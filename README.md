@@ -2,7 +2,7 @@
 
 A modern, production-ready SaaS starter template for building full-stack applications using Next.js 15, Convex, Clerk, and Clerk Billing. The easiest way to start accepting payments with beautiful UI and seamless integrations.
 
-[🌐 Live Demo](https://elite-next-clerk-convex-starter.vercel.app/) – Try the app in your browser!
+[🌐 Live Demo](https://more-secure-starter.vercel.app/) – Try the app in your browser!
 
 
 ## Features
