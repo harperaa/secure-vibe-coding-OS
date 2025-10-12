@@ -1,4 +1,4 @@
-# Starter.diy - Elite Next.js SaaS Starter Kit
+# More Secure Starter DIY - Next.js SaaS Starter Kit
 
 A modern, production-ready SaaS starter template for building full-stack applications using Next.js 15, Convex, Clerk, and Clerk Billing. The easiest way to start accepting payments with beautiful UI and seamless integrations.
 
@@ -598,7 +598,7 @@ npm start
 - `npm start` - Start production server
 - `npm run lint` - Run ESLint
 
-## Why Starter.diy?
+## Why More Secure Starter DIY?
 
 **THE EASIEST TO SET UP. EASIEST IN TERMS OF CODE.**
 
@@ -608,6 +608,7 @@ npm start
 - ✅ **Beautiful UI** - Tailark.com inspired landing page blocks
 - ✅ **Production ready** - Authentication, payments, and database included
 - ✅ **Type safe** - Full TypeScript support throughout
+- ✅ **Security** - Full security support throughout
 
 ## Contributing
 
@@ -623,6 +624,6 @@ This project is licensed under the MIT License.
 
 ---
 
-**Stop rebuilding the same foundation over and over.** Starter.diy eliminates weeks of integration work by providing a complete, production-ready SaaS template with authentication, payments, and real-time data working seamlessly out of the box.
+**Stop rebuilding the same foundation over and over.** More Secure Starter DIY eliminates weeks of integration work by providing a complete, production-ready SaaS template with authentication, payments, and real-time data working seamlessly out of the box.
 
 Built with ❤️ using Next.js 15, Convex, Clerk, and modern web technologies.
