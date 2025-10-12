@@ -141,7 +141,7 @@ export const updateProfileSchema = z.object({
 export const contactFormSchema = z.object({
   name: safeTextSchema,
   email: emailSchema,
-  subject: safeTextSchema.max(200),
+  subject: z.string().min(1, 'Required').max(200, 'Too long').trim().transform(sanitizeXSS),
   message: safeLongTextSchema,
 });
 
@@ -150,7 +150,7 @@ export const contactFormSchema = z.object({
  * Example for user-generated content
  */
 export const createPostSchema = z.object({
-  title: safeTextSchema.max(200),
+  title: z.string().min(1, 'Required').max(200, 'Too long').trim().transform(sanitizeXSS),
   content: safeLongTextSchema,
   tags: z.array(safeTextSchema).max(5).optional(),
 });

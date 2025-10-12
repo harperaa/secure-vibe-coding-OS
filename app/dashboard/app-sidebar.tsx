@@ -100,8 +100,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             >
               <Link href="/">
                 <ChatMaxingIconColoured className="!size-6" />
-                <span className="text-base font-semibold">Starter DIY</span>
-                <Badge variant="outline" className="text-muted-foreground  text-xs">Demo</Badge>
+                <span className="text-base font-semibold">More Secure Starter</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

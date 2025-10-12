@@ -78,9 +78,10 @@ export function validateRequest<T extends z.ZodType>(
 export async function validateRequestAsync<T extends z.ZodType>(
   schema: T,
   data: unknown
-):
-  | Promise<{ success: true; data: z.infer<T> }>
-  | Promise<{ success: false; response: NextResponse }> {
+): Promise<
+  | { success: true; data: z.infer<T> }
+  | { success: false; response: NextResponse }
+> {
   const result = await schema.safeParseAsync(data);
 
   if (!result.success) {
