@@ -17,6 +17,7 @@ A modern, production-ready SaaS starter template for building full-stack applica
 - 🔒 **CSRF Protection** - Built-in Cross-Site Request Forgery protection with HMAC-SHA256
 - 🔐 **Security Headers** - Automatic security headers (CSP, X-Frame-Options, etc.)
 - 🚦 **Rate Limiting** - IP-based rate limiting (5 requests/minute) to prevent abuse
+- ✅ **Input Validation** - Zod-based validation with XSS sanitization
 - 💰 **Payment Gating** - Subscription-based content access
 - 🎭 **Beautiful 404 Page** - Custom animated error page
 - 🌗 **Dark/Light Theme** - System-aware theme switching
@@ -263,6 +264,98 @@ node scripts/test-rate-limit.js /api/your-custom-route
 - Requests 6-10: HTTP 429 (Rate Limited)
 
 The script will display color-coded results showing which requests succeeded and which were rate limited. Wait 60 seconds between test runs for the rate limit to reset.
+
+### Input Validation & XSS Prevention
+
+The application uses Zod schemas for type-safe input validation and XSS prevention. All user input is validated and sanitized before processing.
+
+#### XSS Sanitization
+
+User input is automatically sanitized to prevent Cross-Site Scripting (XSS) attacks by removing dangerous characters:
+
+- **Removed**: `<` `>` `"` `&`
+- **Preserved**: `'` (apostrophes for names like O'Neal, D'Angelo, etc.)
+
+**Note**: React automatically escapes JSX output, so this is defense-in-depth protection.
+
+#### Using Validation Schemas
+
+Import pre-built schemas from `@/lib/validation`:
+
+```typescript
+import {
+  emailSchema,
+  safeTextSchema,
+  safeLongTextSchema,
+  createPostSchema
+} from '@/lib/validation';
+```
+
+#### Example: Validated API Route
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit } from '@/lib/withRateLimit';
+import { withCsrf } from '@/lib/withCsrf';
+import { validateRequest } from '@/lib/validateRequest';
+import { createPostSchema } from '@/lib/validation';
+
+async function createPostHandler(request: NextRequest) {
+  const body = await request.json();
+
+  // Validate and sanitize input
+  const validation = validateRequest(createPostSchema, body);
+
+  if (!validation.success) {
+    return validation.response; // Returns 400 with error details
+  }
+
+  // validation.data is type-safe and XSS-sanitized
+  const { title, content, tags } = validation.data;
+
+  // Save to database (data is already sanitized)
+  // ...
+
+  return NextResponse.json({ success: true });
+}
+
+// Apply all security layers
+export const POST = withRateLimit(withCsrf(createPostHandler));
+```
+
+#### Available Schemas
+
+- **`emailSchema`** - Email validation with sanitization
+- **`safeTextSchema`** - Short text (max 100 chars)
+- **`safeLongTextSchema`** - Long text (max 5000 chars)
+- **`usernameSchema`** - Alphanumeric usernames
+- **`urlSchema`** - HTTPS URLs only
+- **`contactFormSchema`** - Complete contact form
+- **`createPostSchema`** - User-generated content
+- **`updateProfileSchema`** - Profile updates
+
+See `lib/validation.ts` for all available schemas and create custom ones as needed.
+
+#### Example: Convex Mutation with Validation
+
+```typescript
+// convex/posts.ts
+import { mutation } from "./_generated/server";
+import { createPostSchema } from "../lib/validation";
+
+export const createPost = mutation({
+  handler: async (ctx, args) => {
+    const validation = createPostSchema.safeParse(args);
+
+    if (!validation.success) {
+      throw new Error("Invalid input");
+    }
+
+    // validation.data is sanitized
+    await ctx.db.insert("posts", validation.data);
+  }
+});
+```
 
 ### Additional Security Headers
 
