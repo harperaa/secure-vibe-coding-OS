@@ -14,6 +14,8 @@ A modern, production-ready SaaS starter template for building full-stack applica
 - 💳 **Clerk Billing** - Integrated subscription management and payments
 - 🗄️ **Convex Real-time Database** - Serverless backend with real-time sync
 - 🛡️ **Protected Routes** - Authentication-based route protection
+- 🔒 **CSRF Protection** - Built-in Cross-Site Request Forgery protection with HMAC-SHA256
+- 🔐 **Security Headers** - Automatic security headers (CSP, X-Frame-Options, etc.)
 - 💰 **Payment Gating** - Subscription-based content access
 - 🎭 **Beautiful 404 Page** - Custom animated error page
 - 🌗 **Dark/Light Theme** - System-aware theme switching
@@ -132,6 +134,81 @@ npm run dev
 ```
 
 Your application will be available at `http://localhost:3000`.
+
+## Security Configuration
+
+### CSRF Protection
+
+This application includes built-in CSRF (Cross-Site Request Forgery) protection for all state-changing operations. To enable CSRF protection, you need to configure two secret keys:
+
+1. **Generate CSRF secrets:**
+
+```bash
+# Generate CSRF_SECRET
+node -p "require('crypto').randomBytes(32).toString('base64url')"
+
+# Generate SESSION_SECRET
+node -p "require('crypto').randomBytes(32).toString('base64url')"
+```
+
+2. **Add to `.env.local`:**
+
+```bash
+CSRF_SECRET=your_generated_csrf_secret_here
+SESSION_SECRET=your_generated_session_secret_here
+```
+
+### How CSRF Protection Works
+
+- CSRF tokens are automatically generated and bound to user sessions using HMAC-SHA256
+- Tokens are stored in HTTP-only, SameSite=Strict cookies (`XSRF-TOKEN`)
+- Frontend applications should fetch tokens from `/api/csrf` before making POST requests
+- Tokens are single-use and cleared after validation
+
+### Using CSRF Protection in Your API Routes
+
+To protect an API route with CSRF validation:
+
+```typescript
+import { withCsrf } from '@/lib/withCsrf';
+import { NextRequest, NextResponse } from 'next/server';
+
+async function myProtectedHandler(request: NextRequest) {
+  // Your API logic here
+  return NextResponse.json({ success: true });
+}
+
+// Wrap your handler with withCsrf
+export const POST = withCsrf(myProtectedHandler);
+```
+
+### Frontend Usage
+
+```typescript
+// Fetch CSRF token
+const response = await fetch('/api/csrf', { credentials: 'include' });
+const { csrfToken } = await response.json();
+
+// Use token in POST request
+await fetch('/api/your-endpoint', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': csrfToken
+  },
+  credentials: 'include',
+  body: JSON.stringify(data)
+});
+```
+
+### Additional Security Headers
+
+The application automatically sets the following security headers on all responses:
+
+- `X-Content-Type-Options: nosniff` - Prevents MIME type sniffing
+- `X-Frame-Options: DENY` - Prevents clickjacking attacks
+- `Content-Security-Policy` - Controls resource loading
+- `X-Robots-Tag: noindex, nofollow` - Prevents indexing of protected routes
 
 ## Architecture
 
