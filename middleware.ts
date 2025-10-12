@@ -35,6 +35,14 @@ export default clerkMiddleware(async (auth, req) => {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow')
   }
 
+  // Force HTTPS in production (HSTS - HTTP Strict Transport Security)
+  if (process.env.NODE_ENV === 'production') {
+    response.headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains'
+    )
+  }
+
   return response
 })
 

@@ -3,6 +3,7 @@ import { withRateLimit } from '@/lib/withRateLimit';
 import { withCsrf } from '@/lib/withCsrf';
 import { validateRequest } from '@/lib/validateRequest';
 import { createPostSchema } from '@/lib/validation';
+import { handleApiError } from '@/lib/errorHandler';
 
 /**
  * Example Protected API Route
@@ -60,12 +61,9 @@ async function exampleProtectedHandler(request: NextRequest) {
       },
       note: 'In production, this would save to database',
     });
-  } catch (err: any) {
-    console.error('Example protected handler error:', err.message);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (error) {
+    // Use secure error handler (hides stack traces in production)
+    return handleApiError(error, 'example-protected');
   }
 }
 

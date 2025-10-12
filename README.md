@@ -15,9 +15,10 @@ A modern, production-ready SaaS starter template for building full-stack applica
 - 🗄️ **Convex Real-time Database** - Serverless backend with real-time sync
 - 🛡️ **Protected Routes** - Authentication-based route protection
 - 🔒 **CSRF Protection** - Built-in Cross-Site Request Forgery protection with HMAC-SHA256
-- 🔐 **Security Headers** - Automatic security headers (CSP, X-Frame-Options, etc.)
+- 🔐 **Security Headers** - Automatic security headers (CSP, X-Frame-Options, HSTS)
 - 🚦 **Rate Limiting** - IP-based rate limiting (5 requests/minute) to prevent abuse
 - ✅ **Input Validation** - Zod-based validation with XSS sanitization
+- 🛡️ **Secure Error Handling** - Environment-aware error responses (no data leakage)
 - 💰 **Payment Gating** - Subscription-based content access
 - 🎭 **Beautiful 404 Page** - Custom animated error page
 - 🌗 **Dark/Light Theme** - System-aware theme switching
@@ -365,6 +366,73 @@ The application automatically sets the following security headers on all respons
 - `X-Frame-Options: DENY` - Prevents clickjacking attacks
 - `Content-Security-Policy` - Controls resource loading
 - `X-Robots-Tag: noindex, nofollow` - Prevents indexing of protected routes
+- `Strict-Transport-Security` - Forces HTTPS in production (HSTS)
+
+### Secure Error Handling
+
+The application includes secure error handling to prevent information leakage:
+
+- **Development**: Full error details and stack traces for debugging
+- **Production**: Generic error messages, no internal details exposed
+
+#### Using Error Handlers
+
+Import error handlers from `@/lib/errorHandler`:
+
+```typescript
+import {
+  handleApiError,
+  handleValidationError,
+  handleForbiddenError,
+  handleUnauthorizedError,
+  handleNotFoundError
+} from '@/lib/errorHandler';
+
+async function myApiHandler(request: NextRequest) {
+  try {
+    // Your API logic here
+    const result = await performOperation();
+    return NextResponse.json({ success: true, result });
+  } catch (error) {
+    // Secure error handling (hides stack traces in production)
+    return handleApiError(error, 'my-api-route');
+  }
+}
+```
+
+**Available Error Handlers:**
+- `handleApiError(error, context)` - HTTP 500 for unexpected errors
+- `handleValidationError(message, details)` - HTTP 400 for validation failures
+- `handleForbiddenError(message)` - HTTP 403 for authorization failures
+- `handleUnauthorizedError(message)` - HTTP 401 for authentication failures
+- `handleNotFoundError(resource)` - HTTP 404 for missing resources
+
+### Security Auditing
+
+#### Running Security Checks
+
+Use the provided script to audit dependencies and check for vulnerabilities:
+
+```bash
+# Run comprehensive security check
+bash scripts/security-check.sh
+
+# Or manually:
+npm audit --production
+npm outdated
+```
+
+#### Fixing Vulnerabilities
+
+```bash
+# Automatic fixes (minor/patch updates)
+npm audit fix
+
+# Force major version updates (review breaking changes!)
+npm audit fix --force
+```
+
+**Recommendation**: Run `npm audit` regularly and before deploying to production.
 
 ## Architecture
 
