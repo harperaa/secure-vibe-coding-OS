@@ -1,109 +1,899 @@
-# Security Best Practices
+# Security Rules for secure-vibe Project
 
-## 1. Validate Inputs
-- Sanitize and validate all incoming data (e.g., query parameters, form inputs, headers, cookies) to prevent injection attacks like SQL injection, XSS, and XML External Entity (XXE) attacks.  
-- Whitelist known-good patterns rather than blacklisting known-bad patterns, as attackers constantly evolve their techniques.  
-- Use strong type validation for all inputs (e.g., integers should not accept strings, emails should follow a strict pattern).  
-- Reject excessively long inputs to prevent buffer overflow and denial-of-service (DoS) attacks.  
-- Encode data properly before rendering it in HTML, JavaScript, or URLs.  
-- Use security libraries that provide built-in validation and sanitization, such as OWASP Java Encoder.
+**Tech Stack:** Next.js 15.5, Clerk Authentication, Convex Database, TypeScript
+**Security Level:** High - Payment features present via Clerk Billing
+**Last Updated:** October 12, 2025
+**Dependencies Status:** 0 known vulnerabilities
 
-## 2. Safe Authentication & Authorization
-- Enforce strong credential policies:
-  - Minimum password length (e.g., 12+ characters)
-  - Require a mix of uppercase, lowercase, numbers, and special characters
-  - Implement Multi-Factor Authentication (MFA) where feasible
-- Use secure authentication mechanisms:
-  - Prefer OAuth 2.0, OpenID Connect (OIDC), or SAML over custom authentication
-  - Never store plain-text passwords—use bcrypt, Argon2, or PBKDF2 with strong salts
-- Session management:
-  - Store session identifiers securely (e.g., HTTP-only, Secure, and SameSite cookies)
-  - Implement session expiration and rotation policies
-  - Use account lockout policy whenever applicable
-  - Implement CSRF protection wherever applicable
-- Implement Role-Based & Attribute-Based Access Control (RBAC/ABAC):
-  - Enforce least privilege—users and services should have only the minimum permissions required
-  - Always check user authorization in server-side logic (never trust client-side checks)
-  - Use JWT tokens securely (avoid storing them in local storage; prefer HTTP-only cookies)
+## Key Principle: Defense-in-Depth
 
-## 3. Data Protection & Encryption
-- Secure storage:
-  - Store sensitive data (like passwords) using salted, hashed functions (e.g., bcrypt, Argon2)
-  - Use field-level encryption for highly sensitive fields (e.g., SSNs, credit card numbers)
-- Encryption in transit:
-  - Use TLS 1.2+ / HTTPS for all communications
-  - Enforce HSTS (Strict-Transport-Security) headers
-- Encryption at rest:
-  - Encrypt databases, files, and backups using AES-256 or similar strong encryption algorithms
-  - Enable Transparent Data Encryption (TDE) in databases where applicable
-- Key management:
-  - Rotate encryption keys periodically and on suspected compromise
-  - Never hardcode secrets in source code—use environment variables or secrets managers
+Every API route handling sensitive operations MUST apply multiple security layers:
+1. Rate limiting (prevent brute force)
+2. CSRF protection (prevent cross-site attacks)
+3. Input validation (prevent injection/XSS)
+4. Authentication (verify identity via Clerk)
+5. Error handling (prevent information leakage)
 
-## 4. Handling Sensitive Data
-- Minimize data collection:
-  - Only collect essential personally identifiable or financial information
-- Compliance requirements:
-  - Adhere to GDPR, PCI DSS, HIPAA, and other applicable regulations
-  - Implement data retention and deletion policies
-- Mask & redact:
-  - Redact or mask sensitive data in logs, UI, and debug output
-- Strict access controls:
-  - Enforce role-based access (RBAC) to sensitive data
+---
 
-## 5. Secure Configuration
-- Environment separation:
-  - Maintain separate development, staging, and production environments configuration files.
-- Disable unused features:
-  - Remove unnecessary services, endpoints, and debugging interfaces
-  - Disable directory listing, default credentials, and insecure protocols
-- Harden defaults:
-  - Use strict CORS policies
-  - Implement secure HTTP headers (e.g., CSP, X-Frame-Options, X-XSS-Protection)
+## 1. API Route Security - MANDATORY PATTERNS
 
-## 6. Error Handling & Logging
-- Generic error messages:
-  - Do not expose internal details, stack traces, or database errors in production
-- Secure logging:
-  - Log events without storing sensitive information (e.g., avoid logging passwords, credit card numbers)
+### Rule: Always Apply Security Middlewares
 
-## 7. Secure Deployment & DevSecOps
-- Container image security:
-  - Use minimal base images to reduce the attack surface
-  - Restrict container privileges (run as non-root, use read-only filesystem)
-- API security:
-  - Enforce rate limiting and authentication for all APIs when applicable
-  - Secure GraphQL endpoints (e.g., depth limiting, cost analysis)
-- Third-party Vulnerability Management
-  - Use latest versions of third-party dependencies
-  - Do not use publicly known vulnerable libraries and functions
+For ANY new API route that modifies data (POST, PUT, DELETE) or handles user input:
 
-## 8. Mobile Application Security
-- Secure device storage:
-  - Use platform-specific secure storage (e.g., Keychain for iOS, Keystore for Android)
-  - Implement app-level encryption for sensitive data in shared storage
-  - Never store authentication tokens or credentials in plaintext or NSUserDefaults/SharedPreferences
-- Code protection:
-  - Implement code obfuscation to prevent reverse engineering
-  - Apply root/jailbreak detection
-- Secure communications:
-  - Implement certificate pinning to prevent man-in-the-middle attacks
-- Permission & access control:
-  - Implement contextual authentication for sensitive features (e.g., biometrics, MFA before financial transactions)
-  - Use secure inter-app communication (avoid broadcasting sensitive intents on Android)
-- Secure building & deployment:
-  - Keep SDKs, libraries, and dependencies updated to address known vulnerabilities
-  - Use code signing and verify the integrity of published applications
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit } from '@/lib/withRateLimit';
+import { withCsrf } from '@/lib/withCsrf';
+import { validateRequest } from '@/lib/validateRequest';
+import { handleApiError } from '@/lib/errorHandler';
+import { auth } from '@clerk/nextjs/server';
 
-## 9. OWASP Top 10 Awareness
-- Regularly review code and architecture against OWASP Top 10 vulnerabilities:
-  - Broken Access Control
-  - Cryptographic Failures
-  - Injection 
-  - Insecure Design
-  - Security Misconfiguration
-  - Vulnerable and Outdated Components
-  - Identification and Authentication Failures
-  - Software and Data Integrity Failures
-  - Security Logging and Monitoring Failures
-  - Server-Side Request Forgery (SSRF)
+async function handler(request: NextRequest) {
+  try {
+    // 1. Authentication via Clerk
+    const { userId } = await auth();
+    if (!userId) {
+      return handleUnauthorizedError();
+    }
+
+    // 2. Validate input
+    const body = await request.json();
+    const validation = validateRequest(yourSchema, body);
+
+    if (!validation.success) {
+      return validation.response;
+    }
+
+    // 3. Use validated data (already sanitized)
+    const data = validation.data;
+
+    // 4. Business logic
+    // ...
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleApiError(error, 'route-name');
+  }
+}
+
+// Apply security layers (order matters!)
+export const POST = withRateLimit(withCsrf(handler));
+
+export const config = {
+  runtime: 'nodejs',
+};
+```
+
+### When to Apply Each Middleware
+
+**`withRateLimit()`** - Apply to:
+- ✅ Any route that could be abused (spam, brute force)
+- ✅ Login-like operations (even if Clerk handles auth)
+- ✅ Data creation/modification endpoints
+- ✅ Contact/support form endpoints
+- ✅ Webhooks (to prevent DoS)
+
+**`withCsrf()`** - Apply to:
+- ✅ All POST/PUT/DELETE operations
+- ✅ Any state-changing operation
+- ✅ Form submissions
+- ❌ Skip for: GET requests, public read-only endpoints
+
+**Combining Both:**
+```typescript
+// For maximum protection
+export const POST = withRateLimit(withCsrf(handler));
+
+// Order matters: rate limit first, then CSRF
+```
+
+---
+
+## 2. Input Validation - MANDATORY
+
+### Rule: Never Trust User Input - Always Validate with Zod
+
+**Import schemas from `lib/validation.ts`:**
+
+```typescript
+import {
+  emailSchema,
+  safeTextSchema,
+  safeLongTextSchema,
+  usernameSchema,
+  urlSchema,
+  contactFormSchema,
+  createPostSchema,
+  updateProfileSchema
+} from '@/lib/validation';
+import { validateRequest } from '@/lib/validateRequest';
+```
+
+**Usage Pattern:**
+
+```typescript
+async function handler(request: NextRequest) {
+  const body = await request.json();
+
+  // Validate and sanitize
+  const validation = validateRequest(createPostSchema, body);
+
+  if (!validation.success) {
+    return validation.response; // Returns 400 with field errors
+  }
+
+  // TypeScript knows exact shape, data is XSS-sanitized
+  const { title, content, tags } = validation.data;
+
+  // Use sanitized data safely
+}
+```
+
+### XSS Sanitization
+
+**All validation schemas automatically remove:**
+- `<` - Prevents opening tags
+- `>` - Prevents closing tags
+- `"` - Prevents attribute injection
+- `&` - Prevents HTML entity injection
+
+**Preserved:**
+- `'` - Apostrophes (for names like O'Neal, D'Angelo)
+
+### Custom Schemas
+
+**When creating custom schemas:**
+
+```typescript
+// lib/validation.ts (add your schema here)
+export const myCustomSchema = z.object({
+  field: z.string()
+    .min(1, 'Required')
+    .max(200, 'Too long')
+    .trim()
+    .transform((val) => val.replace(/[<>"&]/g, '')),  // XSS sanitization
+});
+```
+
+### Common Validation Patterns
+
+```typescript
+// Email
+const validation = validateRequest(emailSchema, email);
+
+// Short text (names, titles)
+const validation = validateRequest(safeTextSchema, name);
+
+// Long text (bios, comments)
+const validation = validateRequest(safeLongTextSchema, bio);
+
+// URL (HTTPS only)
+const validation = validateRequest(urlSchema, website);
+
+// Complete forms
+const validation = validateRequest(contactFormSchema, formData);
+```
+
+**Never:**
+- ❌ Use `body.field` directly without validation
+- ❌ Manually sanitize with `.replace()` - use Zod schemas
+- ❌ Skip validation for "trusted" input
+- ❌ Validate client-side only
+
+---
+
+## 3. Authentication & Authorization
+
+### Rule: Use Clerk's `auth()` for Authentication
+
+```typescript
+import { auth } from '@clerk/nextjs/server';
+
+async function handler(request: NextRequest) {
+  const { userId } = await auth();
+
+  if (!userId) {
+    return handleUnauthorizedError('Authentication required');
+  }
+
+  // User is authenticated, userId available
+  // Use userId to associate data with user in Convex
+}
+```
+
+**Never:**
+- ❌ Implement custom JWT/session logic
+- ❌ Store passwords or credentials
+- ❌ Create custom login/logout endpoints (Clerk handles this)
+- ❌ Manually parse Clerk tokens
+
+### Rule: Check Authorization for Resource Access (When Applicable)
+
+**If your API accesses user-specific resources:**
+
+```typescript
+async function handler(request: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return handleUnauthorizedError();
+
+  // Get resource from database
+  const resource = await getResource(resourceId);
+
+  // Check ownership
+  if (resource.userId !== userId) {
+    return handleForbiddenError('You do not have access to this resource');
+  }
+
+  // Proceed with authorized operation
+}
+```
+
+**Never:**
+- ❌ Assume authentication equals authorization
+- ❌ Skip ownership checks for user data
+- ❌ Allow users to access other users' private data
+
+---
+
+## 4. Error Handling - Prevent Information Leakage
+
+### Rule: Use Error Handlers from `lib/errorHandler.ts`
+
+**Import all error handlers:**
+
+```typescript
+import {
+  handleApiError,
+  handleValidationError,
+  handleForbiddenError,
+  handleUnauthorizedError,
+  handleNotFoundError
+} from '@/lib/errorHandler';
+```
+
+**Usage:**
+
+```typescript
+// Unexpected errors (500)
+try {
+  // risky operation
+} catch (error) {
+  return handleApiError(error, 'route-name');
+}
+
+// Validation errors (400)
+return handleValidationError('Invalid input', { email: 'Required' });
+
+// Authorization errors (403)
+return handleForbiddenError('Access denied');
+
+// Authentication errors (401)
+return handleUnauthorizedError('Please sign in');
+
+// Not found errors (404)
+return handleNotFoundError('Post');
+```
+
+**This ensures:**
+- ✅ Production: Generic messages (no stack traces, paths, or internal details)
+- ✅ Development: Full error details for debugging
+- ✅ Consistent error response format
+- ✅ Proper HTTP status codes
+
+**Never:**
+- ❌ `return NextResponse.json({ error: error.message }, { status: 500 })`
+- ❌ Include `error.stack` in responses
+- ❌ Expose database errors to clients
+- ❌ Return different error messages that reveal system internals
+
+---
+
+## 5. Secure Cookies
+
+### Rule: Use Secure Cookie Configuration
+
+**For any custom cookies, use these settings:**
+
+```typescript
+response.cookies.set('cookie-name', value, {
+  httpOnly: true,                                    // Prevent XSS access
+  sameSite: 'strict',                                // CSRF protection
+  secure: process.env.NODE_ENV === 'production',    // HTTPS only in prod
+  maxAge: 3600,                                      // Expiration
+  path: '/',                                         // Cookie scope
+});
+```
+
+**Never:**
+- ❌ Set cookies without `httpOnly: true`
+- ❌ Use `sameSite: 'none'` or `sameSite: 'lax'`
+- ❌ Skip `secure` flag in production
+- ❌ Create long-lived cookies without expiration
+
+---
+
+## 6. Convex Database Operations
+
+### Rule: Validate Input in Convex Mutations
+
+**In Convex mutation files:**
+
+```typescript
+// convex/posts.ts
+import { mutation } from "./_generated/server";
+import { createPostSchema } from "../lib/validation";
+
+export const createPost = mutation({
+  handler: async (ctx, args) {
+    // Validate input with Zod
+    const validation = createPostSchema.safeParse(args);
+
+    if (!validation.success) {
+      throw new Error("Invalid input: " + validation.error.message);
+    }
+
+    // Use sanitized data
+    const { title, content } = validation.data;
+
+    await ctx.db.insert("posts", {
+      title,
+      content,
+      userId: ctx.auth.userId,
+      createdAt: Date.now()
+    });
+  }
+});
+```
+
+**Never:**
+- ❌ Insert `args` directly into database
+- ❌ Skip validation in Convex mutations
+- ❌ Trust data from frontend without sanitization
+
+---
+
+## 7. CSRF Protection
+
+### Rule: Protect State-Changing Operations
+
+**Fetch CSRF token before POST requests:**
+
+```typescript
+// Client-side
+const response = await fetch('/api/csrf', { credentials: 'include' });
+const { csrfToken } = await response.json();
+
+// Use in POST request
+await fetch('/api/your-endpoint', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': csrfToken
+  },
+  credentials: 'include',
+  body: JSON.stringify(data)
+});
+```
+
+**Server-side - wrap handler:**
+
+```typescript
+export const POST = withCsrf(handler);
+```
+
+**CSRF tokens are:**
+- ✅ Single-use (cleared after validation)
+- ✅ Session-bound (HMAC with session ID)
+- ✅ HTTP-only cookies (XSS protection)
+- ✅ SameSite=Strict (CSRF protection)
+
+**Never:**
+- ❌ Skip CSRF for POST/PUT/DELETE operations
+- ❌ Send CSRF tokens in URL parameters
+- ❌ Reuse tokens across requests
+
+---
+
+## 8. Rate Limiting
+
+### Rule: Prevent Abuse with Rate Limiting
+
+**Apply to endpoints that could be abused:**
+
+```typescript
+import { withRateLimit } from '@/lib/withRateLimit';
+
+export const POST = withRateLimit(handler);
+```
+
+**Current Configuration:**
+- 5 requests per minute per IP address
+- Tracks by `x-forwarded-for` or `x-real-ip` header
+- Returns HTTP 429 when exceeded
+
+**Applies to:**
+- ✅ Contact/support forms
+- ✅ Data creation endpoints
+- ✅ Password reset (if custom)
+- ✅ Webhook endpoints
+- ✅ Resource-intensive operations
+
+**Note:** All routes using `withRateLimit()` share the same 5 req/min budget per IP.
+
+**Never:**
+- ❌ Create public endpoints without rate limiting
+- ❌ Allow unlimited requests to expensive operations
+
+---
+
+## 9. Environment Variables & Secrets
+
+### Rule: Use Environment Variables for All Secrets
+
+**Required Variables:**
+
+```bash
+# CSRF Protection (generate with node -p "require('crypto').randomBytes(32).toString('base64url')")
+CSRF_SECRET=<32-byte-base64url-string>
+SESSION_SECRET=<32-byte-base64url-string>
+
+# Clerk (from Clerk dashboard)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
+CLERK_SECRET_KEY=sk_...
+NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://...
+
+# Convex (from Convex dashboard)
+CONVEX_DEPLOYMENT=...
+NEXT_PUBLIC_CONVEX_URL=https://...
+```
+
+**Access in code:**
+
+```typescript
+// ✅ Correct
+const secret = process.env.CSRF_SECRET;
+
+// ❌ Never do this
+const secret = 'my-hardcoded-secret-123';
+```
+
+**Never:**
+- ❌ Hardcode API keys, tokens, or secrets
+- ❌ Commit `.env.local` to version control
+- ❌ Log environment variables
+- ❌ Expose secrets in client-side code
+- ❌ Use `.env.local` values in `NEXT_PUBLIC_*` variables (they're exposed!)
+
+---
+
+## 10. Security Headers (Automatic)
+
+### Headers Applied Automatically via middleware.ts
+
+All responses include:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Content-Security-Policy` (dynamic based on env vars)
+- `X-Robots-Tag: noindex, nofollow` (protected routes)
+- `Strict-Transport-Security` (production only)
+
+**No action needed** - these are applied automatically.
+
+**If modifying `middleware.ts`:**
+- ✅ Keep all existing security headers
+- ✅ Never hardcode domains in CSP
+- ✅ Always use environment variables for dynamic domains
+- ✅ Keep HSTS production-only (breaks localhost in dev)
+
+---
+
+## 11. Dependency Security
+
+### Rule: Keep Dependencies Updated and Audited
+
+**Before committing:**
+```bash
+# Check for vulnerabilities
+npm audit --production
+
+# Or use the automated script
+bash scripts/security-check.sh
+```
+
+**Fix vulnerabilities:**
+```bash
+# Auto-fix minor/patch versions
+npm audit fix
+
+# Force major version updates (test thoroughly!)
+npm audit fix --force
+```
+
+**Regular maintenance:**
+- Run `npm audit` before every deploy
+- Update dependencies monthly
+- Monitor GitHub Dependabot alerts
+- Keep Next.js updated for security patches
+
+**Never:**
+- ❌ Ignore npm audit warnings
+- ❌ Use deprecated packages
+- ❌ Skip testing after dependency updates
+
+---
+
+## 12. Logging & Debugging
+
+### Rule: Never Log Sensitive Data
+
+**Safe logging:**
+
+```typescript
+// ✅ Safe - no sensitive data
+console.log('User updated profile', { userId, timestamp: Date.now() });
+
+// ❌ Unsafe - logs password
+console.log('Login attempt', { email, password }); // NEVER DO THIS
+
+// ❌ Unsafe - logs full request
+console.log('Request body:', await request.json());
+```
+
+**Redact sensitive fields:**
+
+```typescript
+const SENSITIVE_FIELDS = ['password', 'token', 'secret', 'apiKey', 'ssn', 'creditCard'];
+
+function safelog(data: any) {
+  const sanitized = { ...data };
+  SENSITIVE_FIELDS.forEach(field => {
+    if (field in sanitized) {
+      sanitized[field] = '[REDACTED]';
+    }
+  });
+  console.log(sanitized);
+}
+```
+
+**Never:**
+- ❌ Log passwords, tokens, or API keys
+- ❌ Log full request/response bodies
+- ❌ Log environment variables
+- ❌ Include PII in logs without redaction
+
+---
+
+## 13. Convex-Specific Security
+
+### Rule: Validate All Mutation Arguments
+
+**In Convex mutations:**
+
+```typescript
+// convex/items.ts
+import { mutation } from "./_generated/server";
+import { safeTextSchema, safeLongTextSchema } from "../lib/validation";
+
+export const createItem = mutation({
+  handler: async (ctx, args) {
+    // Validate args with Zod
+    const titleValidation = safeTextSchema.safeParse(args.title);
+    const descValidation = safeLongTextSchema.safeParse(args.description);
+
+    if (!titleValidation.success || !descValidation.success) {
+      throw new Error("Invalid input");
+    }
+
+    // Use sanitized data
+    await ctx.db.insert("items", {
+      title: titleValidation.data,
+      description: descValidation.data,
+      userId: ctx.auth.userId,  // From Clerk authentication
+      createdAt: Date.now()
+    });
+  }
+});
+```
+
+**Never:**
+- ❌ Insert `args` directly: `ctx.db.insert("items", args)`
+- ❌ Skip validation in Convex
+- ❌ Trust frontend validation alone
+
+---
+
+## 14. Testing Security Features
+
+### Testing Commands
+
+**1. CSRF Protection:**
+```bash
+curl http://localhost:3001/api/csrf
+# Should return: {"csrfToken":"..."}
+```
+
+**2. Rate Limiting:**
+```bash
+node scripts/test-rate-limit.js
+# Should show: 5 success, 5 rate limited
+```
+
+**3. Input Validation:**
+```bash
+curl -X POST http://localhost:3001/api/example-protected \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Test<script>alert(1)</script>", "content": "Safe content"}'
+# Should sanitize: removes <script> tags
+```
+
+**4. Security Headers:**
+```bash
+curl -I http://localhost:3001
+# Should include: X-Frame-Options, CSP, X-Content-Type-Options
+```
+
+**5. Dependency Audit:**
+```bash
+bash scripts/security-check.sh
+```
+
+---
+
+## 15. QUICK REFERENCE - Security Checklist
+
+When creating a new API route, verify:
+
+- [ ] Applied `withRateLimit()` if route could be abused
+- [ ] Applied `withCsrf()` for POST/PUT/DELETE
+- [ ] Validated input with Zod schemas from `lib/validation.ts`
+- [ ] Used `handleApiError()` in catch block
+- [ ] Checked authentication with `await auth()` from Clerk
+- [ ] Checked authorization if accessing user-specific resources
+- [ ] Used proper HTTP status codes (200, 400, 401, 403, 404, 429, 500)
+- [ ] No sensitive data logged (passwords, tokens, PII)
+- [ ] Set `runtime: 'nodejs'` in config for crypto operations
+- [ ] Tested the endpoint before committing
+
+---
+
+## 16. Common Patterns - Copy & Paste Templates
+
+### Template 1: Simple Protected Endpoint (No CSRF)
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit } from '@/lib/withRateLimit';
+import { handleApiError } from '@/lib/errorHandler';
+import { auth } from '@clerk/nextjs/server';
+
+async function handler(request: NextRequest) {
+  try {
+    const { userId } = await auth();
+    if (!userId) return handleUnauthorizedError();
+
+    // Your logic here
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleApiError(error, 'route-name');
+  }
+}
+
+export const GET = withRateLimit(handler);
+export const config = { runtime: 'nodejs' };
+```
+
+### Template 2: Form Submission with Full Protection
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit } from '@/lib/withRateLimit';
+import { withCsrf } from '@/lib/withCsrf';
+import { validateRequest } from '@/lib/validateRequest';
+import { handleApiError, handleUnauthorizedError } from '@/lib/errorHandler';
+import { contactFormSchema } from '@/lib/validation';
+import { auth } from '@clerk/nextjs/server';
+
+async function handler(request: NextRequest) {
+  try {
+    const { userId } = await auth();
+    if (!userId) return handleUnauthorizedError();
+
+    const body = await request.json();
+    const validation = validateRequest(contactFormSchema, body);
+
+    if (!validation.success) {
+      return validation.response;
+    }
+
+    const { name, email, subject, message } = validation.data;
+
+    // Process form (send email, save to DB, etc.)
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleApiError(error, 'contact-form');
+  }
+}
+
+export const POST = withRateLimit(withCsrf(handler));
+export const config = { runtime: 'nodejs' };
+```
+
+### Template 3: Public Endpoint (No Auth, Yes Rate Limit)
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit } from '@/lib/withRateLimit';
+import { validateRequest } from '@/lib/validateRequest';
+import { handleApiError } from '@/lib/errorHandler';
+import { emailSchema } from '@/lib/validation';
+
+async function handler(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const validation = validateRequest(emailSchema, body);
+
+    if (!validation.success) {
+      return validation.response;
+    }
+
+    const email = validation.data;
+
+    // Process (e.g., newsletter signup)
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleApiError(error, 'newsletter');
+  }
+}
+
+export const POST = withRateLimit(handler);
+export const config = { runtime: 'nodejs' };
+```
+
+---
+
+## 17. What NOT to Do - Common Anti-Patterns
+
+### ❌ Anti-Pattern 1: No Security Middlewares
+
+```typescript
+// BAD - No protection
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  // directly use body.field
+  return NextResponse.json({ success: true });
+}
+```
+
+### ❌ Anti-Pattern 2: Skipping Input Validation
+
+```typescript
+// BAD - No validation
+async function handler(request: NextRequest) {
+  const body = await request.json();
+  const { title } = body; // Could contain <script> tags!
+  await saveToDatabase(title);
+}
+```
+
+### ❌ Anti-Pattern 3: Exposing Error Details in Production
+
+```typescript
+// BAD - Information leakage
+catch (error) {
+  return NextResponse.json({
+    error: error.message,      // Could reveal internal paths
+    stack: error.stack,        // Exposes code structure
+    query: failedQuery         // Reveals database schema
+  }, { status: 500 });
+}
+```
+
+### ❌ Anti-Pattern 4: Hardcoding Secrets
+
+```typescript
+// BAD - Hardcoded secret
+const apiKey = 'sk_live_123456789';
+
+// GOOD - Environment variable
+const apiKey = process.env.API_KEY;
+```
+
+### ❌ Anti-Pattern 5: No Rate Limiting on Public Forms
+
+```typescript
+// BAD - Can be spammed infinitely
+export async function POST(request: NextRequest) {
+  await sendEmail(data);
+  return NextResponse.json({ success: true });
+}
+
+// GOOD - Rate limited
+export const POST = withRateLimit(async (request: NextRequest) => {
+  await sendEmail(data);
+  return NextResponse.json({ success: true });
+});
+```
+
+---
+
+## 18. Pre-Deployment Security Checklist
+
+Before deploying to production:
+
+- [ ] All environment variables set in production environment
+- [ ] `CSRF_SECRET` and `SESSION_SECRET` generated and configured
+- [ ] Run `npm audit` - 0 vulnerabilities
+- [ ] Test authentication flow with Clerk
+- [ ] Verify CSRF tokens working
+- [ ] Test rate limiting: `node scripts/test-rate-limit.js`
+- [ ] Check security headers with `curl -I https://your-domain.com`
+- [ ] Verify HSTS header present in production
+- [ ] No secrets in code (grep for common patterns)
+- [ ] Error messages generic (no stack traces exposed)
+- [ ] All API routes have proper security middlewares
+- [ ] Convex mutations validate input
+- [ ] `.env.local` NOT committed to git
+
+---
+
+## 19. Security Monitoring
+
+### What to Monitor Post-Deployment
+
+**Server logs:**
+- Repeated 429 (rate limit) errors - potential abuse
+- 403 (CSRF) errors - potential attack
+- 401/403 spikes - potential unauthorized access attempts
+- Unusual error patterns
+
+**Metrics to track:**
+- Failed authentication attempts
+- Rate limit violations per IP
+- CSRF validation failures
+- Input validation failures
+- Error rates by endpoint
+
+---
+
+## 20. Resources & Documentation
+
+**Project Security Docs:**
+- `docs/security/SECURITY_IMPLEMENTATION.md` - Complete implementation guide
+- `docs/security/security_risk.md` - Risk analysis and examples
+- `README.md` - Security Configuration section
+
+**Testing Scripts:**
+- `scripts/test-rate-limit.js` - Rate limiting verification
+- `scripts/security-check.sh` - Dependency audit
+
+**Example Routes:**
+- `app/api/example-protected/route.ts` - Complete security stack example
+- `app/api/test-rate-limit/route.ts` - Rate limiting test endpoint
+
+**External Resources:**
+- OWASP Top 10: https://owasp.org/www-project-top-ten/
+- Next.js Security: https://nextjs.org/docs/app/guides/security
+- Clerk Security: https://clerk.com/docs/security
+- Convex Security: https://docs.convex.dev/production/hosting/authentication
+
+---
+
+## Summary: Security is Non-Negotiable
+
+Every line of code that handles user input or performs sensitive operations MUST follow these security rules. There are no exceptions.
+
+**Remember:**
+- 🔒 Security is implemented, not assumed
+- 🔒 Defense-in-depth: multiple layers of protection
+- 🔒 Validate all input, sanitize all output
+- 🔒 Fail secure: when in doubt, deny access
+- 🔒 Test security features regularly
+
+**For questions or security concerns, refer to:**
+- `docs/security/SECURITY_IMPLEMENTATION.md`
+- Sample secure implementation: `app/api/example-protected/route.ts`
