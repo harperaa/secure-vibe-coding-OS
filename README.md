@@ -16,6 +16,7 @@ A modern, production-ready SaaS starter template for building full-stack applica
 - 🛡️ **Protected Routes** - Authentication-based route protection
 - 🔒 **CSRF Protection** - Built-in Cross-Site Request Forgery protection with HMAC-SHA256
 - 🔐 **Security Headers** - Automatic security headers (CSP, X-Frame-Options, etc.)
+- 🚦 **Rate Limiting** - IP-based rate limiting (5 requests/minute) to prevent abuse
 - 💰 **Payment Gating** - Subscription-based content access
 - 🎭 **Beautiful 404 Page** - Custom animated error page
 - 🌗 **Dark/Light Theme** - System-aware theme switching
@@ -200,6 +201,68 @@ await fetch('/api/your-endpoint', {
   body: JSON.stringify(data)
 });
 ```
+
+### Rate Limiting
+
+The application includes built-in rate limiting to protect against brute force attacks and abuse. Rate limiting is configured per IP address:
+
+- **Limit**: 5 requests per minute per IP address
+- **Response**: HTTP 429 (Too Many Requests) when limit exceeded
+
+#### Using Rate Limiting in Your API Routes
+
+To protect an API route with rate limiting:
+
+```typescript
+import { withRateLimit } from '@/lib/withRateLimit';
+import { NextRequest, NextResponse } from 'next/server';
+
+async function sensitiveHandler(request: NextRequest) {
+  // Your API logic here
+  return NextResponse.json({ success: true });
+}
+
+// Wrap your handler with withRateLimit
+export const POST = withRateLimit(sensitiveHandler);
+```
+
+#### Combining Rate Limiting with CSRF Protection
+
+For maximum security, you can combine both protections:
+
+```typescript
+import { withRateLimit } from '@/lib/withRateLimit';
+import { withCsrf } from '@/lib/withCsrf';
+import { NextRequest, NextResponse } from 'next/server';
+
+async function protectedHandler(request: NextRequest) {
+  // Your API logic here
+  return NextResponse.json({ success: true });
+}
+
+// Apply both rate limiting and CSRF protection
+export const POST = withRateLimit(withCsrf(protectedHandler));
+```
+
+**Note**: Rate limiting tracks by IP address using the `x-forwarded-for` header (for proxies/load balancers) or `x-real-ip` as fallback.
+
+#### Testing Rate Limiting
+
+A test script is provided to verify rate limiting is working correctly on your protected endpoints:
+
+```bash
+# Test the default test endpoint
+node scripts/test-rate-limit.js
+
+# Test your custom protected endpoint
+node scripts/test-rate-limit.js /api/your-custom-route
+```
+
+**Expected Results:**
+- First 5 requests: HTTP 200 (Success)
+- Requests 6-10: HTTP 429 (Rate Limited)
+
+The script will display color-coded results showing which requests succeeded and which were rate limited. Wait 60 seconds between test runs for the rate limit to reset.
 
 ### Additional Security Headers
 
