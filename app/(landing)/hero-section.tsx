@@ -26,7 +26,7 @@ export default function HeroSection() {
                                     </div>
                                     <span className="font-medium">Introducing AI Agents</span>
                                 </Link>
-                                <h1 className="mx-auto mt-8 max-w-3xl text-balance text-4xl font-bold tracking-tight sm:text-5xl">Build 10x Faster with Starter</h1>
+                                <h1 className="mx-auto mt-8 max-w-3xl text-balance text-4xl font-bold tracking-tight sm:text-5xl">Build 10x Faster with {process.env.NEXT_PUBLIC_SITE_NAME || 'More Secure Starter'}</h1>
                                 <p className="text-muted-foreground mx-auto my-6 max-w-xl text-balance text-xl">Craft. Build. Ship Modern Websites With AI Support.</p>
 
                                 <div className="flex items-center justify-center gap-3">

@@ -100,7 +100,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             >
               <Link href="/">
                 <ChatMaxingIconColoured className="!size-6" />
-                <span className="text-base font-semibold">More Secure Starter</span>
+                <span className="text-base font-semibold">{process.env.NEXT_PUBLIC_SITE_NAME || 'More Secure Starter'}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

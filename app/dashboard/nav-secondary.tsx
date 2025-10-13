@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { IconBrightness, type Icon } from "@tabler/icons-react"
+import { IconBrightness, IconLogout, type Icon } from "@tabler/icons-react"
 
 import {
   SidebarGroup,
@@ -11,6 +11,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { ModeToggle } from "@/components/mode-toggle"
+import { useClerk } from "@clerk/nextjs"
 
 export function NavSecondary({
   items,
@@ -22,6 +23,8 @@ export function NavSecondary({
     icon: Icon
   }[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
+  const { signOut } = useClerk()
+
   return (
     <SidebarGroup {...props}>
       <SidebarGroupContent>
@@ -43,6 +46,12 @@ export function NavSecondary({
                 Dark Mode
                 <span className="ml-auto"><ModeToggle/></span>
               </label>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={() => signOut({ redirectUrl: '/' })}>
+              <IconLogout />
+              <span>Logout</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

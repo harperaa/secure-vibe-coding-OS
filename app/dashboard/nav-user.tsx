@@ -40,7 +40,7 @@ export function NavUser() {
               } })}
             >
               <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage src={clerkUser?.imageUrl || ""} alt={clerkUser?.fullName || ""} />
+                <AvatarImage src={clerkUser?.imageUrl} alt={clerkUser?.fullName || ""} />
                 <AvatarFallback className="rounded-lg">CN</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">

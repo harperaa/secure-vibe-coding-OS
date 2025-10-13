@@ -6,3 +6,4 @@ See @docs/security/security_risk.md for security risk analysis and mitigation st
 
 See @docs/security/SECURITY_IMPLEMENTATION.md for security implementation details and maintain that standard.
 
+Use npm tsc --noEmit to check types after each major change
