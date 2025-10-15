@@ -130,7 +130,8 @@ npx convex dev
 
 5. Convex Webhook Secret
 - Get the site url from your Convex dashboard at https://dashboard.convex.dev
-- > Personal Deployment Settings > URL & Deploy Key > Show development credentials > HTTP Actions URL (copy that URL)
+- Select your new project
+- > Settings > URL & Deploy Key > Show development credentials > HTTP Actions URL (copy that URL)
 - Goto Clerk dashboard > Configure > Webhooks > Add Endpoint > Paste in the above Convex HTTP Actions URL and append endpoint
 - ex. {HTTP Actions URL}/clerk-users-webhook
 - Search for and enable the following events: 
@@ -146,10 +147,10 @@ CLERK_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://your-clerk-frontend-api-url.clerk.accounts.dev
 ```
 
-7. Setup Clerk Subscriptons (Optional - but ready when you need it)
+7. Setup Clerk Subscriptons (Required for template to work)
 - Clerk dashboard > Subscriptions > Create a Plan > Add User Plan > Name the plan > Set the Monthly base fee 
 - Hit Save button  
-- Hit Enable Billing button
+- Hit Enable Billing button at top of screen (very important)
 
 
 ### Development
@@ -621,6 +622,417 @@ npm start
 - `npm run build` - Build for production
 - `npm start` - Start production server
 - `npm run lint` - Run ESLint
+
+## Production Deployment
+
+> **📘 For detailed deployment strategies, 3-environment setups, staging workflows, and advanced deployment patterns, see [DEPLOYMENT.md](./DEPLOYMENT.md)**
+
+### Understanding Development vs Production Instances
+
+This application uses **separate instances** for development and production. Both can run simultaneously without interfering with each other.
+
+#### Instance Separation
+
+**Clerk:** Has separate Development and Production instances
+```
+Your Application in Clerk Dashboard
+  ├─ Development Instance
+  │  ├─ Keys: pk_test_..., sk_test_...
+  │  ├─ Users: Test users
+  │  └─ Stripe: Test mode
+  │
+  └─ Production Instance
+     ├─ Keys: pk_live_..., sk_live_...
+     ├─ Users: Real users
+     └─ Stripe: Live mode
+```
+
+**Convex:** Has separate Development and Production deployments
+```
+Your Project in Convex Dashboard
+  ├─ dev:your-deployment-name
+  │  ├─ URL: https://....convex.cloud
+  │  └─ Database: Dev data
+  │
+  └─ prod:your-deployment-name
+     ├─ URL: https://....convex.site
+     └─ Database: Prod data
+```
+
+#### How Instances Are Selected
+
+**Your application connects to different instances based on environment variables:**
+
+**Local Development (.env.local):**
+```bash
+# Points to DEV instances
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+CONVEX_DEPLOYMENT=dev:polite-bulldog-532
+NEXT_PUBLIC_CONVEX_URL=https://....convex.cloud
+```
+
+**Production (Vercel Environment Variables):**
+```bash
+# Points to PROD instances
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+CONVEX_DEPLOYMENT=prod:your-deployment-name
+NEXT_PUBLIC_CONVEX_URL=https://....convex.site
+```
+
+### Setting Up Production (Step-by-Step Walkthrough)
+
+Follow this complete guide to deploy your application to production with Clerk, Convex, and Vercel.
+
+---
+
+#### Part 1: Create Clerk Production Instance
+
+**Step 1: Create Production Instance**
+
+1. Go to **Clerk Dashboard:** https://dashboard.clerk.com
+2. **Select your application** (the one you created for development)
+3. **Top of page:** Click the **"Development"** toggle/dropdown (top right corner)
+4. **Click:** "Create production instance"
+5. **Choose:**
+   - **"Clone development settings"** (recommended - copies your dev config), OR
+   - **"Use default settings"** (start fresh)
+6. **Click:** "Create"
+
+Clerk creates a separate production instance alongside your dev instance (dev instance is NOT removed).
+
+**Step 2: Get Production API Keys**
+
+1. **Ensure you're viewing Production** (top toggle should say "Production")
+2. **Left sidebar:** Click **"API Keys"**
+3. **Copy and save these keys:**
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (starts with `pk_live_...`)
+   - `CLERK_SECRET_KEY` (starts with `sk_live_...`)
+   - Frontend API URL (e.g., `https://your-prod.clerk.accounts.dev`)
+
+You'll add these to Vercel later.
+
+**Step 3: Configure Production Domain**
+
+1. **Left sidebar:** Click **"Domains"**
+2. **Add your production domain:**
+   - For Vercel: `your-app.vercel.app` (DNS automatic)
+   - For custom domain: Add domain and configure DNS records shown
+3. **Wait for DNS propagation** (if custom domain - can take up to 48 hours)
+
+**Step 4: Configure OAuth Providers (If Using Social Login)**
+
+1. **Left sidebar:** Click **"SSO Connections"** or **"Social Connections"**
+2. **For each provider you use** (Google, GitHub, etc.):
+   - Click the provider
+   - **Important:** Production requires YOUR OWN OAuth credentials
+   - Click "Use custom credentials"
+   - Follow Clerk's provider-specific guide to create OAuth app
+   - Add Client ID and Client Secret from the provider
+   - Save
+
+**Note:** Development uses Clerk's shared credentials, but production requires your own for security.
+
+**Step 5: Connect Stripe**
+
+1. **Left sidebar:** Click **"Billing"** → **"Settings"**
+2. **Click:** "Connect Stripe Account"
+3. **Choose:**
+   - Connect existing Stripe account (if you have one), OR
+   - Create new Stripe account through Clerk
+4. **Follow Stripe connection flow**
+5. **Important:** Start in **Stripe Test Mode** (toggle at top of Billing page)
+
+**Step 6: Deploy Certificates**
+
+1. **Go to Clerk Dashboard home page**
+2. **Review checklist** - it shows remaining steps
+3. **Once all green checkmarks appear:**
+   - Click **"Deploy certificates"** button
+   - This activates your production instance
+
+**✅ Clerk Production Instance is now active!**
+
+---
+
+#### Part 2: Create Convex Production Deployment
+
+**Step 1: Generate Production Deploy Key**
+
+1. **Go to Convex Dashboard:** https://dashboard.convex.dev
+2. **Select your project**
+3. **Left sidebar:** Click **"Settings"** → **"Deploy Keys"**
+4. **Click:** "Generate a production deploy key"
+5. **Copy the entire key** (format: `prod:xxx|yyy...`)
+6. **Save it securely** - you'll add this to Vercel
+
+**Important:** This key is shown only once. If you lose it, you'll need to generate a new one.
+
+**Step 2: Note Your Convex Project Info**
+
+You'll need:
+- Production deployment name (will be `prod:your-deployment-name`)
+- Production URL (will be created on first deploy, ends with `.convex.site`)
+
+These will be auto-configured by Vercel during deployment.
+
+---
+
+#### Part 3: Configure Vercel for Production
+
+**Step 1: Create Vercel Project**
+
+1. **Go to:** https://vercel.com
+2. **Click:** "Add New Project"
+3. **Import your GitHub repository:** `harperaa/secure-vibe-coding-OS`
+4. **Click:** "Import"
+
+**Step 2: Configure Build Settings**
+
+**In Vercel project configuration (before first deploy):**
+
+1. **Build Command** - Override to:
+   ```bash
+   npx convex deploy --cmd 'npm run build'
+   ```
+
+2. **Install Command** - Leave as default:
+   ```bash
+   npm install
+   ```
+
+3. **Output Directory** - Leave as default:
+   ```
+   .next
+   ```
+
+4. **Root Directory** - Leave as default (blank)
+
+**Step 3: Add Production Environment Variables**
+
+**In Vercel → Settings → Environment Variables:**
+
+**For each variable below, select "Production" environment:**
+
+```bash
+# Convex Production Deploy Key (CRITICAL - from Part 2, Step 1)
+CONVEX_DEPLOY_KEY=prod:abc123|xyz...
+
+# Clerk Production Keys (from Part 1, Step 2)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://your-prod.clerk.accounts.dev
+
+# Site Branding
+NEXT_PUBLIC_SITE_NAME=Secure Vibe Coding OS
+
+# CSRF Protection (use SAME values from your .env.local)
+CSRF_SECRET=<copy-from-your-dev-env>
+SESSION_SECRET=<copy-from-your-dev-env>
+
+# Clerk Redirects (same as dev)
+NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
+NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=/dashboard
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/dashboard
+```
+
+**Important:**
+- Do NOT add `CONVEX_DEPLOYMENT` or `NEXT_PUBLIC_CONVEX_URL` manually
+- Convex automatically sets these during the deploy process
+- Only add `CONVEX_DEPLOY_KEY` - the rest is automatic
+
+**Step 4: Deploy to Production**
+
+1. **Click:** "Deploy" button
+2. **Watch the deployment logs:**
+   - Convex will deploy your functions
+   - Create production deployment (if first time)
+   - Build your Next.js app
+   - Deploy to Vercel
+
+3. **After successful deploy:**
+   - Note your production URL: `https://your-app.vercel.app`
+   - Visit the URL to verify it's working
+
+4. **Go to Convex Dashboard:**
+   - You'll now see a **`prod:your-deployment-name`** deployment
+   - Click it and copy the production URL (ends with `.convex.site`)
+   - You'll need this for webhooks in the next part
+
+---
+
+#### Part 4: Configure Production Webhooks
+
+**Step 1: Set Up Clerk Production Webhook**
+
+1. **Clerk Dashboard** → Ensure in **Production** mode (top toggle)
+2. **Left sidebar:** Click **"Webhooks"**
+3. **Click:** "Add Endpoint"
+4. **Endpoint URL** - Enter your Convex production URL + endpoint:
+   ```
+   https://your-prod-deployment.convex.site/clerk-users-webhook
+   ```
+5. **Subscribe to events** - Check these:
+   - ✅ `user.created`
+   - ✅ `user.updated`
+   - ✅ `user.deleted`
+   - ✅ `paymentAttempt.updated`
+6. **Click:** "Create"
+7. **Copy the signing secret** (starts with `whsec_...`)
+
+**Step 2: Add Webhook Secret to Convex Production**
+
+1. **Convex Dashboard** → Select your **production deployment** (prod:...)
+2. **Left sidebar:** Click **"Settings"** → **"Environment Variables"**
+3. **Add these variables:**
+   ```bash
+   CLERK_WEBHOOK_SECRET=whsec_your_production_secret
+   NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://your-prod.clerk.accounts.dev
+   ```
+4. **Click:** "Save"
+
+**Step 3: Verify Webhook Connection**
+
+1. Create a test user in your production app
+2. Check Convex Dashboard → Production → Data → `users` table
+3. User should appear (confirms webhook working)
+
+---
+
+#### Part 5: Test Production (Before Going Live)
+
+**Phase 1: Test Mode Testing**
+
+1. **Verify Stripe is in Test Mode:**
+   - Clerk Dashboard (Production) → Billing → Settings
+   - Should show "Test Mode" toggle enabled
+
+2. **Visit your production URL:** `https://your-app.vercel.app`
+
+3. **Test user signup/login:**
+   - Create account
+   - Sign in
+   - Verify user appears in Convex production database
+
+4. **Test subscription with Stripe test card:**
+   - Go to payment-gated page
+   - Click subscribe
+   - Use test card: `4242 4242 4242 4242`
+   - Any future date, any CVC
+   - Complete "payment"
+
+5. **Verify subscription access:**
+   - Should redirect to payment-gated content
+   - Check Convex → `paymentAttempts` table
+   - Subscription should be recorded
+
+6. **Test subscription cancellation:**
+   - User profile → Manage subscription
+   - Cancel subscription
+   - Verify access revoked
+
+**Phase 2: Go Live with Real Payments**
+
+**When everything works in test mode:**
+
+1. **Clerk Dashboard** (Production) → **Billing** → **Settings**
+2. **Toggle:** Switch from **Test Mode** to **Live Mode**
+3. **Confirm** the switch (Clerk will warn you about real payments)
+4. **Test with real card:**
+   - Subscribe yourself with a real credit card
+   - Verify charge appears in your Stripe dashboard
+   - Verify subscription works
+   - Cancel subscription (to avoid recurring charges)
+
+5. **You're now live!** 🚀
+   - Real users can sign up
+   - Real payments are processed
+   - Stripe takes their fees (~2.9% + 30¢)
+
+---
+
+#### Part 6: Ongoing Production Management
+
+**Monitoring:**
+- Clerk Dashboard (Production) → View real users
+- Convex Dashboard (Production) → Monitor database
+- Stripe Dashboard → Track payments and revenue
+- Vercel Dashboard → Monitor deployments and performance
+
+**Updates:**
+- Make changes locally (uses dev instances)
+- Test thoroughly in development
+- Push to GitHub
+- Vercel auto-deploys to production
+- Both dev and prod run simultaneously
+
+**Key Points:**
+- ✅ Production is separate from development
+- ✅ Making production doesn't delete development
+- ✅ You can develop locally while users use production
+- ✅ Each environment is completely isolated
+
+### Development Workflow With Both Instances
+
+**Typical developer workflow:**
+
+**Morning - Start developing:**
+```bash
+npm run dev          # Terminal 1 - Next.js dev server
+npx convex dev       # Terminal 2 - Convex dev connection
+```
+→ Uses dev instances, test users, test payments
+
+**Meanwhile:**
+- Production app running on Vercel
+- Real users using production instances
+- Completely isolated from your dev work
+
+**Deploy changes:**
+```bash
+git add .
+git commit -m "New feature"
+git push origin main
+```
+→ Vercel auto-deploys to production
+→ Production uses prod instances
+→ Dev instances unchanged
+
+**Key Points:**
+- ✅ Dev and prod instances never interfere
+- ✅ Dev instances exist permanently (not removed when creating prod)
+- ✅ Same codebase, different environment variables select which instance
+- ✅ You can develop locally while prod serves real users
+- ✅ Each instance has separate users, databases, and payment data
+
+### Environment Variables Summary
+
+**Variables that CHANGE between dev and prod:**
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (pk_test_ → pk_live_)
+- `CLERK_SECRET_KEY` (sk_test_ → sk_live_)
+- `CONVEX_DEPLOYMENT` (dev:... → prod:...)
+- `NEXT_PUBLIC_CONVEX_URL` (.convex.cloud → .convex.site)
+
+**Variables that STAY THE SAME:**
+- `NEXT_PUBLIC_SITE_NAME`
+- `CSRF_SECRET`
+- `SESSION_SECRET`
+- All `NEXT_PUBLIC_CLERK_SIGN_*` redirect URLs
+
+---
+
+> **📘 For advanced deployment topics including:**
+> - 3-environment setup (dev → preview → production)
+> - Staging/QA workflows with test branches
+> - Database snapshots and rollback strategies
+> - Data cloning for testing
+> - Emergency hotfix procedures
+>
+> **See the complete guide: [DEPLOYMENT.md](./DEPLOYMENT.md)**
+
+---
 
 ## Why More Secure Starter DIY?
 

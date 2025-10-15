@@ -27,7 +27,7 @@ export default clerkMiddleware(async (auth, req) => {
 
   response.headers.set(
     'Content-Security-Policy',
-    `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' ${clerkDomain}; style-src 'self' 'unsafe-inline'; connect-src 'self' ${clerkDomain} ${convexDomain} ${convexWss}; img-src 'self' data: https:; worker-src blob:;`
+    `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' ${clerkDomain} https://js.stripe.com; style-src 'self' 'unsafe-inline'; connect-src 'self' ${clerkDomain} ${convexDomain} ${convexWss} https://api.stripe.com; frame-src 'self' ${clerkDomain} https://js.stripe.com https://hooks.stripe.com; img-src 'self' data: https:; worker-src blob:;`
   )
 
   // Prevent search engines from indexing protected routes
