@@ -68,6 +68,8 @@ A modern, production-ready SaaS starter template for building full-stack applica
 ```bash
 # Download the template files to your project directory
 # Then navigate to your project directory and install dependencies
+git clone https://github.com/harperaa/secure-vibe-coding-OS.git [project-name]
+cd [project-name]
 npm install #or pnpm / yarn / bun
 ```
 
