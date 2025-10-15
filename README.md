@@ -77,39 +77,64 @@ npm install #or pnpm / yarn / bun
 cp .env.example .env.local
 ```
 
-3. Configure your environment variables in `.env.local`:
+3. Configure your environment variables (complete each step/setting in order in the `.env.local` file ):
 
 ```bash
-# Convex Configuration
-CONVEX_DEPLOYMENT=your_convex_deployment_here
-NEXT_PUBLIC_CONVEX_URL=your_convex_url_here
+# a. Site Branding (Name your site)
+NEXT_PUBLIC_SITE_NAME=YOUR SITE NAME HERE
 
-# Clerk Authentication & Billing
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key_here
-CLERK_SECRET_KEY=your_clerk_secret_key_here
+# b. Clerk Authentication & Billing
+# Sign up and get these from your Clerk dashboard at https://dashboard.clerk.com
+# Select "Create application", Name it, hit "Create application"
+# Then on Overview page > scroll down to "2. Set your Clerk API keys" > copy/paste here.
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key_here
+CLERK_SECRET_KEY=sk_test_your_clerk_secret_key_here
 
-# Clerk Frontend API URL (from JWT template - see step 5)
+# c. Setup your JWT template Clerk Frontend API URL in Clerk 
+# Dashboard > Configure > JWT Templates > Add new template > select convex from Template dropdown > save
+# Copy the URL from the issuer field and paste it here, ensure it ends with .dev
 NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://your-clerk-frontend-api-url.clerk.accounts.dev
 
-# Clerk Redirect URLs
+# d. Convex Configuration
+# Sign up and get these from your Convex dashboard at https://dashboard.convex.dev
+# Create new project, then goto Settings > Project Settings > Lost Access
+# Copy/paste/execute command: npx convex dev --configure=existing --team your_team_name --project your_project_name
+CONVEX_DEPLOYMENT=your_convex_deployment_here
+NEXT_PUBLIC_CONVEX_URL=https://your-convex-url.convex.cloud
+
+# e. confirm the above values are updated automatically in .env.local by the convex script.  
+
+# f. Set the Convex Environment variable for NEXT_PUBLIC_CLERK_FRONTEND_API_URL
+# Click link in terminal from running convex config, to set the NEXT_PUBLIC_CLERK_FRONTEND_API_URL there.
+# Use value from above for NEXT_PUBLIC_CLERK_FRONTEND_API_URL
+
+# g. CSRF Protection
+# Generate these secrets using: node -p "require('crypto').randomBytes(32).toString('base64url')"
+CSRF_SECRET=<32-byte-base64url-string>
+SESSION_SECRET=<32-byte-base64url-string>
+
+# Clerk Redirect URLs (leave these for now)
+# These ensure users are redirected to dashboard after authentication
 NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
 NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=/dashboard
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/dashboard
 ```
 
-4. Initialize Convex:
-
+4. Terminate and Re-Initialize Convex (leave it running in the background):
 ```bash
 npx convex dev
 ```
 
-5. Set up Clerk JWT Template:
-   - Go to your Clerk dashboard
-   - Navigate to JWT Templates
-   - Create a new template with name "convex"
-   - Copy the Issuer URL - this becomes your `NEXT_PUBLIC_CLERK_FRONTEND_API_URL`
-   - Add this URL to both your `.env.local` and Convex environment variables
+5. Convex Webhook Secret
+- Get the site url from your Convex dashboard at https://dashboard.convex.dev
+- > Personal Deployment Settings > URL & Deploy Key > Show development credentials > HTTP Actions URL (copy that URL)
+- Goto Clerk dashboard > Configure > Webhooks > Add Endpoint > Paste in the above Convex HTTP Actions URL and append endpoint
+- ex. {HTTP Actions URL}/clerk-users-webhook
+- Search for and enable the following events: 
+- Enable events: `user.created`, `user.updated`, `user.deleted`, `paymentAttempt.updated`
+- Copy the webhook signing secret to your Convex environment variables
+- Note: CLERK_WEBHOOK_SECRET should be set in your Convex dashboard environment variables (not here)
 
 6. Set up Convex environment variables in your Convex dashboard:
 
@@ -119,14 +144,11 @@ CLERK_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://your-clerk-frontend-api-url.clerk.accounts.dev
 ```
 
-7. Set up Clerk webhooks:
-   - In your Clerk dashboard, configure webhook endpoint: `{your_domain}/clerk-users-webhook`
-   - Enable events: `user.created`, `user.updated`, `user.deleted`, `paymentAttempt.updated`
-   - Copy the webhook signing secret to your Convex environment variables
+7. Setup Clerk Subscriptons (Optional - but ready when you need it)
+- Clerk dashboard > Subscriptions > Create a Plan > Add User Plan > Name the plan > Set the Monthly base fee 
+- Hit Save button  
+- Hit Enable Billing button
 
-8. Configure Clerk Billing:
-   - Set up your pricing plans in Clerk dashboard
-   - Configure payment methods and billing settings
 
 ### Development
 
