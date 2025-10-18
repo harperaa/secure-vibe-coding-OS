@@ -1160,302 +1160,355 @@ Create a deployment checklist specific to my app.
 
 ---
 
-## Hands-On Practice: Customizing Your Secure Starter
+## Hands-On Practice: Applying Module 2.6 Security Architecture Principles
 
-### Complete Customization Project
+**Objective:** Apply the security architecture blueprint concepts from Module 2.6 to customize Secure Vibe Coding OS for your SaaS, creating living documentation that guides your development.
 
-**Objective:** Transform Secure Vibe Coding OS into your own SaaS application while maintaining all security controls.
+**Time:** 2-3 hours
 
----
-
-### Part 1: Planning Your SaaS (30 minutes)
-
-**Task 1: Define Your Application**
-
-Create `docs/MY_SAAS_PLAN.md`:
-
-```markdown
-# My SaaS Application Plan
-
-## Application Overview
-**Name:** [Your App Name]
-**Purpose:** [What problem does it solve?]
-**Target Users:** [Who will use it?]
-
-## Core Features
-1. [Feature 1 - describe]
-2. [Feature 2 - describe]
-3. [Feature 3 - describe]
-
-## Subscription Tiers
-**Free Tier:**
-- [Feature access]
-- [Limitations]
-
-**Basic Tier ($X/month):**
-- [All free features plus]
-- [Premium feature 1]
-- [Limitation adjustments]
-
-**Pro Tier ($Y/month):**
-- [All basic features plus]
-- [Premium feature 2]
-- [Premium feature 3]
-
-## Data Model
-**User data to store:**
-- [Field 1]
-- [Field 2]
-- [Field 3]
-
-**User-generated content:**
-- [What users create]
-- [Ownership model]
-- [Access controls needed]
-
-## Security Priorities
-1. [Your top security concern]
-2. [Your second concern]
-3. [Your third concern]
-```
-
-**Task 2: Map Features to Security Controls**
-
-In `docs/MY_SAAS_PLAN.md`, add:
-
-```markdown
-## Security Controls Needed
-
-### Feature 1: [Name]
-- **Input:** [User provides what?]
-- **Validation:** [Which Zod schema?]
-- **Rate Limiting:** [Yes/No - why?]
-- **CSRF:** [Yes/No - state changing?]
-- **Auth Required:** [Yes/No]
-- **Subscription Gate:** [Free/Basic/Pro]
-
-### Feature 2: [Name]
-- **Input:** [User provides what?]
-- **Validation:** [Which Zod schema?]
-- **Rate Limiting:** [Yes/No - why?]
-- **CSRF:** [Yes/No - state changing?]
-- **Auth Required:** [Yes/No]
-- **Subscription Gate:** [Free/Basic/Pro]
-
-[Repeat for each feature]
-```
+**Prerequisites:** Completed Module 2.6 (Security Architecture Blueprint)
 
 ---
 
-### Part 2: Branding and UI Customization (45 minutes)
+## Overview: From Generic Starter to Your Secure SaaS
 
-**Task 3: Rebrand the Application**
+In Module 2.6, you learned to create security architecture blueprints. Now you'll apply those concepts to the Secure Vibe Coding OS starter, which already has a 90/100 OWASP security foundation.
 
-Use Prompt Pattern 5:
-
-```
-I want to rebrand Secure Vibe Coding OS for my SaaS: [Your App Name from docs/MY_SAAS_PLAN.md]
-
-My Brand:
-- App Name: [Your App Name]
-- Tagline: [Your Tagline]
-- Primary Color: [Hex code]
-- Secondary Color: [Hex code]
-- Font: [Font name or keep default]
-
-Changes Needed:
-1. Update NEXT_PUBLIC_SITE_NAME in environment files
-2. Update landing page hero section
-3. Update pricing page messaging
-4. Customize color scheme
-5. Update page metadata (title, description)
-
-Security Requirements:
-- Don't modify files in lib/ folder
-- Keep all security middleware intact
-- Preserve Clerk and Convex integrations
-
-Please guide me through:
-1. Updating environment variables
-2. Changing landing page copy in app/(landing)/
-3. Customizing colors in app/globals.css
-4. Updating metadata in app/layout.tsx
-5. Keeping all security features active
-
-Verify that no security controls are affected by branding changes.
-```
-
-**Task 4: Customize Landing Page**
-
-Files to modify (safe for customization):
-- `app/(landing)/hero-section.tsx` - Main hero
-- `app/(landing)/features-one.tsx` - Features section
-- `app/(landing)/testimonials.tsx` - Social proof
-- `app/(landing)/faqs.tsx` - FAQ section
-- `app/(landing)/footer.tsx` - Footer content
-
-**Prompt for each section:**
-
-```
-Update the [section name] for my SaaS app: [Your App Name].
-
-Current Content:
-[Copy current text from file]
-
-New Content:
-- Headline: [Your headline]
-- Description: [Your description]
-- Features/Benefits: [Your list]
-
-Keep:
-- All security features intact
-- Component structure
-- Styling approach (customize colors if needed)
-
-Please update the content while preserving the component architecture.
-```
+**The Process:**
+1. Review the starter's existing security architecture
+2. Customize security blueprint templates for your specific SaaS
+3. Document your security decisions as you customize
+4. Reference your blueprint when prompting Claude Code
+5. Build features that extend the secure foundation
 
 ---
 
-### Part 3: Implementing Your Core Features (90 minutes)
+### Part 1: Understanding the Existing Security Architecture (30 minutes)
 
-**Task 5: Build Your First Secure Feature**
+**Task 1: Review the Starter's Security Foundation**
 
-Choose Feature 1 from `docs/MY_SAAS_PLAN.md`.
-
-Use Prompt Pattern 1 and 4 combined:
+**Prompt to Claude Code:**
 
 ```
-I'm implementing [Feature 1 from MY_SAAS_PLAN.md] for my SaaS app.
+Explain the security architecture in Secure Vibe Coding OS.
 
-Feature Details (from docs/MY_SAAS_PLAN.md):
-- [Copy your feature description]
-- [User inputs]
-- [Expected outputs]
+I need to understand:
+1. What security controls are already implemented?
+2. How do they work together (the security stack)?
+3. What files contain the security utilities?
+4. What attacks are already prevented?
+5. What's the OWASP Top 10 security score?
 
-Security Implementation:
-- Reference: app/api/example-protected/route.ts
-- Use: withRateLimit() and withCsrf() from @/lib
-- Validate: Create or use schema from @/lib/validation
-- Errors: Use handleApiError() from @/lib/errorHandler
-- Auth: Use Clerk's auth() if user-specific
-- Subscription: Use Protect component if paid feature
+Reference these project files:
+- docs/security/OWASP_TOP_10_ASSESSMENT.md
+- docs/security/SECURITY_ARCHITECTURE.md
+- .cursor/rules/security_rules.mdc
+- lib/ folder (all security utilities)
+
+Create a summary I can reference as I build my app.
+```
+
+**Save Claude's explanation to:** `docs/STARTER_SECURITY_REVIEW.md`
+
+**Task 2: Copy and Customize Security Blueprint Template**
+
+```bash
+# Copy the provided template
+cp docs/templates/MY_SECURITY_BLUEPRINT_TEMPLATE.md docs/MY_SECURITY_BLUEPRINT.md
+```
+
+**Prompt to customize it:**
+
+```
+Help me customize docs/MY_SECURITY_BLUEPRINT.md for my SaaS app.
+
+My App Concept (from Module 2.6 if you did it):
+- Name: [Your App Name]
+- Purpose: [What it does]
+- Key features: [List 3-5 features]
+- Subscription model: [Free/Basic/Pro tiers]
+
+Update the template with:
+1. My app name and description
+2. My specific features in the data flow maps
+3. My subscription tiers in the architecture
+4. Threats specific to my app type
+5. Keep all inherited security controls from Secure Vibe Coding OS
+
+Reference: docs/templates/MY_SECURITY_BLUEPRINT_TEMPLATE.md
+```
+
+**Deliverable:** Your customized security blueprint
+
+---
+
+### Part 2: Documenting Your Security Decisions (30 minutes)
+
+**Task 3: Create Your Security Decision Log**
+
+```bash
+# Copy the template
+cp docs/templates/SECURITY_DECISION_LOG_TEMPLATE.md docs/SECURITY_DECISION_LOG.md
+```
+
+**The template already includes 2 decisions (Clerk and CSRF). Now add YOUR decisions:**
+
+**Prompt for each decision you make:**
+
+```
+I'm deciding [what you're choosing - e.g., "which AI service to use"].
+
+For my SaaS app: [Your App Name]
+
+Options I'm considering:
+- Option 1: [Name and brief description]
+- Option 2: [Name and brief description]
+- Option 3: [Name and brief description]
+
+Help me document this decision using the Security Decision Log format:
+
+1. What I should choose and why
+2. What I'm giving up (trade-offs)
+3. What risks this introduces
+4. How to mitigate those risks
+
+Add this as "Decision 3" in docs/SECURITY_DECISION_LOG.md following the template format.
+```
+
+**Document at least 3 custom decisions:**
+- Decision 3: [Your first major technology choice]
+- Decision 4: [Your data storage approach]
+- Decision 5: [Your external integration choice]
+
+**Deliverable:** Decision log with rationale for all major choices
+
+---
+
+### Part 3: Creating Your Threat Model (30 minutes)
+
+**Task 4: Customize the Threat Model**
+
+```bash
+# Copy the template
+cp docs/templates/THREAT_MODEL_TEMPLATE.md docs/THREAT_MODEL.md
+```
+
+**The template includes common threats. Now add threats specific to YOUR app:**
+
+**Prompt to add custom threats:**
+
+```
+Based on my SaaS app [Your App Name from Module 2.6], what additional threats should I add to my threat model?
+
+My app's unique aspects:
+- [Specific feature that might introduce risk]
+- [Type of data you're storing]
+- [External services you're integrating]
+
+Current threats covered (from template):
+- CSRF, XSS, brute force, etc. (inherited from starter)
+
+Please identify:
+1. Threats specific to my app's features
+2. Attack scenarios for each threat
+3. Likelihood and impact ratings
+4. Required mitigations
+5. Add them to docs/THREAT_MODEL.md using the template format
+
+Reference: docs/templates/THREAT_MODEL_TEMPLATE.md
+```
+
+**Deliverable:** Threat model customized for your specific SaaS
+
+---
+
+### Part 4: Building Your Implementation Checklist (20 minutes)
+
+**Task 5: Set Up Your Implementation Tracking**
+
+```bash
+# Copy the template
+cp docs/templates/IMPLEMENTATION_CHECKLIST_TEMPLATE.md docs/IMPLEMENTATION_CHECKLIST.md
+```
+
+**The template has Phase 1 (Foundation) already checked off.** Now customize for YOUR features:
+
+**In the template, update:**
+- Phase 4: Add YOUR core features (Feature 1, 2, 3 with names from Module 2.6 plan)
+- Phase 5: Add YOUR integration security items
+- Phase 7: Customize production checklist
+
+**Simple edit - just fill in your feature names where the template says [Your Feature Name].**
+
+**Deliverable:** Implementation checklist ready to track your progress
+
+---
+
+### Part 5: Blueprint-Driven Development (60 minutes)
+
+**Task 6: Build Your First Feature Using Your Blueprint**
+
+**Now use what you created in Module 2.6!** When you prompt Claude Code, reference YOUR blueprint:
+
+**The Blueprint-Driven Prompt:**
+
+```
+I'm implementing [Feature 1 from your Module 2.6 plan] for my SaaS app.
+
+BLUEPRINT REFERENCE:
+- Security Blueprint: docs/MY_SECURITY_BLUEPRINT.md
+- Security Decisions: docs/SECURITY_DECISION_LOG.md
+- Threat Model: docs/THREAT_MODEL.md
+- Security Rules: .cursor/rules/security_rules.mdc
+
+Feature Details:
+[Describe your feature]
+
+Security Requirements (from my blueprint):
+- [Copy from your threat model what threats this addresses]
+- Use Secure Vibe Coding OS security stack
+- Apply withRateLimit() and withCsrf()
+- Validate with Zod schema from lib/validation.ts
+- Follow pattern in app/api/example-protected/route.ts
 
 Please create:
-1. Custom Zod validation schema (if needed) in lib/validation.ts
-2. API route in app/api/[feature-name]/route.ts
-3. Convex mutation (if storing data) in convex/[feature-name].ts
-4. Frontend page in app/dashboard/[feature-name]/page.tsx (if needed)
+1. Validation schema in lib/validation.ts (if needed)
+2. API route with full security stack
+3. Convex mutation with validation
+4. Frontend page with subscription gating (if paid feature)
 
-Follow the security stack pattern:
-export const POST = withRateLimit(withCsrf(handler));
-
-Show me the complete implementation with all security controls.
+Verify the implementation follows my security blueprint and threat mitigations.
 ```
 
-**Task 6: Add Subscription Gating (If Applicable)**
+**After Claude Code responds, update your checklist:**
+- Check off "Feature 1" in `docs/IMPLEMENTATION_CHECKLIST.md`
+- Mark security controls applied
 
-If Feature 1 is a paid feature, use Prompt Pattern 2:
+**Task 7: Repeat for 2-3 More Features**
 
-```
-Feature 1 should only be available to [Free/Basic/Pro] tier subscribers.
-
-Following app/dashboard/payment-gated/page.tsx pattern:
-
-Please:
-1. Wrap the feature page in Clerk's Protect component
-2. Set condition: !has({ plan: "free_user" }) for paid features
-3. Create upgrade fallback with CustomClerkPricing
-4. Ensure newSubscriptionRedirectUrl redirects back to feature
-5. Verify client code can't bypass protection
-
-Show me how to test that non-subscribers can't access the feature.
-```
-
-**Task 7: Repeat for Remaining Features**
-
-For each additional feature from `docs/MY_SAAS_PLAN.md`:
-1. Use Prompt Pattern 1 or 4 (secure API route)
-2. Add validation schema if needed
-3. Create Convex mutations if storing data
-4. Apply subscription gating if paid feature
-5. Test security controls
+Use the same blueprint-driven prompt pattern for each feature, always referencing:
+- `docs/MY_SECURITY_BLUEPRINT.md`
+- `docs/SECURITY_DECISION_LOG.md`
+- `docs/THREAT_MODEL.md`
 
 ---
 
-### Part 4: Testing Your Customized App (45 minutes)
+### Part 6: Testing & Documentation (30 minutes)
 
-**Task 8: Security Testing**
-
-Use Prompt Pattern 8:
-
-```
-I've customized Secure Vibe Coding OS with my features. I need to verify all security controls still work.
-
-My Custom Features:
-- [List all features you added]
-
-Security Tests:
-1. Rate Limiting
-   - Test: node scripts/test-rate-limit.js
-   - Expected: 5 success, 5 blocked
-
-2. CSRF Protection
-   - Test custom API routes without token
-   - Expected: 403 Forbidden
-
-3. Input Validation
-   - Send XSS payloads to each endpoint
-   - Expected: Sanitized or rejected
-
-4. Authentication
-   - Access protected routes without login
-   - Expected: Redirect to sign-in
-
-5. Subscription Gating
-   - Access paid features as free user
-   - Expected: Upgrade prompt
-
-6. Security Headers
-   - curl -I http://localhost:3000
-   - Expected: X-Frame-Options, CSP, etc.
-
-Please create a test plan for my specific features and show me how to verify each security control.
-```
-
-**Document results in:** `docs/SECURITY_TEST_RESULTS.md`
-
-**Task 9: Dependency Security Audit**
+**Task 8: Verify Security Controls**
 
 ```bash
-# Run security audit
+# Test what the starter provides
+node scripts/test-rate-limit.js
 bash scripts/security-check.sh
+npm run build
 
-# Should show:
-# - 0 vulnerabilities
-# - List of outdated packages (if any)
+# Expected: All pass
 ```
 
-If vulnerabilities found:
+**Task 9: Update Your Blueprint as You Build**
 
-```bash
-npm audit fix
-# Or if needed:
-npm audit fix --force
+**After implementing features, update your docs:**
+
+```
+Review my implementation and update my security documentation.
+
+Features I implemented:
+- [Feature 1 name and description]
+- [Feature 2 name and description]
+
+Please help me update:
+1. docs/MY_SECURITY_BLUEPRINT.md - Add my features to data flow
+2. docs/THREAT_MODEL.md - Mark threats as "mitigated" for features
+3. docs/IMPLEMENTATION_CHECKLIST.md - Check off completed items
+
+Show me what to update in each document.
 ```
 
-**Document in** `docs/SECURITY_TEST_RESULTS.md`:
-- Vulnerability count before/after
-- Packages updated
-- Testing performed after update
+**This teaches the "living document" principle from Module 2.6.**
 
 ---
 
-### Part 5: Documentation (30 minutes)
+## Key Differences from Module 2.6
 
-**Task 10: Document Your Security Posture**
+**Module 2.6 taught you:**
+- How to CREATE a security architecture from scratch
+- Blueprint concepts and theory
+- Threat modeling methodology
 
-Create `docs/MY_APP_SECURITY.md`:
+**Module 2.7 shows you:**
+- How to CUSTOMIZE an existing secure architecture
+- Using templates instead of starting from zero
+- Extending a 90/100 security foundation
+- Maintaining security as you build
+
+**The advantage:** You start with working security, then adapt it. Much faster than building from scratch.
+
+---
+
+## Deliverables
+
+By completing this hands-on exercise, you'll have:
+
+**Architecture Documentation (from Module 2.6 concepts):**
+- [ ] `docs/STARTER_SECURITY_REVIEW.md` - Understanding of inherited security
+- [ ] `docs/MY_SECURITY_BLUEPRINT.md` - Your customized blueprint
+- [ ] `docs/SECURITY_DECISION_LOG.md` - Your decisions documented
+- [ ] `docs/THREAT_MODEL.md` - Your threats and mitigations
+- [ ] `docs/IMPLEMENTATION_CHECKLIST.md` - Your progress tracker
+
+**Working Application:**
+- [ ] Branded with your app name
+- [ ] 2-3 features implemented with security stack
+- [ ] All security tests passing
+- [ ] Ready for continued development
+
+**Expected Time:** 2-3 hours
+
+---
+
+## How to Use Your Blueprint Going Forward
+
+**Every time you add a feature:**
+
+1. **Check your threat model** - Does this feature introduce new threats?
+2. **Update your decision log** - Document why you're building it this way
+3. **Reference in prompts** - Tell Claude Code about your blueprint
+4. **Update after implementation** - Mark checklist items complete
+5. **Test security** - Verify controls work
+
+**Example ongoing prompt:**
+
+```
+Following my security blueprint in docs/MY_SECURITY_BLUEPRINT.md and threat mitigations in docs/THREAT_MODEL.md, implement [new feature]...
+
+Security requirements from my blueprint:
+- [Reference specific items from your docs]
+
+Please ensure this follows my documented security architecture.
+```
+
+---
+
+## Connecting to Module 2.6 Learning
+
+**You learned in Module 2.6:**
+- Creating architecture diagrams
+- Documenting decisions
+- Threat modeling
+- Building checklists
+- Making blueprints actionable
+
+**You applied in Module 2.7:**
+- ✅ Used provided templates (faster than creating from scratch)
+- ✅ Customized for your specific SaaS
+- ✅ Referenced in Claude Code prompts
+- ✅ Maintained as living documentation
+- ✅ Built on 90/100 security foundation
+
+**The result:** You have both the knowledge (Module 2.6) AND a working secure foundation (Module 2.7) to build your SaaS application.
+
+---
 
 ```markdown
 # [Your App Name] Security Documentation
@@ -1557,7 +1610,7 @@ Based on OWASP Top 10 assessment (see docs/security/OWASP_TOP_10_ASSESSMENT.md):
 
 ## Resources
 
-- Security Implementation: `docs/security/SECURITY_IMPLEMENTATION.md`
+- Security Implementation: `docs/security/SECURITY_ARCHITECTURE.md`
 - OWASP Assessment: `docs/security/OWASP_TOP_10_ASSESSMENT.md`
 - Security Rules for AI: `.cursor/rules/security_rules.mdc`
 - Deployment Guide: `DEPLOYMENT.md`
@@ -2162,7 +2215,7 @@ catch (error) {
 ### Project Documentation
 
 **Security:**
-- `docs/security/SECURITY_IMPLEMENTATION.md` - Complete security controls guide
+- `docs/security/SECURITY_ARCHITECTURE.md` - Complete security controls guide
 - `docs/security/OWASP_TOP_10_ASSESSMENT.md` - Security posture analysis
 - `docs/security/security_risk.md` - Risk analysis with examples
 
@@ -2221,8 +2274,7 @@ By completing this module, you should have:
 
 ## Next Steps
 
-You now have a production-ready, security-hardened SaaS application foundation. In the next lesson (Module 2.7), you'll learn how to maintain security as you scale, add team members, and evolve your application.
-
+You now have a production-ready, security-hardened SaaS application foundation. In the next lesson (Module 3), you'll learn how to maintain security as vibe code, using security prompts.
 **Before Moving On:** Complete the practical exercise. Don't proceed until you have:
 1. At least 3 custom features implemented
 2. All security tests passing
