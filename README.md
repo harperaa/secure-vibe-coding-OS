@@ -1,8 +1,8 @@
-# More Secure Starter DIY - Next.js SaaS Starter Kit
+# Secure Vibe Coding OS - Morse Secure Next.js SaaS Starter Kit
 
-A modern, production-ready SaaS starter template for building full-stack applications using Next.js 15, Convex, Clerk, and Clerk Billing. The easiest way to start accepting payments with beautiful UI and seamless integrations.
+A modern, production-ready and security hardened SaaS starter template for building full-stack applications using Next.js 15, Convex, Clerk, and Clerk Billing. The easiest way to start accepting payments with beautiful UI and seamless integrations.
 
-[🌐 Live Demo](https://more-secure-starter.vercel.app/) – Try the app in your browser!
+[🌐 Live Demo](https://secure-vibe-coding-os.vercel.app/) – Try the app in your browser!
 
 
 ## Features
