@@ -9,6 +9,10 @@ A collection of specialized security skills that implement enterprise-grade secu
 
 ## 🎯 What This Is
 
+This package is the core security engine of the [Secure Vibe Coding OS](https://github.com/harperaa/secure-vibe-coding-OS)
+
+Also, this package and the Secure Vibe Coding OS are part of the [Secure Vibe Coding Masterclass](https://allenharper.com) by [Dr. Allen Harper](https://www.linkedin.com/in/drallenharper/). 
+
 This package provides specialized Claude Code skills that teach Claude how to implement:
 
 - **CSRF Protection** - Cross-Site Request Forgery prevention
@@ -20,6 +24,20 @@ This package provides specialized Claude Code skills that teach Claude how to im
 - **Payment Security** - Clerk Billing and Stripe security
 - **Dependency Security** - Supply chain protection
 - **Security Testing** - Automated security verification
+
+**Plus Security Awareness Skills:**
+
+In addition to implementation skills, this package includes comprehensive **Security Awareness** skills that help Claude understand *why* AI-generated code is insecure:
+
+- **Awareness Overview** - Statistics, research, and real-world breach examples
+- **Injection Vulnerabilities** - SQL injection, command injection, XSS with real attack scenarios
+- **Auth Vulnerabilities** - Broken authentication patterns and credential storage risks
+- **Information Leakage** - Error message exposure and logging vulnerabilities
+- **Supply Chain Risks** - Dependency confusion and malicious packages
+- **Business Logic Flaws** - Race conditions and integer overflow examples
+- **Resource Exhaustion** - DoS vulnerabilities and resource abuse
+
+These awareness skills educate Claude about the **45% vulnerability rate in AI-generated code** (Veracode 2024), helping it understand security risks before implementing solutions.
 
 Each skill provides Claude with deep knowledge of security patterns, common vulnerabilities, and secure implementation approaches specific to the Next.js + Clerk + Convex stack.
 
@@ -124,6 +142,52 @@ git commit -m "Update security skills"
 
 ---
 
+### Alternative: Install Directly from GitHub
+
+Don't want to use npm? Install directly from GitHub:
+
+#### Method A: Git Subtree (Stay Synced)
+
+```bash
+# Install skills with sync
+git subtree add --prefix=.claude/skills/security \
+  https://github.com/harperaa/secure-claude-skills.git main --squash
+
+# Update later
+git subtree pull --prefix=.claude/skills/security \
+  https://github.com/harperaa/secure-claude-skills.git main --squash
+```
+
+#### Method B: Git Submodule (Versioned)
+
+```bash
+# Install as submodule
+git submodule add https://github.com/harperaa/secure-claude-skills.git \
+  .claude/skills/security
+
+# Update later
+cd .claude/skills/security && git pull origin main
+```
+
+#### Method C: Simple Clone (No Sync)
+
+```bash
+# Clone directly
+git clone https://github.com/harperaa/secure-claude-skills.git \
+  .claude/skills/security
+
+# Remove git history (optional)
+rm -rf .claude/skills/security/.git
+```
+
+#### Method D: Download ZIP
+
+1. Go to https://github.com/harperaa/secure-claude-skills
+2. Click "Code" → "Download ZIP"
+3. Extract to `.claude/skills/security/`
+
+---
+
 ### Updating Skills
 
 If you installed with sync enabled:
@@ -184,6 +248,7 @@ Claude Code: I'll implement rate limiting using the rate-limiting skill.
 | **payment-security** | Clerk Billing/Stripe | "payment security", "PCI compliance", "Stripe" |
 | **dependency-security** | Supply chain protection | "dependencies", "npm audit", "vulnerabilities" |
 | **security-testing** | Automated verification | "security testing", "test security", "verify" |
+| **security-awareness** | Understanding AI code security risks | "vibe coding security", "AI vulnerabilities", "why AI insecure" |
 
 ### Triggering Skills
 
@@ -251,7 +316,15 @@ your-project/
 │       │   ├── auth-security/
 │       │   ├── payment-security/
 │       │   ├── dependency-security/
-│       │   └── security-testing/
+│       │   ├── security-testing/
+│       │   └── security-awareness/  (7 awareness sub-skills)
+│       │       ├── awareness-overview/
+│       │       ├── injection-vulnerabilities/
+│       │       ├── auth-vulnerabilities/
+│       │       ├── information-leakage/
+│       │       ├── supply-chain-risks/
+│       │       ├── business-logic-flaws/
+│       │       └── resource-exhaustion/
 │       └── your-custom-skill.md   (Your skills - untouched)
 ```
 
@@ -294,6 +367,7 @@ MIT License - See [LICENSE](LICENSE) for details
 
 ## ⚡ Quick Reference
 
+### npm Installation
 ```bash
 # Install (copy mode)
 npx secure-claude-skills init
@@ -314,8 +388,23 @@ npx secure-claude-skills init --force
 npx secure-claude-skills --help
 ```
 
+### GitHub Direct Installation
+```bash
+# Subtree (stay synced)
+git subtree add --prefix=.claude/skills/security \
+  https://github.com/harperaa/secure-claude-skills.git main --squash
+
+# Submodule (versioned)
+git submodule add https://github.com/harperaa/secure-claude-skills.git \
+  .claude/skills/security
+
+# Clone (no sync)
+git clone https://github.com/harperaa/secure-claude-skills.git \
+  .claude/skills/security
+```
+
 ---
 
-**Built with 🔒 by [Allen Harper](https://github.com/harperaa)**
+**Built with 🔒 by [Dr. Allen Harper](https://github.com/harperaa)**
 
 *Making AI-generated code secure by default*
