@@ -1,0 +1,21 @@
+# Git files
+.git
+.gitignore
+.github/
+
+# Development files
+node_modules/
+npm-debug.log
+.DS_Store
+
+# Internal documentation (not needed by end users)
+SETUP_GUIDE.md
+COMPLETION_SUMMARY.md
+STRUCTURE_FIXED.md
+
+# Keep these for users:
+# - README.md (installation guide)
+# - LICENSE (legal)
+# - examples/ (usage examples)
+# - bin/ (CLI tool)
+# - All skill directories (the actual skills)
