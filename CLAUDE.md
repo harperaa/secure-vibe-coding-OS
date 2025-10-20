@@ -4,7 +4,7 @@ See @.cursor/rules/security_rules.mdc for security guidelines.
 
 See @docs/security/security_risk.md for security risk analysis and mitigation strategies.
 
-Security architecture is implemented through specialized skills in .claude/skills/:
+Security architecture is implemented through specialized skills in .claude/skills/security/:
 - security-overview: High-level architecture and when to use other skills
 - csrf-protection: CSRF protection implementation
 - rate-limiting: Rate limiting implementation

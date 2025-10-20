@@ -1201,7 +1201,7 @@ I need to understand:
 
 Reference these project files:
 - docs/security/OWASP_TOP_10_ASSESSMENT.md
-- .claude/skills/ (security architecture implemented as skills)
+- .claude/skills/security/ (security architecture implemented as skills)
 - .cursor/rules/security_rules.mdc
 - lib/ folder (all security utilities)
 
@@ -1610,7 +1610,7 @@ Based on OWASP Top 10 assessment (see docs/security/OWASP_TOP_10_ASSESSMENT.md):
 
 ## Resources
 
-- Security Implementation: `.claude/skills/` (security architecture as skills)
+- Security Implementation: `.claude/skills/security/` (security architecture as skills)
 - OWASP Assessment: `docs/security/OWASP_TOP_10_ASSESSMENT.md`
 - Security Rules for AI: `.cursor/rules/security_rules.mdc`
 - Deployment Guide: `DEPLOYMENT.md`
@@ -2215,7 +2215,7 @@ catch (error) {
 ### Project Documentation
 
 **Security:**
-- `.claude/skills/` - Security architecture implemented as skills
+- `.claude/skills/security/` - Security architecture implemented as skills
 - `docs/security/OWASP_TOP_10_ASSESSMENT.md` - Security posture analysis
 - `docs/security/security_risk.md` - Risk analysis with examples
 
