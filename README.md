@@ -461,6 +461,22 @@ npm audit fix --force
 
 ## Architecture
 
+## Security Skills
+
+Security architecture is implemented through specialized Claude Code skills managed as a separate package:
+
+- **Package**: [secure-claude-skills](https://github.com/harperaa/secure-claude-skills)
+- **npm**: `npx secure-claude-skills init`
+- **Location**: `.claude/skills/security/` (managed as git subtree)
+
+The skills are synchronized with the main package using git subtree. To update:
+
+\`\`\`bash
+git subtree pull --prefix=.claude/skills/security \\
+  https://github.com/harperaa/secure-claude-skills.git main --squash
+\`\`\`
+```
+
 ### Key Routes
 - `/` - Beautiful landing page with pricing
 - `/dashboard` - Protected user dashboard
