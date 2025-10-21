@@ -1,6 +1,6 @@
 {
   "name": "secure-claude-skills",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Defense-in-depth security skills for Claude Code - CSRF protection, rate limiting, input validation, and more",
   "main": "index.js",
   "bin": {
