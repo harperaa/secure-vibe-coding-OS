@@ -9,7 +9,7 @@ A collection of specialized security skills that implement enterprise-grade secu
 
 ## 🎯 What This Is
 
-This package is the core security engine of the [Secure Vibe Coding OS](https://github.com/harperaa/secure-vibe-coding-OS), but was separated into its own package for ease of use and distribution.
+This package is the core security engine of the [Secure Vibe Coding OS](https://github.com/harperaa/secure-vibe-coding-OS), but was separated into its own package for ease of use and distribution.  
 
 Also, this package and the Secure Vibe Coding OS are part of the [Secure Vibe Coding Masterclass](https://allenharper.com) by [Dr. Allen Harper](https://www.linkedin.com/in/drallenharper/). 
 
