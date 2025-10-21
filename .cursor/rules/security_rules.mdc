@@ -864,7 +864,7 @@ Before deploying to production:
 
 **Project Security Docs:**
 - `docs/security/SECURITY_IMPLEMENTATION.md` - Complete implementation guide
-- `docs/security/security_risk.md` - Risk analysis and examples
+- `.claude/skills/security/security-awareness/` - AI code vulnerability analysis and examples
 - `README.md` - Security Configuration section
 
 **Testing Scripts:**

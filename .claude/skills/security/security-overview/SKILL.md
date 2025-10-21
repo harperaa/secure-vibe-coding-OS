@@ -239,9 +239,69 @@ When creating a new API route, ensure:
 - [ ] Set `runtime: 'nodejs'` in config for crypto operations
 - [ ] Tested the endpoint before committing
 
+## Security Awareness: Understanding AI Code Vulnerabilities
+
+Before implementing security controls, understand **why AI generates insecure code** and what vulnerabilities to watch for:
+
+### Why AI Code Is Often Insecure
+
+**Statistics from Research:**
+- **45% of AI-generated code** has insecure patterns (Veracode 2024)
+- **36-72% contains vulnerabilities** depending on language (Georgetown CSET 2024)
+- **68% of database queries** have SQL injection (Aikido Security 2025)
+- **81% stores passwords insecurely** (Databricks 2025)
+
+### Security Awareness Skills
+
+Learn about specific vulnerability categories in AI-generated code:
+
+**Understanding Injection Attacks:**
+→ `security-awareness/injection-vulnerabilities` - SQL injection, command injection, XSS
+- Real examples: Equifax (147M records), British Airways (£20M fine)
+- Why AI generates string concatenation instead of parameterized queries
+- Attack vectors and exploitation patterns
+
+**Understanding Authentication Defects:**
+→ `security-awareness/auth-vulnerabilities` - Insecure passwords, broken sessions, access control
+- Real examples: Ashley Madison (32M accounts), Dropbox (68M accounts)
+- Why AI suggests MD5/plaintext passwords
+- Why AI forgets authorization checks
+
+**Understanding Information Leakage:**
+→ `security-awareness/information-leakage` - Hardcoded secrets, verbose logging
+- Real examples: AWS keys exposed ($40K in 12 hours), payment data in logs
+- Why AI hardcodes credentials (training data)
+- What should never be logged
+
+**Understanding Supply Chain Risks:**
+→ `security-awareness/supply-chain-risks` - Vulnerable dependencies, typosquatting
+- Real examples: event-stream hijacked (2M downloads/week), 245K malicious packages (2023)
+- Why AI suggests outdated packages (67% have vulnerabilities)
+- Dependency confusion attacks
+
+**Understanding Business Logic Flaws:**
+→ `security-awareness/business-logic-flaws` - Race conditions, integer overflow
+- Real examples: Flash sales overselling, $250K refund exploit
+- Why logic flaws pass functional tests
+- Concurrent access vulnerabilities
+
+**Understanding Resource Exhaustion:**
+→ `security-awareness/resource-exhaustion` - Unbounded operations, cost explosion
+- Real examples: $200K in AI API charges (4 hours unnoticed)
+- Why AI doesn't add resource limits
+- DoS attack patterns
+
+**Overall Security Awareness:**
+→ `security-awareness/awareness-overview` - Complete overview of AI security risks
+- Statistics, research, real-world breaches
+- Path forward for secure vibe coding
+- Security-first prompting techniques
+
 ## Next Steps
 
-Based on your task, invoke the appropriate security skill:
+Based on your task, invoke the appropriate skill:
+
+### Implementation Skills (How to Build Securely)
 
 - Need to protect an API route? → `csrf-protection` skill
 - Need to prevent spam/abuse? → `rate-limiting` skill
@@ -252,6 +312,16 @@ Based on your task, invoke the appropriate security skill:
 - Need payments? → `payment-security` skill
 - Need to update packages? → `dependency-security` skill
 - Need to test security? → `security-testing` skill
+
+### Awareness Skills (Understanding Risks)
+
+- Want to understand AI security risks? → `security-awareness/awareness-overview` skill
+- Learning about injection attacks? → `security-awareness/injection-vulnerabilities` skill
+- Understanding auth vulnerabilities? → `security-awareness/auth-vulnerabilities` skill
+- Learning about exposed secrets? → `security-awareness/information-leakage` skill
+- Understanding supply chain? → `security-awareness/supply-chain-risks` skill
+- Learning about logic flaws? → `security-awareness/business-logic-flaws` skill
+- Understanding DoS risks? → `security-awareness/resource-exhaustion` skill
 
 ## References
 

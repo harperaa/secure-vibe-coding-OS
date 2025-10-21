@@ -38,12 +38,21 @@ This creates a dangerous situation: You start with an insecure foundation and th
 
 Instead of adding security later (which studies show rarely happens), this starter **embeds security controls from the beginning**:
 
+**Implementation (Code Layer):**
 1. **CSRF Protection** - HMAC-SHA256 signed tokens prevent cross-site request forgery
 2. **Rate Limiting** - 5 requests/minute per IP blocks brute force attacks
 3. **Input Validation** - Zod schemas with XSS sanitization on all user input
 4. **Security Headers** - CSP, HSTS, X-Frame-Options automatically applied
 5. **Secure Error Handling** - Generic errors in production, detailed errors in dev
 6. **Dependency Auditing** - 0 known vulnerabilities, automated checking
+
+**Knowledge Layer (Claude Code Skills):**
+- **Pre-installed skills** at `.claude/skills/security/` guide Claude to generate secure code
+- **10 implementation skills** teach Claude how to implement each security control correctly
+- **7 awareness skills** educate Claude about AI-generated code vulnerabilities
+- **Architecture documentation** in `docs/security/SECURITY_ARCHITECTURE.md` provides high-level blueprint
+
+**Result:** When you prompt Claude to add features, it uses these skills to avoid the 45% vulnerability rate typical of AI-generated code.
 
 ### The Security Stack
 
@@ -88,6 +97,31 @@ According to the project's security assessment (docs/security/OWASP_TOP_10_ASSES
 
 **What this means:** You're starting in the **top 10% of Next.js applications for security**, according to industry benchmarks.
 
+### How Architecture + Skills Work Together
+
+Secure Vibe Coding OS uses a two-layer approach to maintain security:
+
+**Layer 1: Architecture & Implementation**
+- **High-level blueprint**: `docs/security/SECURITY_ARCHITECTURE.md` (what we built)
+- **Security utilities**: `lib/` folder (how it's implemented)
+- **5-layer defense-in-depth**: Every request protected by multiple layers
+
+**Layer 2: Knowledge Transfer (Skills)**
+- **Pre-installed skills**: `.claude/skills/security/` (guide Claude)
+- **Implementation skills**: How to use CSRF, rate limiting, validation correctly
+- **Awareness skills**: Why AI generates insecure code, attack examples
+
+**How they work together:**
+1. You prompt Claude: "Add a contact form to my app"
+2. Claude reads skills: Understands CSRF, rate limiting, input validation required
+3. Claude references architecture: Sees the 5-layer model to follow
+4. Claude generates code: Applies withCsrf(), withRateLimit(), validateRequest()
+5. Result: Secure code that maintains the 90/100 OWASP score
+
+**Without skills:** Claude might forget CSRF protection or use weak validation (45% insecurity rate)
+
+**With skills:** Claude automatically applies all 5 security layers to your new features
+
 ---
 
 ## Section 2: Installation and Setup
@@ -122,7 +156,61 @@ npm install
 # or use: pnpm install / yarn install / bun install
 ```
 
-**Step 2: Set Up Your Environment Variables**
+**Step 2: Verify Security Skills (Pre-installed)**
+
+Secure Vibe Coding OS comes with **security skills already installed** at `.claude/skills/security/`. These specialized Claude Code skills are what make the security architecture work.
+
+**Verify skills are present:**
+
+**macOS / Linux:**
+```bash
+ls .claude/skills/security/
+```
+
+**Windows:**
+```cmd
+dir .claude\skills\security
+```
+
+You should see:
+```
+security-overview/      - Architecture & principles
+csrf-protection/        - CSRF implementation
+rate-limiting/          - Rate limiting patterns
+input-validation/       - Input validation & XSS
+security-headers/       - Header configuration
+error-handling/         - Secure error handling
+auth-security/          - Clerk authentication
+payment-security/       - Clerk Billing & Stripe
+dependency-security/    - npm audit & supply chain
+security-testing/       - Testing security features
+security-awareness/     - AI vulnerability education
+```
+
+**What these skills do:**
+
+When you prompt Claude Code to add features, these skills automatically guide Claude to:
+- Generate secure code following OWASP best practices
+- Apply the correct security layers (CSRF, rate limiting, validation)
+- Avoid the common vulnerabilities that plague AI-generated code (45% insecurity rate)
+- Implement the defense-in-depth architecture correctly
+
+**Skills are managed via git subtree:** They're synchronized with the [secure-claude-skills](https://github.com/harperaa/secure-claude-skills) package, ensuring you always have the latest security patterns.
+
+**Updating skills (optional):**
+
+To get the latest security improvements:
+```bash
+bash scripts/update-security-skills.sh
+```
+
+Or manually:
+```bash
+git subtree pull --prefix=.claude/skills/security \
+  https://github.com/harperaa/secure-claude-skills.git main --squash
+```
+
+**Step 3: Set Up Your Environment Variables**
 
 ```bash
 cp .env.example .env.local
@@ -1160,1128 +1248,148 @@ Create a deployment checklist specific to my app.
 
 ---
 
-## Hands-On Practice: Applying Module 2.6 Security Architecture Principles
+## Hands-On Practice: Install and Explore Secure Vibe Coding OS
 
-**Objective:** Apply the security architecture blueprint concepts from Module 2.6 to customize Secure Vibe Coding OS for your SaaS, creating living documentation that guides your development.
+**Objective:** Install the starter, review its security architecture, and test the built-in security controls.
 
-**Time:** 2-3 hours
+**Time:** 60 minutes
 
-**Prerequisites:** Completed Module 2.6 (Security Architecture Blueprint)
-
----
-
-## Overview: From Generic Starter to Your Secure SaaS
-
-In Module 2.6, you learned to create security architecture blueprints. Now you'll apply those concepts to the Secure Vibe Coding OS starter, which already has a 90/100 OWASP security foundation.
-
-**The Process:**
-1. Review the starter's existing security architecture
-2. Customize security blueprint templates for your specific SaaS
-3. Document your security decisions as you customize
-4. Reference your blueprint when prompting Claude Code
-5. Build features that extend the secure foundation
+**Prerequisites:** Completed Module 2.1 (Security Architecture Fundamentals)
 
 ---
 
-### Part 1: Understanding the Existing Security Architecture (30 minutes)
+### Part 1: Install Secure Vibe Coding OS (30 minutes)
 
-**Task 1: Review the Starter's Security Foundation**
+**Task: Follow the Installation Steps**
+
+Complete all steps from **Section 2: Installation and Setup** above:
+
+1. **Clone the repository** and install dependencies
+2. **Verify security skills** are present at `.claude/skills/security/`
+3. **Set up environment variables** (`.env.local`)
+4. **Configure Clerk account** (authentication provider)
+5. **Configure Convex deployment** (database)
+6. **Run the development server** (`npm run dev`)
+
+**Verification Checklist:**
+- [ ] App runs at http://localhost:3000
+- [ ] Can access sign-in page
+- [ ] Can create an account and sign in
+- [ ] Dashboard loads after authentication
+- [ ] No TypeScript errors in terminal
+
+**What you're learning:** How to set up a security-hardened Next.js starter from scratch
+
+---
+
+### Part 2: Review Security Architecture (20 minutes)
+
+**Task 1: Read the Architecture Document**
+
+Open and carefully read `docs/security/SECURITY_ARCHITECTURE.md`
+
+Pay attention to:
+- The 5 security layers and how they work together
+- The 4 security boundaries and their controls
+- The architectural decisions and why they were made
+- Which files implement each security control
+
+**Task 2: Understand the Architecture**
 
 **Prompt to Claude Code:**
 
 ```
-Explain the security architecture in Secure Vibe Coding OS.
+Review @docs/security/SECURITY_ARCHITECTURE.md and explain:
 
-I need to understand:
-1. What security controls are already implemented?
-2. How do they work together (the security stack)?
-3. What files contain the security utilities?
-4. What attacks are already prevented?
-5. What's the OWASP Top 10 security score?
+1. How do the 5 security layers work together? Give me an example of a request flowing through all layers.
 
-Reference these project files:
-- docs/security/OWASP_TOP_10_ASSESSMENT.md
-- .claude/skills/security/ (security architecture implemented as skills)
-- .cursor/rules/security_rules.mdc
-- lib/ folder (all security utilities)
+2. What are the 4 security boundaries and what controls exist at each boundary?
 
-Create a summary I can reference as I build my app.
+3. Explain these architectural decisions:
+   - Why use Clerk instead of custom authentication?
+   - Why use Convex instead of traditional SQL?
+   - Why HMAC-SHA256 for CSRF tokens?
+
+4. If an attacker tried to exploit this application, which layers would stop common attacks like:
+   - SQL injection
+   - XSS (Cross-Site Scripting)
+   - CSRF (Cross-Site Request Forgery)
+   - Brute force password attack
+
+Explain in simple terms I can understand.
 ```
 
-**Save Claude's explanation to:** `docs/STARTER_SECURITY_REVIEW.md`
+**Save Claude's explanation** for your reference.
 
-**Task 2: Copy and Customize Security Blueprint Template**
-
-```bash
-# Copy the provided template
-cp docs/templates/MY_SECURITY_BLUEPRINT_TEMPLATE.md docs/MY_SECURITY_BLUEPRINT.md
-```
-
-**Prompt to customize it:**
-
-```
-Help me customize docs/MY_SECURITY_BLUEPRINT.md for my SaaS app.
-
-My App Concept (from Module 2.6 if you did it):
-- Name: [Your App Name]
-- Purpose: [What it does]
-- Key features: [List 3-5 features]
-- Subscription model: [Free/Basic/Pro tiers]
-
-Update the template with:
-1. My app name and description
-2. My specific features in the data flow maps
-3. My subscription tiers in the architecture
-4. Threats specific to my app type
-5. Keep all inherited security controls from Secure Vibe Coding OS
-
-Reference: docs/templates/MY_SECURITY_BLUEPRINT_TEMPLATE.md
-```
-
-**Deliverable:** Your customized security blueprint
+**What you're learning:** The defense-in-depth architecture you're building on
 
 ---
 
-### Part 2: Documenting Your Security Decisions (30 minutes)
+### Part 3: Test Security Controls (10 minutes)
 
-**Task 3: Create Your Security Decision Log**
+**Task: See Security in Action**
 
+Run these commands to test each security control:
+
+**Test 1: Rate Limiting**
 ```bash
-# Copy the template
-cp docs/templates/SECURITY_DECISION_LOG_TEMPLATE.md docs/SECURITY_DECISION_LOG.md
-```
-
-**The template already includes 2 decisions (Clerk and CSRF). Now add YOUR decisions:**
-
-**Prompt for each decision you make:**
-
-```
-I'm deciding [what you're choosing - e.g., "which AI service to use"].
-
-For my SaaS app: [Your App Name]
-
-Options I'm considering:
-- Option 1: [Name and brief description]
-- Option 2: [Name and brief description]
-- Option 3: [Name and brief description]
-
-Help me document this decision using the Security Decision Log format:
-
-1. What I should choose and why
-2. What I'm giving up (trade-offs)
-3. What risks this introduces
-4. How to mitigate those risks
-
-Add this as "Decision 3" in docs/SECURITY_DECISION_LOG.md following the template format.
-```
-
-**Document at least 3 custom decisions:**
-- Decision 3: [Your first major technology choice]
-- Decision 4: [Your data storage approach]
-- Decision 5: [Your external integration choice]
-
-**Deliverable:** Decision log with rationale for all major choices
-
----
-
-### Part 3: Creating Your Threat Model (30 minutes)
-
-**Task 4: Customize the Threat Model**
-
-```bash
-# Copy the template
-cp docs/templates/THREAT_MODEL_TEMPLATE.md docs/THREAT_MODEL.md
-```
-
-**The template includes common threats. Now add threats specific to YOUR app:**
-
-**Prompt to add custom threats:**
-
-```
-Based on my SaaS app [Your App Name from Module 2.6], what additional threats should I add to my threat model?
-
-My app's unique aspects:
-- [Specific feature that might introduce risk]
-- [Type of data you're storing]
-- [External services you're integrating]
-
-Current threats covered (from template):
-- CSRF, XSS, brute force, etc. (inherited from starter)
-
-Please identify:
-1. Threats specific to my app's features
-2. Attack scenarios for each threat
-3. Likelihood and impact ratings
-4. Required mitigations
-5. Add them to docs/THREAT_MODEL.md using the template format
-
-Reference: docs/templates/THREAT_MODEL_TEMPLATE.md
-```
-
-**Deliverable:** Threat model customized for your specific SaaS
-
----
-
-### Part 4: Building Your Implementation Checklist (20 minutes)
-
-**Task 5: Set Up Your Implementation Tracking**
-
-```bash
-# Copy the template
-cp docs/templates/IMPLEMENTATION_CHECKLIST_TEMPLATE.md docs/IMPLEMENTATION_CHECKLIST.md
-```
-
-**The template has Phase 1 (Foundation) already checked off.** Now customize for YOUR features:
-
-**In the template, update:**
-- Phase 4: Add YOUR core features (Feature 1, 2, 3 with names from Module 2.6 plan)
-- Phase 5: Add YOUR integration security items
-- Phase 7: Customize production checklist
-
-**Simple edit - just fill in your feature names where the template says [Your Feature Name].**
-
-**Deliverable:** Implementation checklist ready to track your progress
-
----
-
-### Part 5: Blueprint-Driven Development (60 minutes)
-
-**Task 6: Build Your First Feature Using Your Blueprint**
-
-**Now use what you created in Module 2.6!** When you prompt Claude Code, reference YOUR blueprint:
-
-**The Blueprint-Driven Prompt:**
-
-```
-I'm implementing [Feature 1 from your Module 2.6 plan] for my SaaS app.
-
-BLUEPRINT REFERENCE:
-- Security Blueprint: docs/MY_SECURITY_BLUEPRINT.md
-- Security Decisions: docs/SECURITY_DECISION_LOG.md
-- Threat Model: docs/THREAT_MODEL.md
-- Security Rules: .cursor/rules/security_rules.mdc
-
-Feature Details:
-[Describe your feature]
-
-Security Requirements (from my blueprint):
-- [Copy from your threat model what threats this addresses]
-- Use Secure Vibe Coding OS security stack
-- Apply withRateLimit() and withCsrf()
-- Validate with Zod schema from lib/validation.ts
-- Follow pattern in app/api/example-protected/route.ts
-
-Please create:
-1. Validation schema in lib/validation.ts (if needed)
-2. API route with full security stack
-3. Convex mutation with validation
-4. Frontend page with subscription gating (if paid feature)
-
-Verify the implementation follows my security blueprint and threat mitigations.
-```
-
-**After Claude Code responds, update your checklist:**
-- Check off "Feature 1" in `docs/IMPLEMENTATION_CHECKLIST.md`
-- Mark security controls applied
-
-**Task 7: Repeat for 2-3 More Features**
-
-Use the same blueprint-driven prompt pattern for each feature, always referencing:
-- `docs/MY_SECURITY_BLUEPRINT.md`
-- `docs/SECURITY_DECISION_LOG.md`
-- `docs/THREAT_MODEL.md`
-
----
-
-### Part 6: Testing & Documentation (30 minutes)
-
-**Task 8: Verify Security Controls**
-
-```bash
-# Test what the starter provides
 node scripts/test-rate-limit.js
+```
+
+Expected: First 5 requests succeed, requests 6-10 blocked with HTTP 429
+
+**Test 2: CSRF Token Generation**
+```bash
+curl http://localhost:3000/api/csrf
+```
+
+Expected: Returns JSON with `csrfToken` value
+
+**Test 3: Security Headers**
+```bash
+curl -I http://localhost:3000
+```
+
+Expected: See headers like `X-Frame-Options: DENY`, `Content-Security-Policy`, etc.
+
+**Test 4: Dependency Audit**
+```bash
 bash scripts/security-check.sh
-npm run build
-
-# Expected: All pass
 ```
 
-**Task 9: Update Your Blueprint as You Build**
+Expected: 0 vulnerabilities
 
-**After implementing features, update your docs:**
-
-```
-Review my implementation and update my security documentation.
-
-Features I implemented:
-- [Feature 1 name and description]
-- [Feature 2 name and description]
-
-Please help me update:
-1. docs/MY_SECURITY_BLUEPRINT.md - Add my features to data flow
-2. docs/THREAT_MODEL.md - Mark threats as "mitigated" for features
-3. docs/IMPLEMENTATION_CHECKLIST.md - Check off completed items
-
-Show me what to update in each document.
-```
-
-**This teaches the "living document" principle from Module 2.6.**
-
----
-
-## Key Differences from Module 2.6
-
-**Module 2.6 taught you:**
-- How to CREATE a security architecture from scratch
-- Blueprint concepts and theory
-- Threat modeling methodology
-
-**Module 2.7 shows you:**
-- How to CUSTOMIZE an existing secure architecture
-- Using templates instead of starting from zero
-- Extending a 90/100 security foundation
-- Maintaining security as you build
-
-**The advantage:** You start with working security, then adapt it. Much faster than building from scratch.
+**What you're learning:** How to verify security controls are working
 
 ---
 
 ## Deliverables
 
-By completing this hands-on exercise, you'll have:
+By completing this hands-on practice, you should be able to:
 
-**Architecture Documentation (from Module 2.6 concepts):**
-- [ ] `docs/STARTER_SECURITY_REVIEW.md` - Understanding of inherited security
-- [ ] `docs/MY_SECURITY_BLUEPRINT.md` - Your customized blueprint
-- [ ] `docs/SECURITY_DECISION_LOG.md` - Your decisions documented
-- [ ] `docs/THREAT_MODEL.md` - Your threats and mitigations
-- [ ] `docs/IMPLEMENTATION_CHECKLIST.md` - Your progress tracker
+- [ ] Explain what each of the 5 security layers does
+- [ ] Identify where each security control is implemented (which file)
+- [ ] Understand the 4 security boundaries and their controls
+- [ ] Run security tests to verify controls are working
+- [ ] Understand the architectural decisions (why Clerk, Convex, HMAC-SHA256, etc.)
 
-**Working Application:**
-- [ ] Branded with your app name
-- [ ] 2-3 features implemented with security stack
-- [ ] All security tests passing
-- [ ] Ready for continued development
+**Expected Time:** 60 minutes
 
-**Expected Time:** 2-3 hours
-
----
-
-## How to Use Your Blueprint Going Forward
-
-**Every time you add a feature:**
-
-1. **Check your threat model** - Does this feature introduce new threats?
-2. **Update your decision log** - Document why you're building it this way
-3. **Reference in prompts** - Tell Claude Code about your blueprint
-4. **Update after implementation** - Mark checklist items complete
-5. **Test security** - Verify controls work
-
-**Example ongoing prompt:**
-
-```
-Following my security blueprint in docs/MY_SECURITY_BLUEPRINT.md and threat mitigations in docs/THREAT_MODEL.md, implement [new feature]...
-
-Security requirements from my blueprint:
-- [Reference specific items from your docs]
-
-Please ensure this follows my documented security architecture.
-```
-
----
-
-## Connecting to Module 2.6 Learning
-
-**You learned in Module 2.6:**
-- Creating architecture diagrams
-- Documenting decisions
-- Threat modeling
-- Building checklists
-- Making blueprints actionable
-
-**You applied in Module 2.7:**
-- ✅ Used provided templates (faster than creating from scratch)
-- ✅ Customized for your specific SaaS
-- ✅ Referenced in Claude Code prompts
-- ✅ Maintained as living documentation
-- ✅ Built on 90/100 security foundation
-
-**The result:** You have both the knowledge (Module 2.6) AND a working secure foundation (Module 2.7) to build your SaaS application.
-
----
-
-```markdown
-# [Your App Name] Security Documentation
-
-## Security Score: X/100
-
-Based on OWASP Top 10 assessment (see docs/security/OWASP_TOP_10_ASSESSMENT.md):
-
-| Category | Score | Notes |
-|----------|-------|-------|
-| Injection Prevention | X/10 | [Any changes from baseline?] |
-| CSRF Protection | X/10 | [Any changes from baseline?] |
-| Authentication | X/10 | [Using Clerk, any customizations?] |
-| [Continue for all 10]... | | |
-
-## Security Controls Active
-
-### Inherited from Secure Vibe Coding OS:
-- ✅ CSRF Protection (HMAC-SHA256)
-- ✅ Rate Limiting (5 req/min per IP)
-- ✅ Input Validation (Zod schemas)
-- ✅ Security Headers (CSP, HSTS, X-Frame-Options)
-- ✅ Secure Error Handling
-- ✅ 0 Known Vulnerabilities
-
-### Added for My Application:
-- [List custom security controls]
-- [Any additional protections]
-
-## Custom Features Security
-
-### Feature 1: [Name]
-- **Validation:** [Schema used]
-- **Rate Limited:** [Yes/No]
-- **CSRF Protected:** [Yes/No]
-- **Auth Required:** [Yes/No]
-- **Subscription Gate:** [Tier]
-- **Tested:** [✓] [Date]
-
-### Feature 2: [Name]
-[Repeat for each feature]
-
-## Attack Surface
-
-### Public Endpoints (no auth required):
-- `/` - Landing page (static, safe)
-- `/api/csrf` - CSRF token generation (rate limited)
-- [Your public endpoints]
-
-### Authenticated Endpoints:
-- `/dashboard` - Requires authentication
-- `/api/[your-endpoints]` - [Security controls listed]
-
-### Payment Processing:
-- Handled by: Clerk Billing + Stripe
-- PCI Compliance: ✅ (no card data touches our servers)
-- Webhook Security: ✅ (Clerk handles signature verification)
-
-## Security Monitoring
-
-**What we monitor:**
-- Failed authentication attempts (via Clerk)
-- Rate limit violations (logged in console)
-- CSRF validation failures (logged in console)
-- Input validation failures (logged with context)
-- Dependency vulnerabilities (npm audit)
-
-**Monitoring frequency:**
-- Real-time: Authentication, rate limiting, CSRF
-- Daily: `npm audit` check
-- Weekly: Manual security review
-- Monthly: OWASP assessment update
-
-## Incident Response Plan
-
-**If security incident detected:**
-
-1. **Immediate:**
-   - Roll back deployment via Vercel dashboard
-   - Revoke compromised credentials
-   - Enable Clerk rate limiting if not already active
-
-2. **Investigation:**
-   - Review logs (Clerk, Convex, Vercel)
-   - Identify scope of breach
-   - Document timeline
-
-3. **Resolution:**
-   - Patch vulnerability
-   - Test fix thoroughly
-   - Deploy to staging first
-   - Deploy to production
-   - Update security documentation
-
-4. **Post-Incident:**
-   - Update security rules in .cursor/rules/security_rules.mdc
-   - Add tests to prevent recurrence
-   - Review similar code for same issue
-
-## Resources
-
-- Security Implementation: `.claude/skills/security/` (security architecture as skills)
-- OWASP Assessment: `docs/security/OWASP_TOP_10_ASSESSMENT.md`
-- Security Rules for AI: `.cursor/rules/security_rules.mdc`
-- Deployment Guide: `DEPLOYMENT.md`
-```
-
----
-
-## Common Customization Patterns
-
-### Pattern 1: Adding a Data Collection Feature
-
-**Use case:** User submissions, posts, comments, etc.
-
-**Security requirements:**
-1. Input validation with Zod
-2. Rate limiting (prevent spam)
-3. CSRF protection (state-changing)
-4. XSS sanitization
-5. User authentication
-6. Associate data with user ID
-
-**Example implementations in project:**
-- `app/api/example-protected/route.ts` - Full security stack
-- `lib/validation.ts` - Pre-built schemas
-- `convex/users.ts` - Database pattern
-
----
-
-### Pattern 2: Adding External API Integration
-
-**Use case:** Calling third-party services (maps, weather, analytics, AI)
-
-**Security requirements:**
-1. API keys in environment variables only
-2. Backend calls only (never from frontend)
-3. Input validation before sending
-4. Response validation after receiving
-5. Rate limiting to prevent abuse
-6. Timeout protection
-7. Secure error handling
-
-**Refer to:** Module 2.5 (External Integrations Security) for complete patterns
-
----
-
-### Pattern 3: Adding Admin Features
-
-**Use case:** Admin dashboard, user management, analytics
-
-**Security requirements:**
-1. Role-based access control
-2. Audit logging of admin actions
-3. Extra authentication layer (consider MFA requirement)
-4. Separate from user features
-5. No sensitive data exposure
-
-**Prompt:**
-
-```
-I'm adding admin features to my SaaS built on Secure Vibe Coding OS.
-
-Admin Features Needed:
-- [List admin capabilities]
-
-Security Requirements:
-- Check user role/permissions (via Clerk metadata)
-- Require MFA for admin actions (Clerk supports this)
-- Log all admin actions for audit trail
-- Separate admin routes from user routes
-- Extra validation on admin operations
-
-Please:
-1. Show me how to check for admin role using Clerk
-2. Create protected admin route
-3. Implement admin action logging
-4. Add extra security controls for admin features
-5. Ensure admin can't be bypassed
-
-Reference: Clerk role-based access control documentation
-```
-
----
-
-## Practical Exercise: Build Your SaaS on Secure Foundation
-
-### Complete Project (3-4 hours)
-
-**Exercise Overview:**
-
-Transform Secure Vibe Coding OS into your production-ready SaaS application. You'll customize branding, add your core features, configure subscriptions, and verify all security controls remain active.
-
----
-
-#### Phase 1: Planning (30 minutes)
-
-**Task 1: Complete Planning Documents**
-
-Create these files in `docs/` folder:
-
-1. **docs/MY_SAAS_PLAN.md**
-   - Application overview
-   - Feature list
-   - Subscription tiers
-   - Data model
-   - Security priorities
-
-2. **docs/SECURITY_MAPPING.md**
-   - Map each feature to security controls
-   - Identify which schemas to use/create
-   - Note which features need rate limiting
-   - List features requiring CSRF protection
-   - Identify subscription-gated features
-
-**Deliverable:** Complete plan approved before coding
-
----
-
-#### Phase 2: Branding (30 minutes)
-
-**Task 2: Rebrand the Starter**
-
-Using Prompt Pattern 5:
-
-1. Update `NEXT_PUBLIC_SITE_NAME` in `.env.local` and `.env.example`
-2. Customize landing page copy (hero, features, testimonials)
-3. Update color scheme in `app/globals.css`
-4. Replace logo in `components/logo.tsx`
-5. Update metadata in `app/layout.tsx`
-
-**Verification:**
-- [ ] Site name appears correctly throughout app
-- [ ] Landing page reflects your brand
-- [ ] Colors match your design
-- [ ] Metadata updated for SEO
-- [ ] No security features broken
-
-**Deliverable:** Branded starter matching your design
-
----
-
-#### Phase 3: Configure Subscriptions (30 minutes)
-
-**Task 3: Set Up Your Pricing Plans**
-
-1. **In Clerk Dashboard (Development):**
-   - Billing → Create pricing plans
-   - Define tiers from MY_SAAS_PLAN.md
-   - Set pricing and features
-   - Enable Billing (test mode)
-
-2. **Verify Pricing Table:**
-   - Visit `http://localhost:3000`
-   - Pricing section should show your plans
-   - Test subscribing with card: `4242 4242 4242 4242`
-
-3. **Test Payment Gating:**
-   - Visit `/dashboard/payment-gated`
-   - Should show upgrade prompt
-   - Subscribe to plan
-   - Should show premium content after payment
-
-**Deliverable:** Working subscription system
-
----
-
-#### Phase 4: Build Core Features (120 minutes)
-
-**Task 4: Implement Feature 1**
-
-Using Prompt Patterns 1, 3, and 4:
-
-1. **Create validation schema** (if needed) in `lib/validation.ts`
-2. **Create API route** in `app/api/[feature]/route.ts`
-3. **Create Convex mutation** (if storing data) in `convex/[feature].ts`
-4. **Create UI page** in `app/dashboard/[feature]/page.tsx`
-5. **Apply security stack:**
-   ```typescript
-   export const POST = withRateLimit(withCsrf(handler));
-   ```
-
-**Security checklist for this feature:**
-- [ ] Input validated with Zod schema
-- [ ] XSS characters sanitized
-- [ ] Rate limiting applied
-- [ ] CSRF protection active
-- [ ] Authentication required
-- [ ] Subscription tier checked (if paid feature)
-- [ ] Errors handled securely
-- [ ] No sensitive data logged
-
-**Task 5: Implement Feature 2**
-
-Repeat process for second feature from your plan.
-
-**Task 6: Implement Feature 3**
-
-Repeat process for third feature from your plan.
-
-**Deliverable:** 3 working features with full security stack
-
----
-
-#### Phase 5: Security Testing (45 minutes)
-
-**Task 7: Test All Security Controls**
-
-Using Prompt Pattern 8:
-
-1. **Rate Limiting Test:**
-   ```bash
-   node scripts/test-rate-limit.js /api/your-feature
-   # Should block after 5 requests
-   ```
-
-2. **CSRF Test:**
-   ```bash
-   # Try POST without CSRF token
-   curl -X POST http://localhost:3000/api/your-feature \
-     -H "Content-Type: application/json" \
-     -d '{"test": "data"}'
-   # Should get 403 Forbidden
-   ```
-
-3. **XSS Test:**
-   ```bash
-   # Send XSS payload
-   curl -X POST http://localhost:3000/api/your-feature \
-     -H "Content-Type: application/json" \
-     -H "X-CSRF-Token: <get-from-/api/csrf>" \
-     -d '{"message": "<script>alert(1)</script>"}'
-   # Should sanitize the script tags
-   ```
-
-4. **Authentication Test:**
-   - Access `/dashboard/your-feature` while logged out
-   - Should redirect to sign-in
-
-5. **Subscription Test:**
-   - Access paid feature as free user
-   - Should show upgrade prompt
-   - Subscribe and verify access granted
-
-**Task 8: Security Audit**
-
-```bash
-# Run comprehensive security check
-bash scripts/security-check.sh
-
-# Should show:
-# - 0 vulnerabilities
-# - All packages up to date
-```
-
-**Task 9: Type Check**
-
-```bash
-# Verify TypeScript types
-npm run build
-
-# Should complete without errors
-```
-
-**Deliverable:** All tests passing, documented in `docs/SECURITY_TEST_RESULTS.md`
-
----
-
-#### Phase 6: Documentation (30 minutes)
-
-**Task 10: Document Your Implementation**
-
-Create `docs/IMPLEMENTATION_NOTES.md`:
-
-```markdown
-# [Your App Name] Implementation Notes
-
-## Features Implemented
-
-### Feature 1: [Name]
-- **Files Created:**
-  - `app/api/[feature]/route.ts`
-  - `convex/[feature].ts`
-  - `app/dashboard/[feature]/page.tsx`
-- **Security Controls:**
-  - ✅ Rate limiting
-  - ✅ CSRF protection
-  - ✅ Input validation (schema: [name])
-  - ✅ Authentication required
-  - ✅ [Subscription tier] required
-- **Tested:** ✓ [Date]
-
-[Repeat for each feature]
-
-## Security Architecture Maintained
-
-✅ All security utilities from lib/ preserved
-✅ Middleware security headers intact
-✅ CSRF protection active on all POST routes
-✅ Rate limiting applied to appropriate endpoints
-✅ Input validation on all user inputs
-✅ Error handling secure (no leaks in production)
-
-## Customizations Made
-
-**Branding:**
-- Site name: [Your name]
-- Colors: [Your colors]
-- Logo: [Updated/Original]
-
-**Landing Page:**
-- Hero section: [Customized]
-- Features: [Customized]
-- Testimonials: [Customized]
-
-**Features Added:**
-1. [Feature 1]
-2. [Feature 2]
-3. [Feature 3]
-
-**Database Schema:**
-- Tables added: [List]
-- Indexes created: [List]
-
-## Security Test Results
-
-- npm audit: 0 vulnerabilities ✓
-- Rate limiting: Working ✓
-- CSRF protection: Working ✓
-- Input validation: Working ✓
-- Security headers: Present ✓
-- TypeScript: No errors ✓
-
-## Production Readiness
-
-- [ ] All features tested
-- [ ] Security audit passed
-- [ ] Documentation complete
-- [ ] Environment variables configured
-- [ ] Deployment plan reviewed (DEPLOYMENT.md)
-```
-
----
-
-## Section 8: Advanced Security Customizations
-
-### When You Need More Than the Defaults
-
-The starter provides enterprise-grade security for most use cases, but you might need additional controls for specific scenarios.
-
-### Prompt Pattern 10: Adding Authorization Middleware
-
-**When to use:** Features with resource ownership (posts, documents, projects)
-
-**Currently in starter:** Authentication (who you are) via Clerk
-**You might need:** Authorization (what you can access)
-
-**The Prompt:**
-
-```
-I'm adding a feature where users own resources (posts/documents/projects) in Secure Vibe Coding OS.
-
-Feature: [Your feature with ownership model]
-
-Authorization Requirements:
-- Users can only access their own resources
-- Users can't view/edit other users' resources
-- Return 403 Forbidden if unauthorized access attempted
-- Log unauthorized access attempts
-- Check ownership on every request
-
-Please:
-1. Create withAuthorization() middleware in lib/withAuthorization.ts
-2. Implement resource ownership check function
-3. Show how to combine with existing security stack
-4. Add to API route: withRateLimit(withCsrf(withAuthorization(handler)))
-5. Create test showing users can't access others' resources
-
-Reference: OWASP Top 10 - Broken Access Control prevention
-```
-
-**When authorization matters:**
-- User-generated content (blogs, posts, comments)
-- Documents or files (user uploads)
-- Projects or workspaces (multi-tenant features)
-- Private data (health records, financial data)
-
----
-
-### Prompt Pattern 11: Custom Security Requirements
-
-**When to use:** Industry-specific compliance (HIPAA, GDPR, PCI-DSS)
-
-**The Prompt:**
-
-```
-My SaaS app needs to comply with [HIPAA/GDPR/PCI-DSS/etc.].
-
-Compliance Requirements:
-- [List specific requirements from regulation]
-
-Additional Security Needed:
-- [Field-level encryption]
-- [Audit logging]
-- [Data retention policies]
-- [Right to deletion]
-- [Consent management]
-
-Current Security in Secure Vibe Coding OS:
-- CSRF, rate limiting, input validation (already covered)
-- Clerk handles auth/session (SOC 2 certified)
-- Convex database (GDPR compliant)
-
-Please:
-1. Identify gaps between current security and compliance requirements
-2. Implement additional security controls needed
-3. Add audit logging for sensitive operations
-4. Implement data retention/deletion policies
-5. Create compliance documentation
-
-Show me the complete compliance implementation plan.
-```
-
----
-
-## Key Takeaways
-
-### The Secure Vibe Coding OS Security Checklist
-
-**Before deploying your customized app:**
-
-#### Foundation Security (Should Already Be Active)
-- [ ] CSRF protection working (`withCsrf` on POST routes)
-- [ ] Rate limiting enforced (`withRateLimit` on sensitive endpoints)
-- [ ] Input validation (Zod schemas) on all user inputs
-- [ ] XSS sanitization removing `< > " &`
-- [ ] Security headers present (CSP, X-Frame-Options, HSTS)
-- [ ] Secure error handling (generic errors in production)
-- [ ] 0 known vulnerabilities (`npm audit`)
-
-#### Authentication & Authorization
-- [ ] Clerk authentication configured
-- [ ] Protected routes use middleware
-- [ ] Subscription gating on paid features
-- [ ] Authorization checks for owned resources (if applicable)
-
-#### Custom Features Security
-- [ ] All custom API routes use security stack
-- [ ] Custom validation schemas created for new data types
-- [ ] Rate limiting on endpoints that could be abused
-- [ ] CSRF on all POST/PUT/DELETE operations
-- [ ] Authentication on user-specific features
-
-#### Environment & Deployment
-- [ ] Secrets in environment variables (never hardcoded)
-- [ ] `.env.local` not committed to Git
-- [ ] Separate dev and production credentials configured
-- [ ] Production deployment guide followed (DEPLOYMENT.md)
-
-#### Testing Completed
-- [ ] Rate limiting tested (`node scripts/test-rate-limit.js`)
-- [ ] CSRF protection verified
-- [ ] Input validation tested with XSS payloads
-- [ ] Authentication flow tested
-- [ ] Subscription gating verified
-- [ ] Security headers present (`curl -I`)
-- [ ] Error handling tested (dev vs prod)
-
-#### Documentation
-- [ ] Custom features documented with security controls
-- [ ] Security test results recorded
-- [ ] Deployment checklist completed
-- [ ] Team trained on security requirements (if applicable)
-
----
-
-## Tips for Maintaining Security
-
-### As You Build New Features
-
-**DO:**
-- ✅ Use existing security utilities from `lib/`
-- ✅ Follow patterns in `app/api/example-protected/route.ts`
-- ✅ Reference `.cursor/rules/security_rules.mdc`
-- ✅ Test security controls after each feature
-- ✅ Run `npm audit` regularly
-- ✅ Keep dependencies updated
-
-**DON'T:**
-- ❌ Skip security middlewares to "save time"
-- ❌ Modify core security utilities without understanding
-- ❌ Hardcode secrets "temporarily"
-- ❌ Disable security features for debugging
-- ❌ Trust user input without validation
-- ❌ Return detailed errors in production
-
-### Prompting Claude Code Securely
-
-**Always include security context:**
-
-```
-Following the security standards in .cursor/rules/security_rules.mdc and using the utilities in lib/, implement [your feature]...
-```
-
-**Claude Code knows to:**
-- Apply security middlewares
-- Use validation schemas
-- Handle errors securely
-- Never hardcode secrets
-- Follow defense-in-depth patterns
-
-**Verify Claude's output:**
-- Check that security imports are present
-- Verify security middlewares applied
-- Confirm validation schemas used
-- Review error handling
-- Test the security controls
-
----
-
-## Common Mistakes to Avoid
-
-### Mistake 1: Removing Security Middlewares
-
-```typescript
-// ❌ BAD - No security protection
-export async function POST(request: NextRequest) {
-  const body = await request.json();
-  // Use body.field directly - DANGER!
-}
-
-// ✅ GOOD - Full security stack
-import { withRateLimit } from '@/lib/withRateLimit';
-import { withCsrf } from '@/lib/withCsrf';
-import { validateRequest } from '@/lib/validateRequest';
-
-export const POST = withRateLimit(withCsrf(async (request) => {
-  const body = await request.json();
-  const validation = validateRequest(schema, body);
-  if (!validation.success) return validation.response;
-  // Use validation.data - SAFE!
-}));
-```
-
-### Mistake 2: Skipping Input Validation
-
-```typescript
-// ❌ BAD - No validation
-const { title } = await request.json();
-await saveToDatabase(title); // Could contain XSS!
-
-// ✅ GOOD - Validated and sanitized
-const validation = validateRequest(safeTextSchema, body);
-if (!validation.success) return validation.response;
-const { title } = validation.data; // XSS-safe!
-await saveToDatabase(title);
-```
-
-### Mistake 3: Hardcoding Secrets
-
-```typescript
-// ❌ BAD - Hardcoded API key
-const apiKey = 'sk-1234567890abcdef';
-
-// ✅ GOOD - Environment variable
-const apiKey = process.env.MY_API_KEY;
-if (!apiKey) throw new Error('API key not configured');
-```
-
-### Mistake 4: Exposing Error Details in Production
-
-```typescript
-// ❌ BAD - Leaks internal details
-catch (error) {
-  return NextResponse.json({
-    error: error.message,
-    stack: error.stack,
-    query: failedQuery
-  }, { status: 500 });
-}
-
-// ✅ GOOD - Secure error handling
-catch (error) {
-  return handleApiError(error, 'my-feature');
-  // Production: generic message only
-  // Development: full details
-}
-```
-
-### Mistake 5: Forgetting to Test Security
-
-```typescript
-// ❌ BAD - Assume security works
-// Build feature → Deploy → Hope for the best
-
-// ✅ GOOD - Verify security works
-// Build feature → Test security controls → Document results → Deploy
-```
-
----
-
-## Resources
-
-### Project Documentation
-
-**Security:**
-- `.claude/skills/security/` - Security architecture implemented as skills
-- `docs/security/OWASP_TOP_10_ASSESSMENT.md` - Security posture analysis
-- `docs/security/security_risk.md` - Risk analysis with examples
-
-**Development:**
-- `README.md` - Setup and configuration
-- `DEPLOYMENT.md` - 3-environment deployment guide
-- `.cursor/rules/security_rules.mdc` - Security rules for AI coding
-- `.cursor/rules/convex_rules.mdc` - Convex best practices
-
-**Testing:**
-- `scripts/test-rate-limit.js` - Rate limiting verification
-- `scripts/security-check.sh` - Dependency audit
-- `app/api/example-protected/route.ts` - Complete security example
-
-### External Resources
-
-**Clerk:**
-- Authentication: https://clerk.com/docs
-- Billing: https://clerk.com/docs/billing
-- Security: https://clerk.com/docs/security
-
-**Convex:**
-- Documentation: https://docs.convex.dev
-- Production deployment: https://docs.convex.dev/production
-
-**Security Standards:**
-- OWASP Top 10: https://owasp.org/www-project-top-ten/
-- OWASP Cheat Sheets: https://cheatsheetseries.owasp.org
-- Next.js Security: https://nextjs.org/docs/app/guides/security
-
----
-
-## Deliverables
-
-By completing this module, you should have:
-
-- [ ] `docs/MY_SAAS_PLAN.md` - Complete application plan
-- [ ] `docs/SECURITY_MAPPING.md` - Features mapped to security controls
-- [ ] `docs/MY_APP_SECURITY.md` - Your app's security documentation
-- [ ] `docs/IMPLEMENTATION_NOTES.md` - Implementation details
-- [ ] `docs/SECURITY_TEST_RESULTS.md` - All security tests documented
-- [ ] Branded application (NEXT_PUBLIC_SITE_NAME configured)
-- [ ] 3+ core features implemented with full security stack
-- [ ] Subscription plans configured in Clerk
-- [ ] All security controls tested and verified
-- [ ] TypeScript building without errors
-- [ ] `npm audit` showing 0 vulnerabilities
-- [ ] Clear understanding of security architecture
-- [ ] Ready for production deployment
-
-**Expected Time:** 3-4 hours
-
-**Note:** This is your foundation for every future SaaS project. Take time to understand the security architecture. Once you master this starter, you can build secure SaaS applications in days instead of weeks.
+**You now have a working, secure SaaS foundation ready for customization!**
 
 ---
 
 ## Next Steps
 
-You now have a production-ready, security-hardened SaaS application foundation. In the next lesson (Module 3), you'll learn how to maintain security as vibe code, using security prompts.
-**Before Moving On:** Complete the practical exercise. Don't proceed until you have:
-1. At least 3 custom features implemented
-2. All security tests passing
-3. Documentation complete
-4. Clear understanding of each security control
+You now have a production-ready, security-hardened SaaS application foundation.
 
-Your secure foundation is only valuable if you keep it secure as you build. The patterns you learned here will guide every feature you add.
+**Before Moving On:** Complete the hands-on practice. Ensure you can:
+- ✅ Explain what each of the 5 security layers does
+- ✅ Identify which files implement each control
+- ✅ Run all 4 security tests successfully
+- ✅ Understand why the architecture achieves a 90/100 OWASP score
+
+In the next module, you'll learn how to build features on this secure foundation while maintaining the security architecture.
 
 ---
 
@@ -2332,7 +1440,28 @@ import { Protect } from '@clerk/nextjs';
 
 ## Summary
 
-Secure Vibe Coding OS provides a security-hardened foundation that achieves a 90/100 OWASP security score out of the box, placing it in the top 10% of Next.js applications. The starter embeds defense-in-depth security controls including CSRF protection with HMAC-SHA256 signed tokens, IP-based rate limiting at 5 requests per minute, Zod-powered input validation with automatic XSS sanitization, comprehensive security headers (CSP, HSTS, X-Frame-Options), and environment-aware error handling. Installation requires configuring three accounts (Clerk for authentication, Convex for database, Stripe for payments via Clerk Billing) and takes approximately 30 minutes for basic setup. The security architecture follows a layered approach where every API route automatically inherits protection through utility functions: withRateLimit() prevents brute force attacks, withCsrf() blocks cross-site request forgery, validateRequest() ensures type-safe sanitized input, and handleApiError() prevents information leakage. Customization follows secure patterns where UI changes are safe while security utility modifications require careful review. Building features on this foundation means prompting Claude Code to use pre-built security utilities from lib/, following patterns in app/api/example-protected/route.ts, and referencing .cursor/rules/security_rules.mdc for AI-guided development. Testing security involves running built-in scripts for rate limiting verification, manual CSRF testing, XSS payload testing, and comprehensive dependency auditing. The starter supports professional deployment workflows with separate development, preview, and production environments, each with isolated Clerk instances and Convex deployments. As you customize and extend the starter, maintaining security requires applying security middlewares to all new routes, validating all user input with Zod schemas, using secure error handlers, testing security controls after each feature, and running regular security audits. The result is a production-ready SaaS foundation where security is implemented, not assumed, and every feature you build inherits enterprise-grade protection from day one.
+Secure Vibe Coding OS provides a security-hardened foundation that achieves a 90/100 OWASP security score out of the box, placing it in the top 10% of Next.js applications.
+
+**Security Implementation (Code):**
+The starter embeds defense-in-depth security controls including CSRF protection with HMAC-SHA256 signed tokens, IP-based rate limiting at 5 requests per minute, Zod-powered input validation with automatic XSS sanitization, comprehensive security headers (CSP, HSTS, X-Frame-Options), and environment-aware error handling.
+
+**Security Knowledge (Skills):**
+Pre-installed Claude Code skills at `.claude/skills/security/` ensure Claude generates secure code when you add features. The 10 implementation skills teach correct usage of security utilities, while 7 awareness skills educate Claude about AI-generated code vulnerabilities (preventing the 45% insecurity rate).
+
+**Architecture Documentation:**
+High-level architecture in `docs/security/SECURITY_ARCHITECTURE.md` provides the 5-layer defense-in-depth blueprint, 4 security boundaries model, and core security principles (Defense-in-Depth, Least Privilege, Fail-Secure, Zero Trust). Skills provide detailed implementation guidance.
+
+**Installation & Setup:**
+Requires configuring three accounts (Clerk for authentication, Convex for database, Stripe for payments via Clerk Billing) and takes approximately 30 minutes for basic setup. Security skills come pre-installed; optionally update with `bash scripts/update-security-skills.sh`.
+
+**Usage Pattern:**
+The security architecture follows a layered approach where every API route automatically inherits protection through utility functions: withRateLimit() prevents brute force attacks, withCsrf() blocks cross-site request forgery, validateRequest() ensures type-safe sanitized input, and handleApiError() prevents information leakage. When prompting Claude Code to add features, reference the skills (`.claude/skills/security/`), architecture doc (`docs/security/SECURITY_ARCHITECTURE.md`), and security rules (`.cursor/rules/security_rules.mdc`) to ensure generated code maintains security.
+
+**Testing & Deployment:**
+Testing security involves running built-in scripts for rate limiting verification, manual CSRF testing, XSS payload testing, and comprehensive dependency auditing. The starter supports professional deployment workflows with separate development, preview, and production environments, each with isolated Clerk instances and Convex deployments.
+
+**Maintaining Security:**
+As you customize and extend the starter, maintaining security requires applying security middlewares to all new routes, validating all user input with Zod schemas, using secure error handlers, letting Claude Code skills guide implementation, testing security controls after each feature, and running regular security audits. The result is a production-ready SaaS foundation where security is implemented AND knowledge-transfer ensures every feature you build inherits enterprise-grade protection from day one.
 
 ---
 

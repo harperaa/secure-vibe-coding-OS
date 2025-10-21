@@ -1,9 +1,16 @@
-# Secure Vibe Coding OS - Morse Secure Next.js SaaS Starter Kit
+# Secure Vibe Coding OS - More Secure Next.js SaaS Starter Kit
 
-A modern, production-ready and security hardened SaaS starter template for building full-stack applications using Next.js 15, Convex, Clerk, and Clerk Billing. The easiest way to start accepting payments with beautiful UI and seamless integrations.
+A modern, production-ready and security hardened SaaS starter template for building full-stack applications using Next.js 15, Convex, Clerk, and Clerk Billing. The easiest and most secure way to start accepting payments with beautiful UI and seamless integrations.
 
 [🌐 Live Demo](https://secure-vibe-coding-os.vercel.app/) – Try the app in your browser!
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## 🎯 What This Is
+
+This Secure Vibe Coding OS is part of the [Secure Vibe Coding Masterclass](https://allenharper.com) by [Dr. Allen Harper](https://www.linkedin.com/in/drallenharper/). 
+
+See two sample course modules, in the docs folder.
 
 ## Features
 
