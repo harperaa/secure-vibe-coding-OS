@@ -711,7 +711,9 @@ const schema = z.object({
 
 ## Convex Integration
 
-When using Convex, validate inputs in mutations:
+When using Convex, **always validate inputs in mutations** - never insert `args` directly into the database.
+
+### Basic Convex Validation Pattern
 
 ```typescript
 // convex/posts.ts
@@ -740,6 +742,70 @@ export const createPost = mutation({
   }
 });
 ```
+
+### Multiple Field Validation in Convex
+
+```typescript
+// convex/items.ts
+import { mutation } from "./_generated/server";
+import { safeTextSchema, safeLongTextSchema } from "../lib/validation";
+
+export const createItem = mutation({
+  handler: async (ctx, args) => {
+    // Validate each field with appropriate schema
+    const titleValidation = safeTextSchema.safeParse(args.title);
+    const descValidation = safeLongTextSchema.safeParse(args.description);
+
+    if (!titleValidation.success || !descValidation.success) {
+      throw new Error("Invalid input");
+    }
+
+    // Use sanitized data
+    await ctx.db.insert("items", {
+      title: titleValidation.data,
+      description: descValidation.data,
+      userId: ctx.auth.userId,  // From Clerk authentication
+      createdAt: Date.now()
+    });
+  }
+});
+```
+
+### Anti-Pattern: Direct Args Insertion (NEVER DO THIS)
+
+```typescript
+// ❌ BAD - Direct insertion without validation
+export const createItem = mutation({
+  handler: async (ctx, args) => {
+    // VULNERABLE: args inserted directly without validation
+    await ctx.db.insert("items", args);
+  }
+});
+
+// ✅ GOOD - Validated and sanitized
+export const createItem = mutation({
+  handler: async (ctx, args) => {
+    const validation = createItemSchema.safeParse(args);
+    if (!validation.success) {
+      throw new Error("Invalid input");
+    }
+
+    await ctx.db.insert("items", {
+      title: validation.data.title,
+      description: validation.data.description,
+      userId: ctx.auth.userId,
+      createdAt: Date.now()
+    });
+  }
+});
+```
+
+### Why Convex Validation is Critical
+
+1. **Frontend validation can be bypassed** - Attackers can call Convex mutations directly
+2. **Convex functions are your API** - Treat them like API routes with full validation
+3. **Type-safety alone isn't enough** - TypeScript types don't prevent XSS or validate lengths
+4. **Defense-in-depth** - Even if Next.js API validates, Convex should validate too
 
 ## What Input Validation Prevents
 

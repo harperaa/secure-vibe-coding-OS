@@ -557,19 +557,27 @@ export function handleNotFoundError(resource: string) {
 - Timestamp
 - Request path
 - HTTP status code
+- IP addresses (for security monitoring)
+- Operation names
+- Last 4 digits of card (for reference only)
+- Transaction IDs
 
 **❌ Never Log:**
 - Passwords (even hashed)
-- Credit card numbers
-- API keys/secrets
-- Personal Identifiable Information (PII)
+- Credit card numbers (full)
+- CVV codes
+- API keys/secrets/tokens
+- Personal Identifiable Information (full addresses, SSN, etc.)
 - Session tokens
+- Encryption keys
 - Full request/response bodies (may contain sensitive data)
+- Environment variables (`process.env`)
+- Full error stack traces (in production)
 
 ### Secure Logging Example
 
 ```typescript
-// Good logging
+// ✅ Good logging
 console.error('Payment failed', {
   userId,
   errorCode: error.code,
@@ -578,12 +586,40 @@ console.error('Payment failed', {
   path: request.nextUrl.pathname
 });
 
-// Bad logging
+// ❌ Bad logging
 console.error('Payment failed', {
   userId,
   creditCard: cardNumber, // ❌ Never log payment info
   apiKey: stripeKey,      // ❌ Never log secrets
   request: req.body       // ❌ May contain sensitive data
+});
+```
+
+### Redacting Sensitive Fields
+
+Always redact sensitive data before logging:
+
+```typescript
+const SENSITIVE_FIELDS = [
+  'password', 'token', 'secret', 'apiKey', 'ssn',
+  'creditCard', 'cvv', 'cardNumber'
+];
+
+function safelog(data: any) {
+  const sanitized = { ...data };
+  SENSITIVE_FIELDS.forEach(field => {
+    if (field in sanitized) {
+      sanitized[field] = '[REDACTED]';
+    }
+  });
+  console.log(sanitized);
+}
+
+// Usage
+safelog({
+  userId: 'user123',
+  email: 'user@example.com',
+  password: 'secret123' // Will be [REDACTED]
 });
 ```
 

@@ -239,6 +239,175 @@ When creating a new API route, ensure:
 - [ ] Set `runtime: 'nodejs'` in config for crypto operations
 - [ ] Tested the endpoint before committing
 
+## Common Patterns - Copy & Paste Templates
+
+### Template 1: Simple Protected Endpoint (No CSRF)
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit } from '@/lib/withRateLimit';
+import { handleApiError, handleUnauthorizedError } from '@/lib/errorHandler';
+import { auth } from '@clerk/nextjs/server';
+
+async function handler(request: NextRequest) {
+  try {
+    const { userId } = await auth();
+    if (!userId) return handleUnauthorizedError();
+
+    // Your logic here
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleApiError(error, 'route-name');
+  }
+}
+
+export const GET = withRateLimit(handler);
+export const config = { runtime: 'nodejs' };
+```
+
+### Template 2: Form Submission with Full Protection
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit } from '@/lib/withRateLimit';
+import { withCsrf } from '@/lib/withCsrf';
+import { validateRequest } from '@/lib/validateRequest';
+import { handleApiError, handleUnauthorizedError } from '@/lib/errorHandler';
+import { contactFormSchema } from '@/lib/validation';
+import { auth } from '@clerk/nextjs/server';
+
+async function handler(request: NextRequest) {
+  try {
+    const { userId } = await auth();
+    if (!userId) return handleUnauthorizedError();
+
+    const body = await request.json();
+    const validation = validateRequest(contactFormSchema, body);
+
+    if (!validation.success) {
+      return validation.response;
+    }
+
+    const { name, email, subject, message } = validation.data;
+
+    // Process form (send email, save to DB, etc.)
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleApiError(error, 'contact-form');
+  }
+}
+
+export const POST = withRateLimit(withCsrf(handler));
+export const config = { runtime: 'nodejs' };
+```
+
+### Template 3: Public Endpoint (No Auth, Yes Rate Limit)
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit } from '@/lib/withRateLimit';
+import { validateRequest } from '@/lib/validateRequest';
+import { handleApiError } from '@/lib/errorHandler';
+import { emailSchema } from '@/lib/validation';
+
+async function handler(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const validation = validateRequest(emailSchema, body);
+
+    if (!validation.success) {
+      return validation.response;
+    }
+
+    const email = validation.data;
+
+    // Process (e.g., newsletter signup)
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleApiError(error, 'newsletter');
+  }
+}
+
+export const POST = withRateLimit(handler);
+export const config = { runtime: 'nodejs' };
+```
+
+## What NOT to Do - Common Anti-Patterns
+
+### ❌ Anti-Pattern 1: No Security Middlewares
+
+```typescript
+// BAD - No protection
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  // directly use body.field
+  return NextResponse.json({ success: true });
+}
+```
+
+**Why this is bad:** No rate limiting, no CSRF protection, no input validation. Vulnerable to brute force, CSRF attacks, and injection attacks.
+
+### ❌ Anti-Pattern 2: Skipping Input Validation
+
+```typescript
+// BAD - No validation
+async function handler(request: NextRequest) {
+  const body = await request.json();
+  const { title } = body; // Could contain <script> tags!
+  await saveToDatabase(title);
+}
+```
+
+**Why this is bad:** XSS vulnerability. User input directly stored/displayed without sanitization.
+
+### ❌ Anti-Pattern 3: Exposing Error Details in Production
+
+```typescript
+// BAD - Information leakage
+catch (error) {
+  return NextResponse.json({
+    error: error.message,      // Could reveal internal paths
+    stack: error.stack,        // Exposes code structure
+    query: failedQuery         // Reveals database schema
+  }, { status: 500 });
+}
+```
+
+**Why this is bad:** Helps attackers understand your system internals, database structure, file paths.
+
+### ❌ Anti-Pattern 4: Hardcoding Secrets
+
+```typescript
+// BAD - Hardcoded secret
+const apiKey = 'sk_live_123456789';
+
+// GOOD - Environment variable
+const apiKey = process.env.API_KEY;
+```
+
+**Why this is bad:** Secrets end up in version control, easily exposed if repository is compromised.
+
+### ❌ Anti-Pattern 5: No Rate Limiting on Public Forms
+
+```typescript
+// BAD - Can be spammed infinitely
+export async function POST(request: NextRequest) {
+  await sendEmail(data);
+  return NextResponse.json({ success: true });
+}
+
+// GOOD - Rate limited
+export const POST = withRateLimit(async (request: NextRequest) => {
+  await sendEmail(data);
+  return NextResponse.json({ success: true });
+});
+```
+
+**Why this is bad:** Attackers can spam your endpoints, rack up costs, or perform brute force attacks.
+
 ## Security Awareness: Understanding AI Code Vulnerabilities
 
 Before implementing security controls, understand **why AI generates insecure code** and what vulnerabilities to watch for:
@@ -312,6 +481,14 @@ Based on your task, invoke the appropriate skill:
 - Need payments? → `payment-security` skill
 - Need to update packages? → `dependency-security` skill
 - Need to test security? → `security-testing` skill
+
+### Operations Skills (Deployment & Monitoring)
+
+- When to use which middleware? → `security-operations` skill
+- Need environment variable setup? → `security-operations` skill
+- Pre-deployment checklist? → `security-operations` skill
+- Security monitoring setup? → `security-operations` skill
+- Maintenance schedule? → `security-operations` skill
 
 ### Awareness Skills (Understanding Risks)
 

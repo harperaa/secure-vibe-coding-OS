@@ -492,6 +492,59 @@ curl -X POST http://localhost:3000/api/example-protected \
 # Expected: 403 Forbidden - Token already used
 ```
 
+## Secure Cookie Configuration
+
+### Cookie Security Settings
+
+For any custom cookies in your application, always use these secure settings:
+
+```typescript
+response.cookies.set('cookie-name', value, {
+  httpOnly: true,                                    // Prevent XSS access
+  sameSite: 'strict',                                // CSRF protection
+  secure: process.env.NODE_ENV === 'production',    // HTTPS only in prod
+  maxAge: 3600,                                      // Expiration (1 hour)
+  path: '/',                                         // Cookie scope
+});
+```
+
+**Security Properties Explained:**
+
+- **`httpOnly: true`** - JavaScript cannot access the cookie via `document.cookie`, preventing XSS theft
+- **`sameSite: 'strict'`** - Browser won't send cookie on cross-origin requests, blocking CSRF
+- **`secure: true`** - Cookie only sent over HTTPS (prevents man-in-the-middle interception)
+- **`maxAge`** - Cookie expiration time in seconds (shorter = more secure)
+- **`path: '/'`** - Where cookie is valid (restrict if possible)
+
+### Common Cookie Mistakes to Avoid
+
+❌ **NEVER do this:**
+```typescript
+// BAD - Missing security flags
+response.cookies.set('session', sessionId);
+
+// BAD - No httpOnly (vulnerable to XSS)
+response.cookies.set('session', sessionId, { httpOnly: false });
+
+// BAD - sameSite: 'none' (allows CSRF)
+response.cookies.set('session', sessionId, { sameSite: 'none' });
+
+// BAD - No expiration (never expires)
+response.cookies.set('session', sessionId, { httpOnly: true });
+```
+
+✅ **ALWAYS do this:**
+```typescript
+// GOOD - All security flags
+response.cookies.set('session', sessionId, {
+  httpOnly: true,
+  sameSite: 'strict',
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: 3600, // 1 hour
+  path: '/'
+});
+```
+
 ## Environment Configuration
 
 ### Required Environment Variables

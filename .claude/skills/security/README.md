@@ -7,7 +7,7 @@ A collection of specialized security skills that implement enterprise-grade secu
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![npm version](https://badge.fury.io/js/secure-claude-skills.svg)](https://www.npmjs.com/package/secure-claude-skills)
 
-## 🎯 What This Is
+## 🎯 What Is This?
 
 This package is the core security engine of the [Secure Vibe Coding OS](https://github.com/harperaa/secure-vibe-coding-OS), but was separated into its own package for ease of use and distribution.  
 
@@ -248,6 +248,7 @@ Claude Code: I'll implement rate limiting using the rate-limiting skill.
 | **payment-security** | Clerk Billing/Stripe | "payment security", "PCI compliance", "Stripe" |
 | **dependency-security** | Supply chain protection | "dependencies", "npm audit", "vulnerabilities" |
 | **security-testing** | Automated verification | "security testing", "test security", "verify" |
+| **security-operations** | Deployment & monitoring | "when to use middleware", "environment variables", "deployment checklist" |
 | **security-awareness** | Understanding AI code security risks | "vibe coding security", "AI vulnerabilities", "why AI insecure" |
 
 ### Triggering Skills
@@ -317,6 +318,7 @@ your-project/
 │       │   ├── payment-security/
 │       │   ├── dependency-security/
 │       │   ├── security-testing/
+│       │   ├── security-operations/
 │       │   └── security-awareness/  (7 awareness sub-skills)
 │       │       ├── awareness-overview/
 │       │       ├── injection-vulnerabilities/
