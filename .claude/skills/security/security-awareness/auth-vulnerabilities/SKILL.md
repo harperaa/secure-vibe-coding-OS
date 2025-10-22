@@ -1,5 +1,5 @@
 ---
-name: Authentication & Authorization Vulnerabilities in AI Code
+name: authentication-authorization-vulnerabilities-ai-code
 description: Understand authentication and authorization defects in AI-generated code including insecure password storage, broken session management, and access control bypasses. Use this skill when you need to learn about auth vulnerabilities in AI code, understand why AI suggests MD5/plaintext passwords, recognize broken session patterns, or identify access control gaps. Triggers include "auth vulnerabilities AI", "password storage AI", "session management", "broken access control", "authentication defects", "MD5 passwords", "session hijacking", "authorization bypass".
 ---
 

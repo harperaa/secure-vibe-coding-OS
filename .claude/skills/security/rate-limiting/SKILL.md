@@ -1,5 +1,5 @@
 ---
-name: Rate Limiting
+name: rate-limiting
 description: Implement rate limiting to prevent brute force attacks, spam, and resource abuse. Use this skill when you need to protect endpoints from automated attacks, prevent API abuse, limit request frequency, or control infrastructure costs. Triggers include "rate limiting", "rate limit", "brute force", "prevent spam", "API abuse", "resource exhaustion", "DoS", "withRateLimit", "too many requests", "429 error".
 ---
 

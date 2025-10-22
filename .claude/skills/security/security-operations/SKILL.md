@@ -1,5 +1,5 @@
 ---
-name: Security Operations & Deployment
+name: security-operations-deployment
 description: Operational security guidance for deployment, monitoring, and maintenance. Use this skill when you need to understand which middlewares to apply, configure environment variables, monitor security post-deployment, or follow the pre-deployment checklist. Triggers include "security operations", "deployment security", "security monitoring", "environment variables", "when to use middleware", "pre-deployment", "security checklist", "production security".
 ---
 

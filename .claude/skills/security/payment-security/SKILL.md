@@ -1,5 +1,5 @@
 ---
-name: Payment Security with Clerk Billing & Stripe
+name: payment-security-clerk-billing-stripe
 description: Implement secure payments using Clerk Billing and Stripe without ever touching card data. Use this skill when you need to set up subscription payments, handle webhooks, implement payment gating, understand PCI-DSS compliance, or integrate Stripe Checkout. Triggers include "payment", "Stripe", "Clerk Billing", "subscription", "PCI-DSS", "credit card", "payment security", "checkout", "webhook", "billing".
 ---
 

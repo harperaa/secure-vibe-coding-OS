@@ -1,5 +1,5 @@
 ---
-name: Security Headers
+name: security-headers
 description: Configure security headers to defend against clickjacking, XSS, MIME confusion, and SSL stripping attacks. Use this skill when you need to set up Content-Security-Policy, X-Frame-Options, HSTS, configure middleware headers, or understand browser security features. Triggers include "security headers", "CSP", "content security policy", "X-Frame-Options", "HSTS", "clickjacking", "MIME confusion", "middleware headers".
 ---
 

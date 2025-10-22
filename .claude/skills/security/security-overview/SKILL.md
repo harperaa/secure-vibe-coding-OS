@@ -1,5 +1,5 @@
 ---
-name: Security Architecture Overview
+name: security-architecture-overview
 description: Understand the defense-in-depth security architecture of Secure Vibe Coding OS. Use this skill when you need to understand the overall security approach, the 5-layer security stack, OWASP scoring, or when to use other security skills. Triggers include "security architecture", "defense in depth", "security layers", "how does security work", "OWASP score", "security overview", "security principles".
 ---
 

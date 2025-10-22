@@ -1,5 +1,5 @@
 ---
-name: Resource Exhaustion & DoS in AI-Generated Code
+name: resource-exhaustion-dos-ai-generated-code
 description: Understand resource exhaustion and denial of service vulnerabilities in AI code including unbounded loops, missing rate limits, and uncontrolled resource consumption. Use this skill when you need to learn about DoS vulnerabilities in AI code, understand resource limits, recognize unbounded operations, or prevent resource exhaustion. Triggers include "resource exhaustion", "DoS vulnerabilities", "denial of service", "unbounded resources", "API cost protection", "memory exhaustion", "uncontrolled consumption", "rate limiting DoS".
 ---
 

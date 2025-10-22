@@ -1,5 +1,5 @@
 ---
-name: Dependency & Supply Chain Security
+name: dependency-supply-chain-security
 description: Manage dependencies and supply chain security to prevent vulnerable or malicious packages. Use this skill when you need to audit dependencies, update packages, check for vulnerabilities, understand supply chain attacks, or maintain dependency security. Triggers include "dependencies", "npm audit", "supply chain", "package security", "vulnerability", "npm update", "security audit", "outdated packages".
 ---
 

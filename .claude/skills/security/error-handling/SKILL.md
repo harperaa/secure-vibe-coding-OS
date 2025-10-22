@@ -1,5 +1,5 @@
 ---
-name: Secure Error Handling
+name: secure-error-handling
 description: Implement secure error handling to prevent information leakage and provide appropriate error responses. Use this skill when you need to handle errors in API routes, prevent stack trace exposure, implement environment-aware error messages, or use the error handler utilities. Triggers include "error handling", "handle errors", "error messages", "information leakage", "stack trace", "handleApiError", "production errors", "error responses".
 ---
 

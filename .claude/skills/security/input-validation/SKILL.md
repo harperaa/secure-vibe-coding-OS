@@ -1,5 +1,5 @@
 ---
-name: Input Validation & XSS Prevention
+name: input-validation-xss-prevention
 description: Validate and sanitize user input to prevent XSS, injection attacks, and ensure data quality. Use this skill when you need to validate forms, sanitize user input, prevent cross-site scripting, use Zod schemas, or handle any user-generated content. Triggers include "input validation", "validate input", "XSS", "cross-site scripting", "sanitize", "Zod", "injection prevention", "validateRequest", "safeTextSchema", "user input security".
 ---
 

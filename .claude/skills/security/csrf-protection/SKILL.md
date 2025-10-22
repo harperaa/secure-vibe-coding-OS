@@ -1,5 +1,5 @@
 ---
-name: CSRF Protection
+name: csrf-protection
 description: Implement Cross-Site Request Forgery (CSRF) protection for API routes. Use this skill when you need to protect POST/PUT/DELETE endpoints, implement token validation, prevent cross-site attacks, or secure form submissions. Triggers include "CSRF", "cross-site request forgery", "protect form", "token validation", "withCsrf", "CSRF token", "session fixation".
 ---
 

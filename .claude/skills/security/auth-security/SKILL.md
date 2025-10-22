@@ -1,5 +1,5 @@
 ---
-name: Authentication & Authorization with Clerk
+name: authentication-authorization-clerk
 description: Implement secure authentication and authorization using Clerk. Use this skill when you need to authenticate users, protect routes, check permissions, implement subscription-based access control, or integrate Clerk with your application. Triggers include "authentication", "auth", "authorization", "Clerk", "protect route", "check user", "sign in", "session", "permissions", "subscription access".
 ---
 

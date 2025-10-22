@@ -1,5 +1,5 @@
 ---
-name: Injection Vulnerabilities in AI-Generated Code
+name: injection-vulnerabilities-ai-generated-code
 description: Understand how AI generates SQL injection, command injection, and XSS vulnerabilities. Use this skill when you need to learn about injection attack patterns in AI code, see real-world examples of injection vulnerabilities, understand why AI generates insecure database queries, or recognize vulnerable code patterns. Triggers include "SQL injection AI", "command injection", "XSS vulnerabilities", "injection attacks", "AI database queries", "shell injection", "cross-site scripting AI code".
 ---
 

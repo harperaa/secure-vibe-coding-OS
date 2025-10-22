@@ -1,5 +1,5 @@
 ---
-name: Supply Chain & Dependency Risks in AI Code
+name: supply-chain-dependency-risks-ai-code
 description: Understand supply chain vulnerabilities and dependency risks in AI-generated code including outdated packages, malicious packages, and dependency confusion attacks. Use this skill when you need to learn about vulnerable dependencies in AI code, understand supply chain attacks, recognize typosquatting, or identify outdated package suggestions. Triggers include "supply chain attacks", "dependency vulnerabilities", "outdated packages", "malicious npm packages", "typosquatting", "dependency confusion", "vulnerable dependencies AI", "npm security".
 ---
 

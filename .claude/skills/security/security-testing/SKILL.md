@@ -1,5 +1,5 @@
 ---
-name: Security Testing & Verification
+name: security-testing-verification
 description: Test security features and verify implementation before deployment. Use this skill when you need to test CSRF protection, rate limiting, input validation, verify security headers, run security audits, or check the pre-deployment security checklist. Triggers include "test security", "security testing", "verify security", "security checklist", "pre-deployment", "test CSRF", "test rate limit", "security verification".
 ---
 

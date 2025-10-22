@@ -1,5 +1,5 @@
 ---
-name: Business Logic Flaws in AI-Generated Code
+name: business-logic-flaws-ai-generated-code
 description: Understand business logic vulnerabilities in AI code including race conditions, integer overflow, and calculation errors that pass functional tests but create security holes. Use this skill when you need to learn about race conditions in AI code, understand integer overflow vulnerabilities, recognize business logic security flaws, or identify calculation errors. Triggers include "race conditions", "business logic vulnerabilities", "integer overflow", "race condition AI", "flash sale security", "concurrent access", "negative totals", "calculation errors".
 ---
 

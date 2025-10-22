@@ -1,5 +1,5 @@
 ---
-name: Information Leakage & Hardcoded Secrets in AI Code
+name: information-leakage-hardcoded-secrets-ai-code
 description: Understand how AI-generated code exposes sensitive information through hardcoded credentials and verbose logging. Use this skill when you need to learn about hardcoded secrets in AI code, understand logging vulnerabilities, recognize exposed API keys, or prevent information disclosure. Triggers include "hardcoded credentials", "hardcoded secrets", "API keys in code", "information leakage", "verbose logging", "exposed secrets", "AWS keys", "logging vulnerabilities", "sensitive data logs".
 ---
 
