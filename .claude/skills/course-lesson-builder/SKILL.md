@@ -12,7 +12,7 @@ This skill guides the creation of educational course modules that follow a consi
 ## Course Outline Reference
 
 Always reference the master course outline to ensure module fits the overall curriculum:
-- **File:** `Secure Vibe Coding Course - 10 Modules.tsx` (in project root)
+- **File:** `course-outline.tsx.txt` (in project root)
 - **Contains:** All module titles, topics, learning paths, and how modules connect
 
 ## Leverage Claude Code Skills when we have them
@@ -20,7 +20,7 @@ If you notice there is a claude skill for the given assignment, then use it by e
 
 >Skills Triggered: Keywords like "Clerk", "authenticated", "sanitize", "XSS", "validate", "rate limit", and "log" trigger appropriate security skills.
 
-## IMPORTANT. - leverage the Secure Vibe Coding OS, throughout, given the project level uploaded file for module 2.6, Secure Vibe Coding OS. Since we already have a secure baseline, understand that module 2.6 and use it to extend the Secure Vibe Coding OS with the given topic for the course lesson.  For example, if talking about authentication, extend the baseline already given in the Secure Vibe Coding OS.  I want the lessons to help the user extend that baseline and accomplish all they would need to as a secure vibe coder, by implementing features securely.  So, always think, how could this topic build upon the Secure Vibe Coding OS.
+## IMPORTANT. - leverage the Secure Vibe Coding OS, throughout, given the project level uploaded file for module 2.6, Secure Vibe Coding OS. Since we already have a secure baseline, understand that module 2.6 (in docs/course/MODULE_2.6_Secure_Vibe_Coding_OS.md) and use it to extend the Secure Vibe Coding OS with the given topic for the course lesson.  For example, if talking about authentication, extend the baseline already given in the Secure Vibe Coding OS.  You also have access to all the code here in the project, for the Secure Vibe Coding OS.  I want the lessons to help the user extend that baseline and accomplish all they would need to as a secure vibe coder, by implementing features securely.  So, always think, how could this topic build upon the Secure Vibe Coding OS.
 
 ## Security Prompt Format
 The Five Essential Components
