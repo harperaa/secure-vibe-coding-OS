@@ -44,3 +44,6 @@ next-env.d.ts
 docs/course/*
 
 course-outline.tsx.txt
+
+.claude/skills/course-lesson-builder/
+
