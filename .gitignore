@@ -42,9 +42,9 @@ yarn-error.log*
 next-env.d.ts
 
 docs/course/*
+docs/scripts/*
+
 
 course-outline.tsx.txt
 
 .claude/skills/course-lesson-builder/
-
-docs/youtube-script-continual-learning-system.md
