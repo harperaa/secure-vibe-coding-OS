@@ -1,11 +1,35 @@
 ---
-allowed-tools: Read(**/SKILL.md), Write(.claude/skills/lessons/**/SKILL.md), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(gh pr create:*)
+allowed-tools: Read(**/SKILL.md), Write(.claude/skills/lessons/**/SKILL.md), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(git merge:*), Bash(gh pr create:*), AskUserQuestion
 description: Save learnings from current session as a new skill
 ---
 
 # Session Retrospective - Capture Your Learnings
 
 Let me help you document what you learned during this session so you can reference it in future work.
+
+## Step 0: Choose Workflow
+
+**ASK THE USER:** How would you like to save your learnings?
+
+Use AskUserQuestion to present these options:
+
+**Question**: "How would you like to save this lesson?"
+
+**Options**:
+
+1. **Direct to Main** (Recommended for solo developers)
+   - Quick and simple
+   - Commit directly to main branch
+   - Lesson immediately available
+   - No PR review needed
+
+2. **Branch + Pull Request** (Recommended for teams)
+   - Create feature branch
+   - Push and create PR for review
+   - Team can review before merging
+   - Better for collaborative projects
+
+**Based on their choice, proceed with the corresponding workflow in Step 3.**
 
 ## Step 1: Summarize Key Findings
 
@@ -153,7 +177,32 @@ triggers:
 **Success Rate**: [X/Y attempts succeeded]
 ```
 
-## Step 3: Create Branch and PR
+## Step 3: Save to Git Repository
+
+### Workflow A: Direct to Main
+
+```bash
+# Add the new skill
+git add .claude/skills/lessons/[topic-name]/
+
+# Commit with descriptive message
+git commit -m "Add lesson: [topic-name]
+
+Documented learnings from session including:
+- [Key point 1]
+- [Key point 2]
+- [Key point 3]
+
+Success rate: [X/Y attempts]
+Final solution: [Brief description]"
+
+# Push to main
+git push origin main
+```
+
+**Result:** Lesson immediately available in main branch
+
+### Workflow B: Branch + Pull Request
 
 ```bash
 # Create feature branch
@@ -204,7 +253,14 @@ This skill will help future sessions by:
 
 EOF
 )"
+
+# After PR is reviewed and approved, merge it:
+# gh pr merge --squash
+# git checkout main
+# git pull
 ```
+
+**Result:** Lesson available after PR review and merge
 
 ---
 
