@@ -20,6 +20,37 @@ Child Skills (Categories)
 Implementation Skills (Concrete)
 ```
 
+### Dynamic Lessons Structure
+
+In addition to the static security skills, the system maintains a **dynamic lessons library** at `.claude/skills/lessons/`:
+
+```
+.claude/skills/lessons/
+├── [topic-name-1]/
+│   └── SKILL.md
+├── [topic-name-2]/
+│   └── SKILL.md
+└── [topic-name-n]/
+    └── SKILL.md
+```
+
+**Key Characteristics**:
+- **User-Generated**: Created via `/retrospective` command after completing work
+- **Session-Based**: Each lesson captures learnings from a specific session or task
+- **Dynamic Discovery**: Claude Code should scan this folder before starting new work
+- **Rich Context**: Contains what worked, what failed, exact parameters, and lessons learned
+
+**Usage Pattern**:
+1. **Before Work**: `/advise` command searches lessons for relevant past experience
+2. **During Work**: Apply learnings from similar past tasks
+3. **After Work**: `/retrospective` command creates new lesson for future reference
+
+**Discovery Mechanism**:
+- Lessons are discovered by scanning `.claude/skills/lessons/*/SKILL.md` files
+- Each SKILL.md has a verbose `description` field with trigger phrases
+- Claude Code matches user goals against description fields to find relevant lessons
+- No static references needed - fully dynamic discovery
+
 ---
 
 ## Security Prompts Skills Hierarchy
@@ -190,6 +221,20 @@ These are concrete implementation skills referenced by category skills:
 - `course-lesson-builder` - Course module creation
 - `security-operations-deployment` - Security operations
 - `security-architecture-overview` - Overall security architecture
+
+### Dynamic Lessons (User-Generated)
+- `lessons/*` - Session learnings captured via `/retrospective`
+  - Location: `.claude/skills/lessons/*/SKILL.md`
+  - Discovery: Dynamic scanning via `/advise` command
+  - Content: What worked, what failed, exact parameters, lessons learned
+  - Created by: User sessions, not pre-packaged
+  - Examples:
+    - `lessons/implementing-rate-limiting/`
+    - `lessons/fixing-csrf-validation/`
+    - `lessons/optimizing-convex-queries/`
+    - `lessons/debugging-clerk-webhooks/`
+
+**Note**: Lessons folder may be empty initially and grows over time as users complete work and run `/retrospective`.
 
 ---
 

@@ -170,6 +170,198 @@ npm run dev
 
 Your application will be available at `http://localhost:3000`.
 
+## 🧠 Continual Learning System
+
+Secure Vibe Coding OS includes a unique **self-improving learning system** that gets smarter over time as you use it.
+
+### How It Works
+
+The system maintains a dynamic lessons library that captures your real-world experiences:
+
+```
+.claude/skills/lessons/
+├── implementing-rate-limiting/
+│   └── SKILL.md          # What worked, what failed, exact parameters
+├── fixing-csrf-validation/
+│   └── SKILL.md          # Debugging steps, root causes, solutions
+├── optimizing-convex-queries/
+│   └── SKILL.md          # Performance learnings, query patterns
+└── [your-future-lessons]/
+    └── SKILL.md          # Grows with every session
+```
+
+### The Learning Loop
+
+**1. Before Starting Work** - Learn from the past
+```bash
+/advise
+
+# Describe your goal:
+> "I need to implement rate limiting on my API endpoints"
+
+# Claude searches past lessons and finds:
+# ✅ What worked: withRateLimit HOF pattern
+# ❌ What failed: Redis approach (too complex)
+# 🔧 Exact params: 5 req/min, IP-based tracking
+# 💡 Key insight: Use Map for simple cases
+```
+
+**2. During Work** - Apply proven solutions
+- Use exact parameters that worked before
+- Avoid documented pitfalls from "Failed Attempts" tables
+- Build on previous successes instead of starting from scratch
+
+**3. After Completing Work** - Capture your learnings
+```bash
+/retrospective
+
+# Claude analyzes your session and creates:
+# - Detailed documentation of what you accomplished
+# - What worked vs. what failed
+# - Exact parameters and configurations
+# - Lessons learned for next time
+# - Creates a PR with your learnings
+```
+
+### Why This Matters
+
+**Traditional Development**: Every task starts from zero, same mistakes repeated
+```
+Task 1: Try A, B, C → C works
+Task 2: Try A, B, C → C works again (wasted effort)
+Task 3: Try A, B, C → C works again (still wasting time)
+```
+
+**With Continual Learning**: Each task makes future tasks faster
+```
+Task 1: Try A, B, C → C works → Document in lessons
+Task 2: Read lesson → Start with C → Success immediately
+Task 3: Read lesson → Start with C → Success immediately
+```
+
+### Benefits Over Time
+
+**Week 1**: Empty lessons folder, learning as you go
+- Complete first API endpoint (took 2 hours, tried 3 approaches)
+- Run `/retrospective` to capture learnings
+
+**Week 2**: Start building lessons library
+- Need second API endpoint
+- Run `/advise` - finds lesson from Week 1
+- Complete in 30 minutes using proven pattern
+
+**Week 4**: Lessons compound
+- 5+ documented lessons from various tasks
+- Most new work has relevant past experience
+- Development speed increases 3-5x on similar tasks
+- Team members learn from your documented experiences
+
+**Month 3**: Institutional knowledge base
+- 20+ real-world lessons from actual production work
+- Exact parameters for common tasks
+- Documented pitfalls and how to avoid them
+- New team members onboard faster by reading lessons
+
+### Example Lessons
+
+**lessons/implementing-rate-limiting/SKILL.md**:
+```markdown
+## Failed Attempts ❌
+| Attempt | What We Tried | Why It Failed | Lesson Learned |
+|---------|---------------|---------------|----------------|
+| 1 | Redis-based rate limiter | Too complex for use case | Start simple, add complexity only if needed |
+| 2 | Cookie-based tracking | Easily bypassed | Use IP-based for public endpoints |
+
+## What Worked ✅
+- withRateLimit HOF with Map-based tracking
+- Parameters: limitWindow: 60000, maxRequests: 5
+- IP extraction from x-forwarded-for header
+```
+
+**lessons/debugging-clerk-webhooks/SKILL.md**:
+```markdown
+## Root Cause
+Webhook secret was set in .env.local instead of Convex dashboard
+
+## Solution
+1. Remove CLERK_WEBHOOK_SECRET from .env.local
+2. Add to Convex Dashboard → Settings → Environment Variables
+3. Restart Convex dev server
+
+## Time Saved Next Time
+Original debugging: 3 hours
+With this lesson: 5 minutes
+```
+
+### Best Practices for Maximum Learning
+
+**1. Run `/advise` before every non-trivial task**
+- Search lessons for similar past work
+- Read relevant SKILL.md files
+- Start with proven approaches
+
+**2. Run `/retrospective` after completing work**
+- Especially after solving difficult problems
+- Always after trying multiple approaches
+- Document exact parameters that worked
+
+**3. Be specific in lessons**
+- Include exact error messages encountered
+- Document specific version numbers
+- Provide copy-paste ready code examples
+- No vague advice - only concrete specifics
+
+**4. Share lessons with your team**
+- Lessons are stored in git
+- PRs document decision-making process
+- Team members review and learn from each other
+- Collective knowledge compounds faster
+
+### Integration with Security Skills
+
+The continual learning system complements the built-in security skills:
+
+**Security Skills** (`.claude/skills/security/`):
+- Pre-built best practices and patterns
+- General security implementation guides
+- Updated by package maintainers
+
+**Your Lessons** (`.claude/skills/lessons/`):
+- YOUR specific experiences applying those patterns
+- YOUR project's unique challenges and solutions
+- YOUR team's specific parameters and configurations
+- Updated by YOU as you work
+
+Together, they create a complete knowledge system:
+- Start with security best practices
+- Learn from your specific implementations
+- Build institutional knowledge over time
+- Never repeat the same mistake twice
+
+### Getting Started with Continual Learning
+
+**Day 1**: Just use the system normally
+- Complete your tasks as you normally would
+- Run `/retrospective` at end of day to capture learnings
+
+**Day 7**: Start seeing benefits
+- Run `/advise` before starting similar tasks
+- Notice faster completion times on repeated work
+
+**Day 30**: System is significantly smarter
+- Substantial lessons library built up
+- Most tasks have relevant past experience
+- Development velocity noticeably increased
+
+**Day 90**: Institutional knowledge established
+- Comprehensive coverage of common tasks
+- New team members leverage your experience
+- Complex tasks completed in fraction of original time
+
+---
+
+**Remember**: Every session you complete makes the NEXT session faster. The system literally gets smarter the more you use it. 🚀
+
 ## Security Configuration
 
 ### CSRF Protection
@@ -483,6 +675,295 @@ git subtree pull --prefix=.claude/skills/security \\
   https://github.com/harperaa/secure-claude-skills.git main --squash
 \`\`\`
 ```
+
+## 🔄 Keeping Your OS Updated
+
+Secure Vibe Coding OS is a **living template** that receives regular updates including:
+- 🛡️ New security features and hardening improvements
+- 📚 Additional course modules and learning materials
+- 🔧 Enhanced Claude Code commands and agents
+- 🐛 Bug fixes and dependency updates
+- ⚡ Performance optimizations
+
+### Update Commands Overview
+
+The template includes specialized pull commands to help you selectively update different parts of your installation:
+
+| Command | Updates | Safety Level | Use When |
+|---------|---------|--------------|----------|
+| `/pull-repo-safe` | Entire repository | ✅ Safe (preview first) | General updates to core template |
+| `/pull-security-skills` | Security skills only | ✅ Safe (merge with squash) | Security feature updates |
+| `/pull-commands` | Claude commands only | ⚠️ Force overwrites | Command updates only |
+| `/pull-agents` | Claude agents only | ⚠️ Force overwrites | Agent updates only |
+
+### How to Update
+
+#### Option 1: Safe Full Update (Recommended)
+
+Use this when you've customized your app and want to safely merge template updates:
+
+```bash
+# From your project root, use the Claude Code command:
+/pull-repo-safe
+```
+
+**What happens:**
+1. Fetches latest changes from the main repository
+2. Shows you exactly what changed (file-by-file diff)
+3. Detects if you have uncommitted local changes
+4. Provides step-by-step merge instructions
+5. Lets you decide what to merge
+
+**Example workflow:**
+```bash
+# Step 1: Check for updates
+/pull-repo-safe
+
+# Step 2: Review the changes shown
+# Read the diffs carefully
+
+# Step 3: Commit your local changes
+git add . && git commit -m 'Save my customizations'
+
+# Step 4: Merge the updates
+git merge origin/main
+
+# Step 5: Resolve any conflicts (if they occur)
+# - Edit conflicted files
+# - git add <resolved-files>
+# - git commit -m 'Merge template updates'
+```
+
+💡 **Let Claude Code help you merge:**
+```
+Ask Claude: "Commit my current changes, then merge the updates from origin/main,
+resolving any conflicts while preserving my customizations"
+```
+
+#### Option 2: Update Security Skills Only
+
+Security skills are updated frequently with new security patterns and best practices:
+
+```bash
+/pull-security-skills
+```
+
+**What happens:**
+1. Checks for local changes in `.claude/skills/security/`
+2. Shows you what you've modified (if anything)
+3. Pulls latest security skills using git subtree
+4. Merges changes with `--squash` flag (keeps history clean)
+
+**If conflicts occur:**
+```bash
+# Manual resolution:
+git status                                    # See conflicted files
+# Edit files to resolve conflicts
+git add .                                     # Stage resolved files
+git commit -m 'Merge security skills updates' # Complete the merge
+
+# Or ask Claude Code:
+"Review the merge conflicts and resolve them intelligently,
+preserving my customizations while integrating new features"
+```
+
+#### Option 3: Update Commands Only
+
+Use this to get the latest Claude Code commands without touching your app code:
+
+```bash
+/pull-commands
+```
+
+**⚠️ Warning:** This will overwrite any local changes in `.claude/commands/`
+
+**What happens:**
+1. Checks for uncommitted changes in `.claude/commands/`
+2. Shows you what you've modified
+3. Warns that continuing will overwrite your changes
+4. Gives you a chance to cancel (Ctrl+C)
+5. Force pulls latest commands from origin/main
+
+**After successful update:**
+```bash
+git commit -m "Update Claude Code commands from template"
+
+# Or ask Claude Code:
+"Review the updated commands and commit them with a descriptive message"
+```
+
+#### Option 4: Update Agents Only
+
+Get the latest Claude Code agents without touching anything else:
+
+```bash
+/pull-agents
+```
+
+**⚠️ Warning:** This will overwrite any local changes in `.claude/agents/`
+
+**What happens:**
+Same as `/pull-commands` but for the `.claude/agents/` folder.
+
+### Best Practices for Updating
+
+#### 1. **Commit Before Updating**
+Always commit your work before pulling updates:
+```bash
+git add .
+git commit -m "Save my current work before updating"
+```
+
+#### 2. **Use Safe Updates for Customized Code**
+If you've modified app pages, components, or core functionality:
+- ✅ Use `/pull-repo-safe` to preview changes
+- ❌ Don't use force update commands
+
+#### 3. **Review Changes Before Merging**
+Take time to read the diffs shown by `/pull-repo-safe`:
+- Understand what's changing
+- Identify potential conflicts with your customizations
+- Decide what to merge and what to skip
+
+#### 4. **Update Frequently**
+- Check for updates weekly or monthly
+- Smaller, frequent updates are easier to merge than large infrequent ones
+- Security updates should be applied promptly
+
+#### 5. **Test After Updates**
+After merging updates:
+```bash
+# Reinstall dependencies (if package.json changed)
+npm install
+
+# Run type checking
+npm run tsc --noEmit
+
+# Test your app locally
+npm run dev
+
+# Visit key pages and test functionality
+```
+
+#### 6. **Use Version Tags**
+Instead of always pulling from `main`, you can pull specific releases:
+```bash
+git fetch --tags
+git merge v2.0.0  # Merge a specific version
+```
+
+### Handling Merge Conflicts
+
+When conflicts occur, you have options:
+
+#### Manual Resolution
+```bash
+# 1. See conflicted files
+git status
+
+# 2. Open each file and look for conflict markers:
+<<<<<<< HEAD
+Your customizations
+=======
+Template updates
+>>>>>>> origin/main
+
+# 3. Edit to keep what you want
+# 4. Remove conflict markers
+# 5. Save the file
+# 6. Stage resolved files
+git add <resolved-file>
+
+# 7. Complete the merge
+git commit -m "Merge template updates"
+```
+
+#### Claude Code Assisted Resolution
+
+Ask Claude Code to help:
+```
+"Review the merge conflicts and resolve them intelligently,
+preserving my customizations while integrating new features"
+```
+
+Or:
+```
+"Help me merge the security skills updates"
+```
+
+Claude Code can:
+- Analyze both versions
+- Understand intent
+- Preserve your customizations
+- Integrate new features
+- Resolve conflicts intelligently
+
+### What Gets Updated
+
+#### Core Files (Use `/pull-repo-safe`)
+- `app/` - Application pages and routes
+- `components/` - UI components
+- `lib/` - Utility libraries
+- `convex/` - Backend functions and schema
+- `package.json` - Dependencies
+
+#### Security Skills (Use `/pull-security-skills`)
+- `.claude/skills/security/` - All security implementation guides
+- New security patterns and best practices
+- Updated vulnerability awareness content
+
+#### Commands (Use `/pull-commands`)
+- `.claude/commands/` - Claude Code command definitions
+- Automation scripts and workflows
+
+#### Agents (Use `/pull-agents`)
+- `.claude/agents/` - Specialized Claude Code agents
+- Task automation configurations
+
+### Selective Updates Strategy
+
+You don't have to update everything:
+
+**Conservative approach:**
+```bash
+# Only update what you need
+/pull-security-skills  # Get security updates (important!)
+/pull-commands         # Get new commands (optional)
+# Skip core template updates if you've heavily customized
+```
+
+**Aggressive approach:**
+```bash
+# Stay current with everything
+/pull-repo-safe        # Review and merge all updates
+# Follow prompts to merge
+```
+
+**Smart approach:**
+```bash
+# Update frequently used parts, cherry-pick core updates
+/pull-security-skills  # Security is critical
+/pull-commands         # Commands are easy to update
+/pull-agents           # Agents enhance productivity
+
+# For core template:
+/pull-repo-safe        # Preview changes
+# Cherry-pick specific features you want:
+git cherry-pick <commit-hash>
+```
+
+### Update Checklist
+
+Before deploying updated code to production:
+
+- [ ] All updates committed locally
+- [ ] `npm install` completed successfully
+- [ ] `npm run tsc --noEmit` passes without errors
+- [ ] App runs locally without errors (`npm run dev`)
+- [ ] Key features tested manually
+- [ ] Security updates applied (if any)
+- [ ] Environment variables still correct
+- [ ] No secrets committed to git
 
 ### Key Routes
 - `/` - Beautiful landing page with pricing
