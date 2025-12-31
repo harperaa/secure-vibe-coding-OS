@@ -1,6 +1,21 @@
 ---
-allowed-tools: Read(**/SKILL.md), Write(.claude/skills/lessons/**/SKILL.md), Edit(.claude/skills/**/SKILL.md), Glob(.claude/skills/**/*.md), Bash(git status:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(git merge:*), Bash(gh pr create:*), AskUserQuestion
-description: Save learnings from current session as a new skill and update related existing skills
+allowed-tools: Read(.claude/skills/**/SKILL.md:0-50), Write(.claude/skills/lessons/**/SKILL.md), Edit(.claude/skills/**/SKILL.md), Bash(git status:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(git merge:*), Bash(gh pr create:*), AskUserQuestion
+description: Save learnings from current session as a new skill and update related existing skills using progressive disclosure
+---
+
+# IMPORTANT: Progressive Disclosure Pattern
+
+**Use Claude Code's built-in progressive disclosure to find relevant skills efficiently:**
+
+1. Ask Claude to identify skills related to the technologies and patterns used in this session
+2. Claude will use progressive disclosure to match relevant skills without reading entire files
+3. Present matched skill names to user
+4. Ask which skills might need updating
+5. Read ONLY the specific sections being updated (Failed Attempts, Parameters, Best Practices)
+6. Never read full 400-line skill files
+
+**Efficiency Target**: Read <200 total lines during retrospective
+
 ---
 
 # Session Retrospective - Capture Your Learnings
@@ -239,17 +254,21 @@ triggers:
 
 **IMPORTANT**: Before committing the new lesson, analyze whether existing skills should be updated based on what you learned.
 
-### 4.1: Scan Existing Skills
+### 4.1: Identify Related Skills Using Progressive Disclosure
 
-Search for related skills in:
-- `.claude/skills/security/*/SKILL.md` - Security implementation skills
-- `.claude/skills/*/SKILL.md` - Other skills
-- Exclude: `.claude/skills/lessons/` (those are past lessons)
+**Use progressive disclosure to identify skills that might benefit from this session's learnings:**
 
-Look for skills related to:
+Ask Claude Code to identify skills related to:
 - The technologies you worked with (e.g., CSRF, rate limiting, Clerk, Convex)
 - The problem you solved (e.g., authentication, validation, error handling)
 - The patterns you used (e.g., middleware, wrappers, hooks)
+
+Claude will use progressive disclosure to match relevant skills in:
+- `.claude/skills/security/*/SKILL.md` - Security implementation skills
+- `.claude/skills/*/SKILL.md` - Other skills
+- Excluding: `.claude/skills/lessons/` (those are past lessons)
+
+**Important**: Do NOT manually Glob/Grep. Let Claude's built-in skill discovery find matches efficiently without reading full files.
 
 ### 4.2: Analyze What Should Be Updated
 
