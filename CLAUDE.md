@@ -8,6 +8,7 @@ Implementation Skills (how to build securely):
 - csrf-protection: CSRF protection implementation
 - rate-limiting: Rate limiting implementation
 - input-validation: Input validation and XSS prevention
+- ai-chat-protection: AI chatbot protection and prompt injection prevention
 - security-headers: Security headers configuration
 - error-handling: Secure error handling
 - auth-security: Clerk authentication and authorization

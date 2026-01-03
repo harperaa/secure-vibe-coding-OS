@@ -108,6 +108,7 @@ An attacker must bypass all 5 layers simultaneously to compromise the system—e
 - **csrf-protection skill**: When creating POST/PUT/DELETE endpoints that change state
 - **rate-limiting skill**: When protecting endpoints from abuse (forms, expensive operations)
 - **input-validation skill**: When accepting any user input (always!)
+- **ai-chat-protection skill**: When implementing AI chatbots, LLM integrations, or chat interfaces
 
 ### For Application Security:
 - **security-headers skill**: When configuring middleware or need to understand CSP/HSTS
@@ -475,6 +476,7 @@ Based on your task, invoke the appropriate skill:
 - Need to protect an API route? → `csrf-protection` skill
 - Need to prevent spam/abuse? → `rate-limiting` skill
 - Need to validate user input? → `input-validation` skill
+- Need to protect AI chatbots? → `ai-chat-protection` skill
 - Need to configure headers? → `security-headers` skill
 - Need error handling? → `error-handling` skill
 - Need authentication? → `auth-security` skill
