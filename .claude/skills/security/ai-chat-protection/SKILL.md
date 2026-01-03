@@ -1188,6 +1188,49 @@ export const sendMessage = mutation({
 });
 ```
 
+### Logging Security Events from Convex Actions
+
+**Important:** Actions cannot write directly to the database. Use this pattern to log security events from actions:
+
+```typescript
+// In your action (e.g., convex/chatExtractor.ts)
+try {
+  validateConversationHistory(args.conversationHistory);
+} catch (error) {
+  const blockedPattern = (error as Error & { blockedPattern?: string }).blockedPattern;
+
+  if (blockedPattern) {
+    // Fire-and-forget: action → internal action → internal mutation
+    ctx.runAction(internal.security.logSecurityEventAsync, {
+      projectId: args.projectId,
+      eventType: "prompt_injection_attempt" as const,
+      severity: "high" as const,
+      metadata: {
+        fingerprint: args.fingerprint,
+        endpoint: "generateChatResponse",
+        errorMessage: blockedPattern,
+        requestPayload: (error as any).blockedContent?.substring(0, 200),
+      },
+    }).catch(console.error);  // Don't block on logging
+  }
+  throw error;
+}
+```
+
+**Key Points:**
+- Use `ctx.runAction(internal.security.logSecurityEventAsync)` from actions
+- Attach `blockedPattern` to errors so catch blocks can log details
+- Use `.catch(console.error)` for fire-and-forget logging
+- Truncate payloads to prevent log flooding
+
+**Adding New Security Event Types:** When adding event types like `prompt_injection_attempt`, update these 4 files:
+1. `convex/schema.ts` - securityEvents.eventType union
+2. `convex/lib/securityLogger.ts` - SecurityEventType type
+3. `convex/security.ts` - logSecurityEventByProject args
+4. `convex/security.ts` - logSecurityEventAsync args
+
+> **See Also:** `.claude/skills/lessons/ai-chat-prompt-injection-convex/SKILL.md` for detailed implementation patterns.
+
 ## Performance Considerations
 
 ### Validation Performance

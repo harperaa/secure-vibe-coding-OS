@@ -7,7 +7,9 @@
  * USAGE:
  * ------
  * node scripts/test-rate-limit.js
+ * node scripts/test-rate-limit.js --port=3001
  * node scripts/test-rate-limit.js /api/custom-endpoint
+ * node scripts/test-rate-limit.js /api/custom-endpoint --port=3001
  *
  * WHAT THIS TESTS:
  * ----------------
@@ -59,9 +61,16 @@
  * - The default test endpoint is: /api/test-rate-limit
  */
 
-const BASE_URL = 'http://localhost:3001';
+// Parse command line arguments
+const args = process.argv.slice(2);
+const portArg = args.find(arg => arg.startsWith('--port='));
+const PORT = portArg ? portArg.split('=')[1] : (process.env.PORT || '3000');
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+
+// First non-flag argument is the endpoint
+const ENDPOINT_ARG = args.find(arg => !arg.startsWith('--'));
 const DEFAULT_ENDPOINT = '/api/test-rate-limit';
-const ENDPOINT = process.argv[2] || DEFAULT_ENDPOINT;
+const ENDPOINT = ENDPOINT_ARG || DEFAULT_ENDPOINT;
 const NUM_REQUESTS = 10;
 
 // ANSI color codes for terminal output

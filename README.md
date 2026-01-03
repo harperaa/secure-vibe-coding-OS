@@ -21,11 +21,13 @@ See two sample course modules, in the docs folder.
 - 💳 **Clerk Billing** - Integrated subscription management and payments
 - 🗄️ **Convex Real-time Database** - Serverless backend with real-time sync
 - 🛡️ **Protected Routes** - Authentication-based route protection
+- 👑 **Admin Pages** - Environment-based admin role with Security Monitoring dashboard (admin-only access)
 - 🔒 **CSRF Protection** - Built-in Cross-Site Request Forgery protection with HMAC-SHA256
 - 🔐 **Security Headers** - Automatic security headers (CSP, X-Frame-Options, HSTS)
 - 🚦 **Rate Limiting** - IP-based rate limiting (5 requests/minute) to prevent abuse
 - ✅ **Input Validation** - Zod-based validation with XSS sanitization
 - 🛡️ **Secure Error Handling** - Environment-aware error responses (no data leakage)
+- 📊 **Security Monitoring Dashboard** - Admin-only real-time security event tracking with severity levels, event filtering, and comprehensive attack detection
 - 💰 **Payment Gating** - Subscription-based content access
 - 🎭 **Beautiful 404 Page** - Custom animated error page
 - 🌗 **Dark/Light Theme** - System-aware theme switching
@@ -152,7 +154,10 @@ npx convex dev
 # In Convex Dashboard Environment Variables
 CLERK_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://your-clerk-frontend-api-url.clerk.accounts.dev
+ADMIN_EMAIL=your-admin-email@example.com
 ```
+
+**Note:** The `ADMIN_EMAIL` must match the email address you use to sign up/sign in. Only this user will see the "Administration" section in the sidebar and have access to the Security Monitoring dashboard. If `ADMIN_EMAIL` is not configured, the app will throw an error when accessing admin features.
 
 7. Setup Clerk Subscriptons (Required for template to work)
 - Clerk dashboard > Subscriptions > Create a Plan > Add User Plan > Name the plan > Set the Monthly base fee 
@@ -477,8 +482,11 @@ export const POST = withRateLimit(withCsrf(protectedHandler));
 A test script is provided to verify rate limiting is working correctly on your protected endpoints:
 
 ```bash
-# Test the default test endpoint
+# Test the default test endpoint (uses port 3000)
 node scripts/test-rate-limit.js
+
+# Specify a custom port if your dev server runs on a different port
+node scripts/test-rate-limit.js --port=3003
 
 # Test your custom protected endpoint
 node scripts/test-rate-limit.js /api/your-custom-route
@@ -630,6 +638,128 @@ async function myApiHandler(request: NextRequest) {
 - `handleForbiddenError(message)` - HTTP 403 for authorization failures
 - `handleUnauthorizedError(message)` - HTTP 401 for authentication failures
 - `handleNotFoundError(resource)` - HTTP 404 for missing resources
+
+### Security Monitoring Dashboard
+
+The application includes a comprehensive real-time security monitoring dashboard accessible at `/dashboard/security`. This feature provides visibility into all security events across your application with advanced filtering and analysis capabilities.
+
+**Admin Only:** The Security Monitoring dashboard is only accessible to the admin user (configured via `ADMIN_EMAIL` environment variable in Convex dashboard). Admin users see an "Administration" section in the sidebar containing the Security Monitoring link. Non-admin users will not see this section and will receive an "Access Denied" message if they navigate directly to `/dashboard/security`.
+
+#### Key Features
+
+- **Real-time Event Tracking** - Monitor security events as they happen
+- **Severity Classification** - Events categorized as Critical, High, Medium, or Low
+- **Event Type Filtering** - Filter by specific attack types (rate limiting, CSRF, XSS, prompt injection, etc.)
+- **Date Range Selection** - View events from last 24 hours, 7 days, 30 days, or custom ranges
+- **Status Management** - Track open (unread) vs closed (read) events
+- **Detailed Event Metadata** - View origin, IP address, fingerprint, endpoint, and error details
+- **Attack Detection** - Automatic detection of 19+ attack types including:
+  - Origin mismatch
+  - Rate limit exceeded
+  - CSRF validation failed
+  - XSS attempts
+  - Prompt injection attempts
+  - JWT validation failures
+  - Fingerprint manipulation
+  - Unauthorized access
+  - And more...
+
+#### Accessing the Dashboard
+
+1. Ensure `ADMIN_EMAIL` is set in your Convex dashboard environment variables
+2. Sign in with the email address matching `ADMIN_EMAIL`
+3. Navigate to the "Security Monitoring" link in the "Administration" section of the sidebar
+
+#### Logging Security Events
+
+Security events are automatically logged when using the built-in security middlewares (`withRateLimit`, `withCsrf`, etc.). You can also manually log events using the security logger:
+
+```typescript
+import { logSecurity } from '@/convex/lib/securityLogger';
+
+// In a Convex mutation
+await logSecurity(
+  ctx,
+  projectId,
+  "xss_attempt",
+  "high",
+  {
+    endpoint: "/api/submit",
+    ipAddress: request.headers.get('x-forwarded-for'),
+    errorMessage: "XSS pattern detected in user input",
+    requestPayload: JSON.stringify(body)
+  }
+);
+```
+
+#### Testing Security Events
+
+Security events are automatically logged when violations occur in the real middleware. The easiest way to test is to trigger actual rate limit violations.
+
+**Testing Rate Limiting (Recommended):**
+
+```bash
+# Start the dev server first
+npm run dev
+
+# Run the rate limit test script
+node scripts/test-rate-limit.js
+
+# Specify a custom port (default is 3000)
+node scripts/test-rate-limit.js --port=3001
+```
+
+**What happens:**
+1. The script sends 10 rapid requests to `/api/test-rate-limit`
+2. First 5 requests succeed (HTTP 200)
+3. Remaining 5 requests are rate-limited (HTTP 429)
+4. Each rate limit violation is logged to the security dashboard
+5. Events appear in `/dashboard/security` with type `rate_limit_exceeded`
+
+**Viewing Security Events:**
+1. Sign in to the application
+2. Navigate to `/dashboard/security`
+3. View logged rate limit violations and other security events
+4. Filter by severity, event type, or date range
+
+**Note:** Events are logged automatically by the middleware - no manual logging required.
+
+#### Event Types
+
+The dashboard tracks the following security event types:
+
+- `origin_mismatch` - Request from unauthorized origin
+- `rate_limit_exceeded` - Too many requests from single IP
+- `invalid_api_key` - Invalid API key provided
+- `fingerprint_change` - Browser fingerprint changed mid-session
+- `suspicious_activity` - Anomaly detection triggered
+- `jwt_validation_failed` - JWT token validation error
+- `unauthorized_access` - Access to protected resource without auth
+- `input_validation_failed` - Input validation rejected malicious data
+- `replay_detected` - Replay attack detected
+- `csrf_validation_failed` - CSRF token validation failed
+- `xss_attempt` - Cross-site scripting attempt detected
+- `prompt_injection_attempt` - AI prompt injection detected
+- `fingerprint_manipulation` - Browser fingerprint tampering
+- `http_origin_blocked` - Blocked origin in HTTP request
+- And more...
+
+#### Dashboard Views
+
+**Summary Cards:**
+- Total Events - Overview of all security events
+- Critical Events - Immediate action required
+- High Events - Authentication failures
+- Medium Events - Rate limiting violations
+- Low Events - Informational events
+- Overall Status - Current security posture
+
+**Event Feed:**
+- Chronological list of security events
+- Expandable details for each event
+- Request payload viewing
+- Mark as read/unread functionality
+- End-user information when available
 
 ### Security Auditing
 
@@ -1080,6 +1210,7 @@ The starter kit includes a fully customizable theme system. You can customize co
 
 - `CLERK_WEBHOOK_SECRET` - Clerk webhook secret (set in Convex dashboard)
 - `NEXT_PUBLIC_CLERK_FRONTEND_API_URL` - Clerk frontend API URL (set in Convex dashboard)
+- `ADMIN_EMAIL` - Email address of the admin user who can access Security Monitoring dashboard
 
 ## Deployment
 
@@ -1394,6 +1525,7 @@ NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/dashboard
    ```bash
    CLERK_WEBHOOK_SECRET=whsec_your_production_secret
    NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://your-prod.clerk.accounts.dev
+   ADMIN_EMAIL=your-admin-email@example.com
    ```
 4. **Click:** "Save"
 
