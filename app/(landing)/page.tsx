@@ -14,8 +14,8 @@ export default function Home() {
       <section className="bg-muted/50 py-12 md:py-16">
         <div className="mx-auto max-w-7xl px-6">
           <div className="mb-8 mx-auto max-w-2xl space-y-4 text-center">
-              <h1 className="text-center text-4xl font-semibold lg:text-5xl">Pricing that Scales with You</h1>
-              <p>Choose the plan that fits your security monitoring needs. From startups to enterprise applications.</p>
+              <h1 className="text-center text-4xl font-semibold lg:text-5xl">Pricing that Scales with You (SAMPLE ONLY - CHANGE THIS)</h1>
+              <p>Choose the plan that fits your security monitoring needs. From startups to enterprise applications. THIS IS JUST AN EXAMPLE PRICING SECTION... the Secure Vibe Coding OS is free...</p>
           </div>
           <CustomClerkPricing />
         </div>
