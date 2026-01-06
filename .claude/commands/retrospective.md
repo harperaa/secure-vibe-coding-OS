@@ -123,6 +123,7 @@ The skill will include:
 
 ```markdown
 ---
+name: [Skill name]
 description: [Detailed description with trigger phrases from your conversation - MUST be verbose and specific, include exact keywords and phrases that came up during the session]
 triggers:
   - "[Key phrase 1 from conversation]"
