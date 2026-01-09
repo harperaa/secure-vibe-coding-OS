@@ -37,6 +37,7 @@ See two sample course modules, in the docs folder.
 - 📊 **Interactive Dashboard** - Complete admin interface with charts
 - �� **Webhook Integration** - Automated user and payment sync
 - 🚢 **Vercel Ready** - One-click deployment
+- 📝 **SEO & LLM SEO Optimized Blog Engine** - Markdown-based blog with AI crawler optimization, llms.txt, sitemap generation, and RSS feed
 
 ## Tech Stack
 
@@ -1257,6 +1258,104 @@ npm start
 - `npm run build` - Build for production
 - `npm start` - Start production server
 - `npm run lint` - Run ESLint
+- `npm run generate:sitemap` - Generate sitemap.xml and robots.txt
+
+## Blog
+
+The starter kit includes a full-featured, SEO and LLM-optimized blog engine built for maximum discoverability by both search engines and AI crawlers like ChatGPT, Claude, and Perplexity.
+
+### Blog Content Location
+
+Blog posts are stored as Markdown/MDX files in:
+
+```
+/content/blog/
+├── your-first-post.mdx
+├── another-post.mdx
+└── ...
+```
+
+### Creating a New Blog Post
+
+Create a new `.mdx` file in `/content/blog/` with the following frontmatter:
+
+```markdown
+---
+title: "Your Post Title"
+description: "A clear, concise description for SEO (150-160 characters)"
+date: "2026-01-08"
+author: "Your Name"
+category: "Security"
+tags: ["tag1", "tag2", "tag3"]
+image: "/blog/images/your-image.png"
+---
+
+## Summary
+
+A 2-3 sentence summary of your article. LLMs extract this first, so make it count.
+
+## Your Content Here
+
+Write your content using standard Markdown syntax...
+```
+
+### Blog Features
+
+- **Static Site Generation (SSG)** - All posts pre-rendered at build time for fast loading
+- **Full-text Search** - Client-side search across all posts
+- **Categories & Tags** - Filter posts by category or tag
+- **Table of Contents** - Auto-generated from headings with scroll tracking
+- **Related Posts** - Automatically suggests related articles
+- **Reading Time** - Estimated reading time for each post
+- **Social Sharing** - Twitter, LinkedIn, and copy link buttons
+- **RSS Feed** - Available at `/feed.xml`
+- **Dark Mode** - Full dark mode support with prose styling
+
+### LLM SEO Optimization
+
+The blog is optimized for AI crawlers with:
+
+| File | Purpose |
+|------|---------|
+| `/public/llms.txt` | Guides AI crawlers to your most important content |
+| `/public/sitemap.xml` | Auto-generated sitemap with all blog URLs |
+| `/public/robots.txt` | Explicitly allows GPTBot, ClaudeBot, PerplexityBot |
+| `/feed.xml` | RSS feed for content syndication |
+
+**Key optimizations:**
+- Server-side rendered content (AI crawlers don't execute JavaScript)
+- JSON-LD structured data (TechArticle schema) on every post
+- Clear heading hierarchy (H1 → H2 → H3)
+- Summary sections for easy LLM extraction
+- Consistent terminology for strong embeddings
+
+### Generating the Sitemap
+
+The sitemap is automatically generated before each build via the `prebuild` script. You can also generate it manually:
+
+```bash
+npm run generate:sitemap
+```
+
+This creates:
+- `/public/sitemap.xml` - All blog posts, categories, and tags
+- `/public/robots.txt` - AI crawler permissions (if not exists)
+
+### Adding Blog Images
+
+Store blog images in `/public/blog/images/` and reference them in your frontmatter:
+
+```yaml
+image: "/blog/images/my-post-image.png"
+```
+
+### Environment Variables for Blog
+
+Set your site URL for proper sitemap and meta tag generation:
+
+```bash
+NEXT_PUBLIC_SITE_URL=https://yourdomain.com
+```
 
 ## Production Deployment
 

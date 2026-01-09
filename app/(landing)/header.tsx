@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { ChatMaxingIconColoured } from '@/components/logo'
-import { Loader2, Menu, X } from 'lucide-react'
+import { Loader2, Menu, X, Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import React from 'react'
@@ -16,20 +16,25 @@ import { useTheme } from "next-themes"
 
 
 const menuItems = [
-    { name: 'Features', href: '#link' },
-    { name: 'Solution', href: '#link' },
-    { name: 'Pricing', href: '#link' },
-    { name: 'About', href: '#link' },
+    { name: 'Features', href: '#features' },
+    { name: 'Pricing', href: '#pricing' },
+    { name: 'Blog', href: '/blog' },
+    { name: 'About', href: '#about' },
 ]
 
 export const HeroHeader = () => {
     const [menuState, setMenuState] = React.useState(false)
     const [isScrolled, setIsScrolled] = React.useState(false)
-    const { theme } = useTheme()
+    const [mounted, setMounted] = React.useState(false)
+    const { theme, setTheme } = useTheme()
 
     const appearance = {
         baseTheme: theme === "dark" ? dark : undefined,
     }
+
+    React.useEffect(() => {
+        setMounted(true)
+    }, [])
 
     React.useEffect(() => {
         const handleScroll = () => {
@@ -91,7 +96,7 @@ export const HeroHeader = () => {
                                     ))}
                                 </ul>
                             </div>
-                            <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
+                            <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit items-center">
                                 <AuthLoading>
                                     <div className="flex items-center justify-center">
                                         <Loader2 className="size-8 p-2 animate-spin" />
@@ -139,6 +144,20 @@ export const HeroHeader = () => {
                                         </Button>
                                     </SignUpButton>
                                 </Unauthenticated>
+
+                                {/* Theme Toggle */}
+                                {mounted && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                                        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                                        className="h-9 w-9"
+                                    >
+                                        <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                                        <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </div>

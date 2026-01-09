@@ -1,0 +1,35 @@
+# Secure Vibe Coding OS
+
+> A production-ready SaaS starter kit with Next.js 15, Clerk authentication, Convex backend, and comprehensive security features. Built for developers who want to ship secure applications fast while using AI-assisted development ("vibe coding").
+
+This starter kit provides battle-tested security patterns for modern web applications, including CSRF protection, rate limiting, input validation, and secure authentication flows.
+
+## Key Features
+
+- **Next.js 15 App Router**: Server-side rendering for optimal SEO and performance
+- **Clerk Authentication**: Secure user management with social logins
+- **Convex Backend**: Real-time database with type-safe queries
+- **Security-First Design**: Built-in protection against OWASP Top 10 vulnerabilities
+- **AI-Assisted Development Ready**: Optimized for vibe coding workflows
+
+## Documentation
+
+- [Blog](/blog): Articles on secure development, vibe coding, and best practices
+- [Security Overview](/blog/security-overview): Complete security architecture guide
+- [Getting Started](/blog/getting-started): Quick start tutorial for new developers
+
+## Blog Categories
+
+- [Security](/blog/category/security): Security best practices and implementation guides
+- [Development](/blog/category/development): Development tutorials and patterns
+- [AI & Vibe Coding](/blog/category/ai): AI-assisted development techniques
+
+## Technical Resources
+
+- [GitHub Repository](https://github.com/your-repo): Source code and contributions
+- [RSS Feed](/feed.xml): Subscribe to latest articles
+
+## Optional
+
+- [Dashboard](/dashboard): Application dashboard (requires authentication)
+- [API Documentation](/api): Technical API reference (internal use)
