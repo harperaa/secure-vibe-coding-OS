@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Metadata } from 'next'
 import { getAllPostsMeta, getAllCategories, getAllTags, generateBlogListJsonLd } from '@/lib/blog'
 import { BlogCard } from './components/blog-card'
@@ -54,7 +55,9 @@ export default function BlogPage() {
 
         {/* Search and Filters */}
         <div className="mb-8 space-y-4">
-          <BlogSearch />
+          <Suspense fallback={<div className="h-10 max-w-md mx-auto bg-muted animate-pulse rounded-md" />}>
+            <BlogSearch />
+          </Suspense>
           {categories.length > 0 && (
             <CategoryFilter categories={categories} tags={tags} />
           )}
