@@ -40,16 +40,25 @@ export async function compileMDXContent(source: string) {
 export function extractTableOfContents(content: string): TableOfContentsItem[] {
   const headingRegex = /^(#{2,4})\s+(.+)$/gm
   const toc: TableOfContentsItem[] = []
+  const idCounts: Record<string, number> = {}
   let match
 
   while ((match = headingRegex.exec(content)) !== null) {
     const level = match[1].length
     const title = match[2].trim()
     // Create slug from title (same as rehype-slug)
-    const id = title
+    let id = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '')
+
+    // Handle duplicate IDs by appending a counter (matches rehype-slug behavior)
+    if (idCounts[id] !== undefined) {
+      idCounts[id]++
+      id = `${id}-${idCounts[id]}`
+    } else {
+      idCounts[id] = 0
+    }
 
     toc.push({ id, title, level })
   }
