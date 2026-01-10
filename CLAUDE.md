@@ -48,3 +48,4 @@ How to use lessons:
 Note: Lessons folder may be empty initially and grows over time. Each lesson is a valuable asset that makes future work faster and more successful.
 
 Use npm tsc --noEmit to check types after each major change
+Use npx convex dev --once --typecheck=enable 2>&1 | tail -20 to check Convex types
