@@ -148,9 +148,25 @@ Parse the JSON output:
 - Show which Convex env vars were set
 - If `manualSteps` array is non-empty, display those as fallback instructions
 
-## Phase 6: Completion Summary
+## Phase 6: Write Summary + Completion
 
-Display a final summary, adjusting based on what actually succeeded:
+**Step 1:** Write the installation summary to `docs/INSTALL.md`.
+
+Build the `write-install-summary` arguments from data collected during the installation:
+
+- `--site-name` from Phase 2
+- `--admin-email` from Phase 2
+- `--claim-url` from Phase 3 init result (if accountless app was created)
+- `--api-keys-url` from Phase 3 init result (if accountless app was created)
+- `--accountless` = "true" if an accountless app was created, "false" if user provided keys
+- `--completed-steps` = comma-separated list of steps that succeeded (e.g., "Dependencies installed,.env.local created and configured,CSRF and Session secrets generated,Clerk application created,JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set")
+- `--manual-steps` = comma-separated list of anything that failed and needs manual completion (from `manualSteps` arrays in configure output)
+- `--env-vars` = comma-separated list of .env.local variables set from Phase 3 init result (envVarsSet)
+- `--convex-vars` = comma-separated list of Convex env vars set from Phase 5 configure result (convexEnvVarsSet)
+
+Run: `node scripts/setup.mjs write-install-summary --site-name="<NAME>" --admin-email="<EMAIL>" --claim-url="<URL>" --api-keys-url="<URL>" --accountless="<BOOL>" --completed-steps="<STEPS>" --manual-steps="<STEPS>" --env-vars="<VARS>" --convex-vars="<VARS>"`
+
+**Step 2:** Display the final summary, adjusting based on what actually succeeded:
 
 ```
 ## Installation Complete!
@@ -169,6 +185,10 @@ Display a final summary, adjusting based on what actually succeeded:
 ### Claim Your Clerk App (if accountless)
 Visit: <CLAIM_URL>
 Click the **Claim** button to create your Clerk account — then skip the remaining setup steps on that page, as the installer has already configured everything for you. Refresh the page after claiming to access your Clerk dashboard.
+
+### Installation Summary Saved
+A full record of this installation has been saved to: **docs/INSTALL.md**
+This includes all URLs, environment variables set, claim URL, and next steps for future reference.
 
 ### Optional Steps (can be done later)
 These are only needed when you're ready to enable paid subscriptions:

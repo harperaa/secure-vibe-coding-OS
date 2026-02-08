@@ -4,9 +4,11 @@
  * Automated Setup Script for Secure Vibe Coding OS
  *
  * Subcommands:
- *   init         - Create Clerk app, generate secrets, write .env.local
- *   convex-setup - Login check, team selection, project creation (non-interactive)
- *   configure    - Set up webhook + Convex env vars (run after Convex setup)
+ *   init                - Create Clerk app, generate secrets, write .env.local
+ *   convex-setup        - Login check, team selection, project creation (non-interactive)
+ *   configure           - Set up webhook + Convex env vars (run after Convex setup)
+ *   detect-port         - Find an available port starting from 3000
+ *   write-install-summary - Write installation summary to docs/INSTALL.md
  *
  * All input comes from CLI arguments (no interactive prompts).
  * Designed to be called by the /install Claude Code command.
@@ -16,6 +18,7 @@
  *   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" --clerk-pk=pk_test_... --clerk-sk=sk_test_...
  *   node scripts/setup.mjs convex-setup --project-name="My App" [--team=team-slug]
  *   node scripts/setup.mjs configure --clerk-sk=sk_test_... --admin-email="me@example.com"
+ *   node scripts/setup.mjs write-install-summary --site-name="My App" --admin-email="me@example.com" [--claim-url=...] [--api-keys-url=...]
  */
 
 import { createClerkClient } from '@clerk/backend';
@@ -663,6 +666,155 @@ async function runDetectPort() {
 }
 
 // ---------------------------------------------------------------------------
+// write-install-summary Subcommand
+// ---------------------------------------------------------------------------
+
+async function runWriteInstallSummary(args) {
+  const siteName = args['site-name'] || '(not set)';
+  const adminEmail = args['admin-email'] || '(not set)';
+  const claimUrl = args['claim-url'] || '';
+  const apiKeysUrl = args['api-keys-url'] || '';
+  const accountless = args['accountless'] === 'true';
+
+  // Read current state from .env.local
+  const envContent = readEnvFile(ENV_FILE);
+  const convexUrl = getEnvValue(envContent, 'NEXT_PUBLIC_CONVEX_URL') || '(not configured)';
+  const convexDeployment = getEnvValue(envContent, 'CONVEX_DEPLOYMENT') || '(not configured)';
+  const frontendApiUrl = getEnvValue(envContent, 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL') || '(not configured)';
+
+  // Build completed/remaining steps from args
+  const completedSteps = (args['completed-steps'] || '').split(',').filter(Boolean);
+  const manualSteps = (args['manual-steps'] || '').split(',').filter(Boolean);
+  const convexVars = (args['convex-vars'] || '').split(',').filter(Boolean);
+  const envVars = (args['env-vars'] || '').split(',').filter(Boolean);
+
+  const timestamp = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
+
+  const lines = [
+    `# Installation Summary`,
+    ``,
+    `**Installed:** ${timestamp}`,
+    `**Site:** ${siteName}`,
+    `**Admin:** ${adminEmail}`,
+    ``,
+    `## Development URLs`,
+    ``,
+    `| Service | URL |`,
+    `|---------|-----|`,
+    `| App (local) | http://localhost:3000 |`,
+    `| Convex Cloud | ${convexUrl} |`,
+    `| Convex HTTP Actions | ${convexUrl.replace('.convex.cloud', '.convex.site')} |`,
+    `| Clerk Frontend API | ${frontendApiUrl} |`,
+    `| Convex Dashboard | https://dashboard.convex.dev |`,
+    `| Clerk Dashboard | https://dashboard.clerk.com |`,
+    ``,
+    `## Convex Deployment`,
+    ``,
+    `- Deployment: \`${convexDeployment}\``,
+    `- URL: \`${convexUrl}\``,
+    ``,
+    `## Completed Steps`,
+    ``,
+  ];
+
+  for (const step of completedSteps) {
+    lines.push(`- [x] ${step}`);
+  }
+
+  if (claimUrl && accountless) {
+    lines.push(``);
+    lines.push(`## Claim Your Clerk App`);
+    lines.push(``);
+    lines.push(`**Claim URL:** ${claimUrl}`);
+    lines.push(``);
+    lines.push(`Click the **Claim** button to create your Clerk account — then skip the remaining`);
+    lines.push(`setup steps on that page, as the installer has already configured everything for you.`);
+    lines.push(`Refresh the page after claiming to access your Clerk dashboard.`);
+    if (apiKeysUrl) {
+      lines.push(``);
+      lines.push(`**API Keys URL:** ${apiKeysUrl}`);
+    }
+  }
+
+  if (envVars.length > 0) {
+    lines.push(``);
+    lines.push(`## .env.local Variables Set`);
+    lines.push(``);
+    for (const v of envVars) {
+      lines.push(`- \`${v}\``);
+    }
+  }
+
+  if (convexVars.length > 0) {
+    lines.push(``);
+    lines.push(`## Convex Environment Variables Set`);
+    lines.push(``);
+    for (const v of convexVars) {
+      lines.push(`- \`${v}\``);
+    }
+  }
+
+  if (manualSteps.length > 0) {
+    lines.push(``);
+    lines.push(`## Remaining Manual Steps`);
+    lines.push(``);
+    for (const step of manualSteps) {
+      lines.push(`- [ ] ${step}`);
+    }
+  }
+
+  lines.push(``);
+  lines.push(`## Optional Steps (can be done later)`);
+  lines.push(``);
+  lines.push(`These are only needed when you're ready to enable paid subscriptions:`);
+  lines.push(``);
+  lines.push(`1. **Enable Billing** in Clerk Dashboard:`);
+  lines.push(`   - Go to Clerk Dashboard → Billing → Settings → Enable Billing`);
+  lines.push(`2. **Create a Subscription Plan**:`);
+  lines.push(`   - Clerk Dashboard → Billing → Plans → Create Plan`);
+  lines.push(`   - Name it, set monthly price, save`);
+  lines.push(``);
+
+  lines.push(`## Start Development`);
+  lines.push(``);
+  lines.push(`\`\`\`bash`);
+  lines.push(`# Terminal 1:`);
+  lines.push(`npx convex dev`);
+  lines.push(``);
+  lines.push(`# Terminal 2:`);
+  lines.push(`npm run dev`);
+  lines.push(`\`\`\``);
+  lines.push(``);
+  lines.push(`The URL to access your app will be shown in Terminal 2 output.`);
+  lines.push(``);
+
+  lines.push(`## Next: Deploy to Production`);
+  lines.push(``);
+  lines.push(`When you're ready to go live, run the \`/deploy\` command in Claude Code:`);
+  lines.push(``);
+  lines.push(`\`\`\`bash`);
+  lines.push(`claude`);
+  lines.push(`# Then type: /deploy`);
+  lines.push(`\`\`\``);
+  lines.push(``);
+
+  const content = lines.join('\n');
+  const docsDir = path.join(ROOT_DIR, 'docs');
+  if (!fs.existsSync(docsDir)) {
+    fs.mkdirSync(docsDir, { recursive: true });
+  }
+
+  const summaryPath = path.join(docsDir, 'INSTALL.md');
+  fs.writeFileSync(summaryPath, content, 'utf-8');
+
+  console.log(JSON.stringify({
+    success: true,
+    path: 'docs/INSTALL.md',
+    absolutePath: summaryPath,
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -682,11 +834,15 @@ switch (command) {
   case 'detect-port':
     await runDetectPort();
     break;
+  case 'write-install-summary':
+    await runWriteInstallSummary(args);
+    break;
   default:
     console.error(`Usage:
   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
   node scripts/setup.mjs convex-setup --project-name="My App" [--team=SLUG]
   node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"
-  node scripts/setup.mjs detect-port`);
+  node scripts/setup.mjs detect-port
+  node scripts/setup.mjs write-install-summary --site-name="My App" --admin-email="me@example.com" [--claim-url=...] [--completed-steps=...]`);
     process.exit(1);
 }
