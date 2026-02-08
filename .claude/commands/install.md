@@ -26,12 +26,12 @@ Ask: "What would you like to name your site?"
 - Header: "Site name"
 
 ### Question 2: Admin Email
-Ask: "What email address will be your admin account? (Used for Security Monitoring dashboard access)"
+Ask: "What email address will be your admin account? (Used for Security Monitoring dashboard access). Type your email using the 'Other' option."
 - Options:
-  - "Enter below" — Type your email address
+  - "example@gmail.com" — Use this placeholder (you can change it later)
 - Header: "Admin email"
 
-Note: The user will likely type in their email via the "Other" option. Capture whatever they provide.
+Note: The user will most likely type their real email via the "Other" option. If they select the placeholder, use "example@gmail.com". Always ensure you have a non-empty email string before proceeding.
 
 ### Question 3: Clerk Keys
 Ask: "Do you already have a Clerk application with API keys?"
@@ -62,7 +62,7 @@ node scripts/setup.mjs init --site-name="<SITE_NAME>" --admin-email="<ADMIN_EMAI
 
 Parse the JSON output and display results to the user:
 - Show each completed step with a checkmark
-- If accountless flow: prominently display the **claim URL** and tell the user to visit it after setup to create/link their Clerk account
+- Do NOT display the claim URL yet — it will be shown in the final summary (Phase 6)
 - Show the list of environment variables that were set
 
 ## Phase 4: Convex Setup

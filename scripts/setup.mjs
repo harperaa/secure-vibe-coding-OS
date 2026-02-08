@@ -581,15 +581,28 @@ async function runConvexSetup(args) {
       }
     }
   } catch (err) {
+    // The Convex CLI may exit non-zero but still succeed in creating the project
+    // and writing to .env.local (e.g. due to warnings or typecheck issues).
+    // Check .env.local before reporting failure.
     const errOutput = ((err.stdout || '') + (err.stderr || '')).trim();
-    console.log(JSON.stringify({
-      success: false,
-      error: `Convex project creation failed`,
-      detail: errOutput.substring(0, 1000),
-      hint: 'Try running manually: npx convex dev --once',
-      steps: result.steps,
-    }));
-    return;
+    const fallbackEnv = readEnvFile(ENV_FILE);
+    const fallbackDeployment = getEnvValue(fallbackEnv, 'CONVEX_DEPLOYMENT');
+    const fallbackUrl = getEnvValue(fallbackEnv, 'NEXT_PUBLIC_CONVEX_URL');
+
+    if (fallbackDeployment && fallbackDeployment !== '' && !fallbackDeployment.includes('your_') &&
+        fallbackUrl && fallbackUrl !== '' && !fallbackUrl.includes('your_')) {
+      // Project was actually created despite the non-zero exit code
+      result.steps.push('Convex CLI exited with warnings but project was created successfully');
+    } else {
+      console.log(JSON.stringify({
+        success: false,
+        error: `Convex project creation failed`,
+        detail: errOutput.substring(0, 1000),
+        hint: 'Try running manually: npx convex dev --once',
+        steps: result.steps,
+      }));
+      return;
+    }
   }
 
   // Step 8: Verify .env.local was updated
