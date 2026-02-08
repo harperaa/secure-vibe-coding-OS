@@ -90,9 +90,11 @@ This will:
 
 You'll receive a claim URL to create your Clerk account after setup completes.
 
+After installation, your app runs locally at the provided URL (typically `http://localhost:3000`). Develop and customize your app here — no deployment is needed until you're ready to share it with others.
+
 ### Quick Deploy to Dev (`/deploy-to-dev`)
 
-After `/install` completes and your app works locally, deploy to Vercel with a single command:
+When you're ready for others to see your app, deploy to Vercel with a single command. This uses your existing Clerk and Convex **development** instances — the same ones you see locally:
 
 ```bash
 claude
@@ -109,11 +111,11 @@ This is **fully automated** — no manual steps required (assuming `gh` and `npx
 
 **Prerequisites:** `gh auth login` and `npx vercel login` must be done once beforehand. The command checks and tells you if either is missing.
 
-Your app will be fully functional on Vercel with a small Clerk development badge.
+Your app will be fully functional on Vercel with a small Clerk development badge. After the initial deployment, updating your site is just `git push origin main` — Vercel automatically rebuilds on every push.
 
 ### Deploy to Production (`/deploy-to-prod`)
 
-When you're ready for a full production deployment with a custom domain, Stripe billing, and Clerk production keys:
+When you want to collect real credit cards, remove the Clerk dev badge, and have users depend on your app, run the production deployment. **Delay this step** until you've validated your site and are confident you want to finalize it — it requires a Stripe account, a custom domain, and several manual configuration steps:
 
 ```bash
 claude
@@ -1475,7 +1477,9 @@ NEXT_PUBLIC_SITE_URL=https://yourdomain.com
 
 ## Production Deployment
 
-> **📘 For detailed deployment strategies, 3-environment setups, staging workflows, and advanced deployment patterns, see [DEPLOYMENT.md](./DEPLOYMENT.md)**
+> **📘 For the recommended deployment path (`/install` → `/deploy-to-dev` → `/deploy-to-prod`) and advanced deployment topics, see [DEPLOYMENT.md](./DEPLOYMENT.md)**
+
+The sections below cover manual production setup for reference. If you have Claude Code, the `/deploy-to-prod` command automates most of these steps.
 
 ### Understanding Development vs Production Instances
 

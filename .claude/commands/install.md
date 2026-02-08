@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node *setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Read, Edit
+allowed-tools: AskUserQuestion, Bash(node *setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Bash(git *), Bash(sed *), Read, Edit
 description: Automated installation and setup of Secure Vibe Coding OS
 ---
 
@@ -26,12 +26,13 @@ Ask: "What would you like to name your site?"
 - Header: "Site name"
 
 ### Question 2: Admin Email
-Ask: "What email address will you use to sign in as the site admin? This is required — it controls access to the Security Monitoring dashboard and admin functions. Please enter the email you'll use to log in. (Select 'Other' and type your email)"
+Ask: "What email address will you use to sign in as the site admin? This controls access to the Security Monitoring dashboard and admin functions. (Select 'Other' and type your email, or skip to set later)"
 - Options:
   - "I'll enter my email" — Select 'Other' below and type your admin email address
+  - "Skip for now" — Use a placeholder and configure later
 - Header: "Admin email"
 
-**Important:** You MUST have a valid email before proceeding. If the user selects "I'll enter my email" without typing one via the Other option, ask again directly: "Please type your admin email address (select 'Other' and enter it)." Do NOT proceed with a placeholder or empty email. Keep asking until you have a real email address.
+If the user selects "I'll enter my email" without typing one via the Other option, ask once more. If the user selects "Skip for now", use `example@example.com` as the admin email and continue.
 
 ### Question 3: Clerk Keys
 Ask: "Do you already have a Clerk application with API keys?"
@@ -154,33 +155,28 @@ Parse the JSON output:
 
 Build the `write-install-summary` arguments from data collected during the installation:
 
-- `--site-name` from Phase 2
-- `--admin-email` from Phase 2
 - `--claim-url` from Phase 3 init result (if accountless app was created)
-- `--api-keys-url` from Phase 3 init result (if accountless app was created)
 - `--accountless` = "true" if an accountless app was created, "false" if user provided keys
-- `--completed-steps` = comma-separated list of steps that succeeded (e.g., "Dependencies installed,.env.local created and configured,CSRF and Session secrets generated,Clerk application created,JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set")
+- `--completed-steps` = comma-separated list of steps that succeeded (e.g., "Dependencies installed,.env.local created and configured,CSRF and Session secrets generated,Clerk application created (accountless),JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)")
 - `--manual-steps` = comma-separated list of anything that failed and needs manual completion (from `manualSteps` arrays in configure output)
-- `--env-vars` = comma-separated list of .env.local variables set from Phase 3 init result (envVarsSet)
-- `--convex-vars` = comma-separated list of Convex env vars set from Phase 5 configure result (convexEnvVarsSet)
 
-Run: `node scripts/setup.mjs write-install-summary --site-name="<NAME>" --admin-email="<EMAIL>" --claim-url="<URL>" --api-keys-url="<URL>" --accountless="<BOOL>" --completed-steps="<STEPS>" --manual-steps="<STEPS>" --env-vars="<VARS>" --convex-vars="<VARS>"`
+Run: `node scripts/setup.mjs write-install-summary --claim-url="<URL>" --accountless="<BOOL>" --completed-steps="<STEPS>" --manual-steps="<STEPS>"`
 
-**Step 2:** Display the final summary, adjusting based on what actually succeeded:
+**Step 2:** Display the final summary, adjusting based on what actually succeeded. The on-screen summary and the saved INSTALL.md should contain the same information:
 
 ```
 ## Installation Complete!
 
 ### Automated Steps
-- [x] Dependencies installed
-- [x] .env.local created and configured
-- [x] CSRF and Session secrets generated
-- [x] Clerk application created (or existing keys configured)
-- [x] JWT template for Convex created
-- [x] Frontend API URL configured
-- [x] Convex project set up and functions deployed
-- [x] Webhook endpoint created via Svix
-- [x] Convex environment variables set (CLERK_WEBHOOK_SECRET, ADMIN_EMAIL, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)
+- Dependencies installed
+- .env.local created and configured
+- CSRF and Session secrets generated
+- Clerk application created (accountless)
+- JWT template for Convex created
+- Frontend API URL configured
+- Convex project set up and functions deployed
+- Webhook endpoint created via Svix
+- Convex environment variables set (CLERK_WEBHOOK_SECRET, ADMIN_EMAIL, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)
 
 ### Claim Your Clerk App (if accountless)
 Visit: <CLAIM_URL>
@@ -188,7 +184,6 @@ Click the **Claim** button to create your Clerk account — then skip the remain
 
 ### Installation Summary Saved
 A full record of this installation has been saved to: **docs/INSTALL.md**
-This includes all URLs, environment variables set, claim URL, and next steps for future reference.
 
 ### Optional Steps (can be done later)
 These are only needed when you're ready to enable paid subscriptions:

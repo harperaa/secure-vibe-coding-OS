@@ -1,25 +1,99 @@
-# Deployment Guide: 3-Environment Setup
+# Deployment Guide
 
-This guide covers deploying your application with a professional 3-environment strategy: **Development**, **Preview/Testing**, and **Production**.
+This guide covers deploying your Secure Vibe Coding OS application from local development through to production.
 
-**Last Updated:** October 15, 2025
+**Last Updated:** February 8, 2026
 **For:** Secure Vibe Coding OS / More Secure Starter
 
 ---
 
-## Table of Contents
+## Phase 1: Experimenting
 
-1. [Architecture Overview](#architecture-overview)
-2. [Environment Details](#environment-details)
-3. [Configuration Options](#configuration-options)
-4. [Setup Guide](#setup-guide)
-5. [Workflow](#workflow)
-6. [Data Management](#data-management)
-7. [Troubleshooting](#troubleshooting)
+This is where most of your time is spent — building, customizing, and iterating on your app.
+
+### Step 1: Install and Develop Locally (`/install`)
+
+After running `/install`, your app is fully functional locally with Clerk development authentication, a Convex dev database, and all features working. Develop and customize your app at `http://localhost:3000`:
+
+```bash
+# Terminal 1:
+npx convex dev
+
+# Terminal 2:
+npm run dev
+```
+
+### Step 2: Share with Others (`/deploy-to-dev`)
+
+When you're ready for others to see your app, run `/deploy-to-dev` in Claude Code. This deploys to Vercel using your existing Clerk and Convex **development** instances — the same ones you see locally. Your app gets a public `.vercel.app` URL. There will be a small Clerk development badge, but everything works: authentication, webhooks, payments (in test mode), and all features.
+
+### Step 3: Iterate
+
+After the initial deployment, the development cycle is simple:
+
+1. Make changes locally and test at `localhost:3000`
+2. Push when ready:
+   ```bash
+   git push origin main
+   ```
+3. Vercel automatically rebuilds and redeploys
+
+Repeat as many times as needed. Share the Vercel URL with collaborators, stakeholders, or beta testers to get feedback. The dev deployment is fully functional for testing and demonstration — stay in this phase as long as you need.
 
 ---
 
-## Architecture Overview
+## Phase 2: Going to Production (`/deploy-to-prod`)
+
+When you're done experimenting and want to collect real credit cards, remove the Clerk dev badge, and have users depend on your app, run `/deploy-to-prod`. This sets up a Clerk **production** instance, a Convex **production** deployment, Stripe billing in live mode, and Google OAuth with your own credentials.
+
+**Delay this step** until you've validated your site and are confident you want to finalize it. It requires a Stripe account, a custom domain you own, and several manual configuration steps in the Clerk and Google dashboards.
+
+After production deployment, you can choose either a **2-environment** or **3-environment** setup depending on your team size and risk tolerance.
+
+### 2-Environment Setup (Solo Developers / Small Teams)
+
+Simple and effective — develop locally, deploy straight to production:
+
+```
+Local Development (localhost)     →     Production (Vercel)
+  Clerk: pk_test_                         Clerk: pk_live_
+  Convex: dev:deployment                  Convex: prod:deployment
+  Branch: any                             Branch: main
+```
+
+**Workflow:**
+1. Develop and test locally (`npm run dev` + `npx convex dev`)
+2. Push to main: `git push origin main`
+3. Vercel auto-deploys to production
+
+This works well when you are the primary developer and can test thoroughly before pushing.
+
+### 3-Environment Setup (Teams / Production Apps)
+
+Adds a preview/testing layer between development and production for QA and validation:
+
+```
+Local Development     →     Preview/Testing        →     Production
+  Clerk: pk_test_             Clerk: pk_test_               Clerk: pk_live_
+  Convex: dev:deployment      Convex: dev: or staging:      Convex: prod:deployment
+  Branch: dev/feature         Branch: test                  Branch: main
+```
+
+**Workflow:**
+1. Develop on feature branches, test locally
+2. Merge to `test` branch: `git push origin test`
+   - Vercel creates a preview deployment automatically
+   - QA team tests on the preview URL
+3. After QA approval, merge to `main`: `git push origin main`
+   - Vercel deploys to production
+
+This provides a safety gate before changes reach real users and is industry best practice for apps handling real payments.
+
+---
+
+## Detailed Architecture
+
+The sections below cover advanced deployment topics including multi-environment configuration, staging workflows, data management, and troubleshooting.
 
 ### The 3-Environment Strategy
 

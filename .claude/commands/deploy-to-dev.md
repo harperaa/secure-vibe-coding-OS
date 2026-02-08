@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(node *deploy.mjs*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(basename *), Read, Write
+allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(basename *), Read, Write
 description: Deploy to Vercel using dev keys (fully automated)
 ---
 
@@ -8,6 +8,30 @@ description: Deploy to Vercel using dev keys (fully automated)
 You are the dev deployment assistant for Secure Vibe Coding OS. You will deploy the app to GitHub and Vercel using the existing development keys from `/install`. This is fully automated — no user interaction required beyond prerequisite checks.
 
 **Important context:** The user has already run `/install` and has a working local development setup. This command pushes to GitHub and deploys to Vercel using the dev Clerk and Convex instances. No Convex production deployment or deploy key is needed — the Vercel app points directly at the dev Convex backend.
+
+## Step 0: Check for Existing Deployment
+
+Check if `docs/DEPLOYMENT-DEV.md` exists by reading it.
+
+If it exists, parse out the Vercel URL from the file. Then display:
+
+```
+Your app has already been deployed to: <URL>
+
+Deployment only needs to happen once. To update your site after code changes, just push:
+  git push origin main
+
+Vercel will automatically rebuild and redeploy.
+```
+
+**AskUserQuestion**: "Would you like to re-run the full deployment anyway?"
+- Options:
+  - "Yes, re-deploy" — Re-run the full deployment process
+  - "No, I just need to push" — Cancel and push code changes instead
+- Header: "Re-deploy?"
+
+If "No": STOP here.
+If "Yes": continue to Step 1.
 
 ## Step 1: Prerequisites
 
@@ -107,16 +131,16 @@ Parse JSON output:
 Run: `node scripts/deploy.mjs vercel-deploy`
 
 Parse JSON output:
-- The result contains `url` (deployment-specific URL) and `productionUrl` (short alias like `site.vercel.app`)
+- The result contains `url` (deployment-specific URL), `productionUrl` (short alias like `site.vercel.app`), and `dashboardUrl` (Vercel deployments dashboard)
 - **Use `productionUrl` for display** if available, fall back to `url`
-- Show the URL with checkmark
+- Show the deployment URL and dashboard URL with checkmarks
 - If deploy fails, show error
 
 ## Step 8: Write Summary
 
-Run: `node scripts/deploy.mjs write-summary --deploy-type="dev" --vercel-url="<PRODUCTION_URL or URL>" --repo-url="<REPO_URL>" --convex-prod-url="<CONVEX_URL>" --convex-site-url="<CONVEX_SITE_URL>" --frontend-api-url="<FRONTEND_URL>" --site-name="<NAME>" --admin-email="" --google-oauth="deferred" --webhook-url="" --completed-steps="GitHub repo created,Vercel project linked,Vercel env vars set,Deployed to Vercel" --skipped-steps="Clerk production (run /deploy-to-prod),Google OAuth (run /deploy-to-prod),Stripe billing (run /deploy-to-prod)"`
+Run: `node scripts/deploy.mjs write-summary --deploy-type="dev" --vercel-url="<PRODUCTION_URL or URL>" --dashboard-url="<DASHBOARD_URL>" --repo-url="<REPO_URL>" --convex-prod-url="<CONVEX_URL>" --convex-site-url="<CONVEX_SITE_URL>" --frontend-api-url="<FRONTEND_URL>" --site-name="<NAME>" --admin-email="" --google-oauth="deferred" --webhook-url="" --completed-steps="GitHub repo created,Vercel project linked,Vercel env vars set,Deployed to Vercel" --skipped-steps="Clerk production (run /deploy-to-prod),Google OAuth (run /deploy-to-prod),Stripe billing (run /deploy-to-prod)"`
 
-Use the Convex URL from .env.local (dev instance) for convex-prod-url, and derive the site URL by replacing `.convex.cloud` with `.convex.site`. For vercel-url, prefer `productionUrl` from the deploy result (the short alias).
+Use the Convex URL from .env.local (dev instance) for convex-prod-url, and derive the site URL by replacing `.convex.cloud` with `.convex.site`. For vercel-url, prefer `productionUrl` from the deploy result (the short alias). For dashboard-url, use the `dashboardUrl` from the deploy result.
 
 Display:
 
@@ -132,6 +156,7 @@ Your app is live on Vercel using Clerk and Convex development instances.
 
 ### Your URLs
 - App: <PRODUCTION_URL> (the short .vercel.app alias, not the deployment-specific URL)
+- Vercel Deployments: <DASHBOARD_URL>
 - GitHub: <REPO_URL>
 
 ### Deployment Summary Saved

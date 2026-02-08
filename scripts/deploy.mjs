@@ -1016,14 +1016,29 @@ async function runVercelDeploy() {
     result.success = true;
     result.steps.push('Production deployment triggered');
 
-    // Extract deployment URL from output (usually the last non-empty line)
+    // Extract deployment URL and inspect/dashboard URL from output
     const lines = output.split('\n').filter(l => l.trim());
-    const urlLine = lines.find(l => l.includes('https://'));
+    const urlLine = lines.find(l => l.includes('https://') && !l.includes('Inspect:'));
     if (urlLine) {
       const urlMatch = urlLine.match(/(https:\/\/[^\s]+)/);
       if (urlMatch) {
         result.url = urlMatch[1];
         result.steps.push(`Deployment URL: ${result.url}`);
+      }
+    }
+
+    // Extract inspect URL and derive deployments dashboard URL
+    const inspectLine = lines.find(l => l.includes('Inspect:'));
+    if (inspectLine) {
+      const inspectMatch = inspectLine.match(/(https:\/\/vercel\.com\/[^\s]+)/);
+      if (inspectMatch) {
+        // Inspect URL: https://vercel.com/team/project/deploymentId
+        // Dashboard URL: https://vercel.com/team/project/deployments
+        const parts = inspectMatch[1].split('/');
+        if (parts.length >= 5) {
+          result.dashboardUrl = `${parts.slice(0, 5).join('/')}/deployments`;
+          result.steps.push(`Dashboard: ${result.dashboardUrl}`);
+        }
       }
     }
 
@@ -1082,6 +1097,7 @@ async function runWriteSummary(args) {
   const adminEmail = args['admin-email'] || '(not set)';
   const googleOAuth = args['google-oauth'] || 'skipped';
   const webhookUrl = args['webhook-url'] || '(not configured)';
+  const dashboardUrl = args['dashboard-url'] || '';
   const deployType = args['deploy-type'] || 'prod'; // 'dev' or 'prod'
 
   // Build lists from comma-separated args
@@ -1108,6 +1124,7 @@ async function runWriteSummary(args) {
     `| Service | URL |`,
     `|---------|-----|`,
     `| App | ${vercelUrl} |`,
+    `| Vercel Deployments | ${dashboardUrl || '(not available)'} |`,
     `| GitHub Repo | ${repoUrl} |`,
     `| Convex Cloud | ${convexProdUrl} |`,
     `| Convex HTTP Actions | ${convexSiteUrl} |`,
