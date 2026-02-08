@@ -7,16 +7,18 @@
  *   check-tools           - Check prerequisites (Node, git, gh, vercel)
  *   github-setup          - Create private GitHub repo, reconfigure remotes
  *   convex-deploy-key     - Generate Convex production deploy key via Management API
- *   validate-keys         - Validate Clerk production keys, create JWT template
+ *   validate-keys         - Validate Clerk keys (dev or prod), create JWT template
  *   convex-deploy-functions - Deploy Convex functions to production
  *   prod-webhook          - Create production webhook via Svix
  *   convex-prod-env       - Set Convex production environment variables
+ *   vercel-env-dev        - Set Vercel env vars from .env.local (for /deploy-to-dev)
  *   vercel-env            - Set Vercel production environment variables
  *   vercel-deploy         - Trigger production deployment
  *   write-summary         - Write deployment summary to docs/DEPLOYMENT.md
+ *   update-vercel-clerk-keys - Update only Clerk-related Vercel env vars
  *
  * All input comes from CLI arguments (no interactive prompts).
- * Designed to be called by the /deploy Claude Code command.
+ * Designed to be called by the /deploy-to-dev and /deploy-to-prod Claude Code commands.
  *
  * Usage:
  *   node scripts/deploy.mjs check-tools
@@ -26,7 +28,7 @@
  *   node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...
  *   node scripts/deploy.mjs prod-webhook --clerk-sk=sk_live_... --convex-site-url=https://xxx.convex.site --admin-email=admin@example.com
  *   node scripts/deploy.mjs convex-prod-env --deploy-key=prod:...|... --webhook-secret=whsec_... --frontend-api-url=https://... --admin-email=admin@example.com
- *   node scripts/deploy.mjs vercel-env --clerk-pk=... --clerk-sk=... --deploy-key=... --frontend-api-url=... --site-name=...
+ *   node scripts/deploy.mjs vercel-env --clerk-pk=... --clerk-sk=... --deploy-key=... --frontend-api-url=... --site-name=... [--convex-url=...]
  *   node scripts/deploy.mjs vercel-deploy
  */
 
@@ -508,26 +510,36 @@ async function runValidateKeys(args) {
     jwtTemplateCreated: false,
   };
 
-  // Validate key prefixes
-  if (!clerkPk.startsWith('pk_live_')) {
+  // Validate key prefixes (accept both dev and prod keys)
+  const requireProd = args['require-prod'] === 'true';
+  const validPkPrefixes = requireProd ? ['pk_live_'] : ['pk_test_', 'pk_live_'];
+  const validSkPrefixes = requireProd ? ['sk_live_'] : ['sk_test_', 'sk_live_'];
+
+  if (!validPkPrefixes.some(p => clerkPk.startsWith(p))) {
     console.log(JSON.stringify({
       success: false,
       error: 'invalid_pk',
-      hint: 'Publishable key must start with pk_live_ for production',
+      hint: requireProd
+        ? 'Publishable key must start with pk_live_ for production'
+        : 'Publishable key must start with pk_test_ or pk_live_',
     }));
     return;
   }
 
-  if (!clerkSk.startsWith('sk_live_')) {
+  if (!validSkPrefixes.some(p => clerkSk.startsWith(p))) {
     console.log(JSON.stringify({
       success: false,
       error: 'invalid_sk',
-      hint: 'Secret key must start with sk_live_ for production',
+      hint: requireProd
+        ? 'Secret key must start with sk_live_ for production'
+        : 'Secret key must start with sk_test_ or sk_live_',
     }));
     return;
   }
 
-  result.steps.push('Key prefixes validated (pk_live_, sk_live_)');
+  const keyType = clerkPk.startsWith('pk_live_') ? 'production' : 'development';
+  result.keyType = keyType;
+  result.steps.push(`Key prefixes validated (${keyType} keys)`);
 
   // Validate deploy key format if provided
   if (deployKey) {
@@ -820,6 +832,83 @@ async function runConvexProdEnv(args) {
 }
 
 // ---------------------------------------------------------------------------
+// vercel-env-dev Subcommand (reads everything from .env.local, no args needed)
+// ---------------------------------------------------------------------------
+
+async function runVercelEnvDev() {
+  const result = {
+    success: true,
+    steps: [],
+    varsSet: [],
+  };
+
+  const envContent = readEnvFile(ENV_FILE);
+
+  // Keys to read from .env.local and set on Vercel
+  const keysToRead = [
+    'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+    'CLERK_SECRET_KEY',
+    'NEXT_PUBLIC_CLERK_FRONTEND_API_URL',
+    'NEXT_PUBLIC_CONVEX_URL',
+    'NEXT_PUBLIC_SITE_NAME',
+    'CSRF_SECRET',
+    'SESSION_SECRET',
+    'NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL',
+    'NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL',
+    'NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL',
+    'NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL',
+  ];
+
+  // Optional keys
+  const optionalKeys = ['GEMINI_API_KEY'];
+
+  const envVars = {};
+
+  for (const key of keysToRead) {
+    const val = getEnvValue(envContent, key);
+    if (val && val.trim() && !val.includes('your_') && !val.includes('<')) {
+      envVars[key] = val;
+    } else {
+      result.steps.push(`Warning: ${key} not found or is a placeholder in .env.local`);
+    }
+  }
+
+  for (const key of optionalKeys) {
+    const val = getEnvValue(envContent, key);
+    if (val && val.trim()) {
+      envVars[key] = val;
+    }
+  }
+
+  if (Object.keys(envVars).length === 0) {
+    console.log(JSON.stringify({
+      success: false,
+      error: 'no_env_vars',
+      hint: 'No valid environment variables found in .env.local. Run /install first.',
+    }));
+    return;
+  }
+
+  for (const [key, value] of Object.entries(envVars)) {
+    try {
+      execSync(`printf '%s' "${value.replace(/"/g, '\\"')}" | npx vercel env add ${key} production --force`, {
+        cwd: ROOT_DIR,
+        stdio: 'pipe',
+        timeout: 30000,
+      });
+      result.varsSet.push(key);
+      result.steps.push(`Set Vercel env var: ${key}`);
+    } catch (err) {
+      const errMsg = ((err.stderr || '') + (err.stdout || '')).trim();
+      result.steps.push(`Failed to set ${key}: ${errMsg.substring(0, 200)}`);
+      result.success = false;
+    }
+  }
+
+  console.log(JSON.stringify(result, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // vercel-env Subcommand
 // ---------------------------------------------------------------------------
 
@@ -829,6 +918,8 @@ async function runVercelEnv(args) {
   const deployKey = args['deploy-key'];
   const frontendApiUrl = args['frontend-api-url'];
   const siteName = args['site-name'];
+
+  const convexUrl = args['convex-url'];
 
   if (!clerkPk || !clerkSk || !deployKey || !frontendApiUrl || !siteName) {
     console.error(JSON.stringify({
@@ -863,6 +954,12 @@ async function runVercelEnv(args) {
     'NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL': '/dashboard',
     'NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL': '/dashboard',
   };
+
+  // NEXT_PUBLIC_CONVEX_URL is needed at runtime for server-side code
+  // (middleware, rate limiting, CSRF validation use ConvexHttpClient)
+  if (convexUrl) {
+    envVars['NEXT_PUBLIC_CONVEX_URL'] = convexUrl;
+  }
 
   // Optional: GEMINI_API_KEY if present
   const geminiKey = getEnvValue(envContent, 'GEMINI_API_KEY');
@@ -1041,18 +1138,31 @@ async function runWriteSummary(args) {
   lines.push(`Vercel auto-deploys on push, including Convex function updates (via \`vercel.json\` buildCommand).`);
   lines.push(``);
 
+  if (googleOAuth === 'deferred' || googleOAuth === 'skipped') {
+    lines.push(`## Upgrade to Production Clerk`);
+    lines.push(``);
+    lines.push(`When you have a custom domain and are ready to remove the Clerk dev badge, run:`);
+    lines.push(`\`\`\`bash`);
+    lines.push(`/deploy-to-prod`);
+    lines.push(`\`\`\``);
+    lines.push(``);
+    lines.push(`This will walk you through:`);
+    lines.push(`- Creating a Clerk production instance (requires a custom domain you own)`);
+    lines.push(`- Swapping to production Clerk keys (pk_live_/sk_live_)`);
+    lines.push(`- Setting up Google OAuth with your own credentials`);
+    lines.push(`- Configuring Stripe billing via Clerk`);
+    lines.push(``);
+  }
+
   lines.push(`## Optional Next Steps`);
   lines.push(``);
   lines.push(`1. **Custom Domain**: Vercel Dashboard → Settings → Domains → Add your domain`);
-  lines.push(`2. **Clerk Domain**: Clerk Dashboard (Production) → Domains → Add production domain`);
 
-  if (googleOAuth === 'skipped') {
-    lines.push(`3. **Google OAuth**: Clerk Dashboard (Production) → SSO Connections → Google → Use custom credentials`);
+  if (googleOAuth !== 'deferred' && googleOAuth !== 'skipped') {
+    lines.push(`2. **Enable Billing**: Clerk Dashboard (Production) → Billing → Connect Stripe`);
+    lines.push(`3. **Create Subscription Plan**: Clerk Dashboard (Production) → Billing → Plans → Create`);
+    lines.push(`4. **Go Live with Payments**: Toggle from Test Mode to Live Mode in Clerk Billing`);
   }
-
-  lines.push(`4. **Enable Billing**: Clerk Dashboard (Production) → Billing → Connect Stripe`);
-  lines.push(`5. **Create Subscription Plan**: Clerk Dashboard (Production) → Billing → Plans → Create`);
-  lines.push(`6. **Go Live with Payments**: Toggle from Test Mode to Live Mode in Clerk Billing`);
   lines.push(``);
 
   lines.push(`## Verify Your Deployment`);
@@ -1077,6 +1187,54 @@ async function runWriteSummary(args) {
     path: 'docs/DEPLOYMENT.md',
     absolutePath: summaryPath,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// update-vercel-clerk-keys Subcommand
+// ---------------------------------------------------------------------------
+
+async function runUpdateVercelClerkKeys(args) {
+  const clerkPk = args['clerk-pk'];
+  const clerkSk = args['clerk-sk'];
+  const frontendApiUrl = args['frontend-api-url'];
+
+  if (!clerkPk || !clerkSk || !frontendApiUrl) {
+    console.error(JSON.stringify({
+      success: false,
+      error: 'Missing required arguments: --clerk-pk, --clerk-sk, --frontend-api-url',
+    }));
+    process.exit(1);
+  }
+
+  const result = {
+    success: true,
+    steps: [],
+    varsSet: [],
+  };
+
+  const envVars = {
+    'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY': clerkPk,
+    'CLERK_SECRET_KEY': clerkSk,
+    'NEXT_PUBLIC_CLERK_FRONTEND_API_URL': frontendApiUrl,
+  };
+
+  for (const [key, value] of Object.entries(envVars)) {
+    try {
+      execSync(`printf '%s' "${value.replace(/"/g, '\\"')}" | npx vercel env add ${key} production --force`, {
+        cwd: ROOT_DIR,
+        stdio: 'pipe',
+        timeout: 30000,
+      });
+      result.varsSet.push(key);
+      result.steps.push(`Updated Vercel env var: ${key}`);
+    } catch (err) {
+      const errMsg = ((err.stderr || '') + (err.stdout || '')).trim();
+      result.steps.push(`Failed to update ${key}: ${errMsg.substring(0, 200)}`);
+      result.success = false;
+    }
+  }
+
+  console.log(JSON.stringify(result, null, 2));
 }
 
 // ---------------------------------------------------------------------------
@@ -1108,6 +1266,9 @@ switch (command) {
   case 'convex-prod-env':
     await runConvexProdEnv(args);
     break;
+  case 'vercel-env-dev':
+    await runVercelEnvDev();
+    break;
   case 'vercel-env':
     await runVercelEnv(args);
     break;
@@ -1117,17 +1278,22 @@ switch (command) {
   case 'write-summary':
     await runWriteSummary(args);
     break;
+  case 'update-vercel-clerk-keys':
+    await runUpdateVercelClerkKeys(args);
+    break;
   default:
     console.error(`Usage:
   node scripts/deploy.mjs check-tools
   node scripts/deploy.mjs github-setup --repo-name="my-project"
   node scripts/deploy.mjs convex-deploy-key
-  node scripts/deploy.mjs validate-keys --clerk-pk=pk_live_... --clerk-sk=sk_live_... [--deploy-key=prod:...|...]
+  node scripts/deploy.mjs validate-keys --clerk-pk=... --clerk-sk=... [--deploy-key=prod:...|...] [--require-prod=true]
   node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...
-  node scripts/deploy.mjs prod-webhook --clerk-sk=sk_live_... --convex-site-url=https://xxx.convex.site [--admin-email=admin@example.com]
+  node scripts/deploy.mjs prod-webhook --clerk-sk=... --convex-site-url=https://xxx.convex.site [--admin-email=admin@example.com]
   node scripts/deploy.mjs convex-prod-env --deploy-key=prod:...|... --webhook-secret=whsec_... --frontend-api-url=https://... --admin-email=admin@example.com
-  node scripts/deploy.mjs vercel-env --clerk-pk=... --clerk-sk=... --deploy-key=... --frontend-api-url=... --site-name=...
+  node scripts/deploy.mjs vercel-env-dev                          (reads all from .env.local)
+  node scripts/deploy.mjs vercel-env --clerk-pk=... --clerk-sk=... --deploy-key=... --frontend-api-url=... --site-name=... [--convex-url=...]
   node scripts/deploy.mjs vercel-deploy
-  node scripts/deploy.mjs write-summary --vercel-url=... --repo-url=... [--completed-steps=...] [--skipped-steps=...]`);
+  node scripts/deploy.mjs write-summary --vercel-url=... --repo-url=... [--completed-steps=...] [--skipped-steps=...]
+  node scripts/deploy.mjs update-vercel-clerk-keys --clerk-pk=pk_live_... --clerk-sk=sk_live_... --frontend-api-url=https://...`);
     process.exit(1);
 }

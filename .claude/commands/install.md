@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node scripts/setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Read, Edit
+allowed-tools: AskUserQuestion, Bash(node *setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Read, Edit
 description: Automated installation and setup of Secure Vibe Coding OS
 ---
 

@@ -90,42 +90,58 @@ This will:
 
 You'll receive a claim URL to create your Clerk account after setup completes.
 
-### Quick Deploy to Production (Recommended)
+### Quick Deploy to Dev (`/deploy-to-dev`)
 
-After `/install` completes and your app works locally, use the `/deploy` command to go to production:
+After `/install` completes and your app works locally, deploy to Vercel with a single command:
 
 ```bash
 claude
-# Then type: /deploy
+# Then type: /deploy-to-dev
 ```
 
-This automates 10+ steps that previously required 3 separate dashboards, and guides you through the rest.
-
-**What you'll do manually** (the command walks you through each step):
-
-| Step | Where | Time |
-|------|-------|------|
-| Create Clerk production instance | Clerk Dashboard (toggle + click) | ~1 min |
-| Copy & paste 2 Clerk production keys | Clerk Dashboard → API Keys | ~30 sec |
-| Install GitHub CLI (if not installed) | Terminal (`brew install gh`) | ~1 min |
-| Authenticate GitHub CLI (if needed) | Browser (via `gh auth login`) | ~30 sec |
-| Log in to Vercel (if needed) | Browser (via `npx vercel login`) | ~30 sec |
-| Google OAuth setup (optional, can skip) | Google Cloud Console + Clerk Dashboard | ~5-10 min |
-
-**Total manual effort:** ~3-4 minutes (without Google OAuth)
+This is **fully automated** — no manual steps required (assuming `gh` and `npx vercel` are already authenticated). It uses your existing Clerk dev keys and Convex dev instance.
 
 **What gets automated:**
 - Private GitHub repo creation + remote reconfiguration
+- Vercel project linking
+- All environment variables set on Vercel (read from `.env.local`)
+- Production deployment to Vercel
+
+**Prerequisites:** `gh auth login` and `npx vercel login` must be done once beforehand. The command checks and tells you if either is missing.
+
+Your app will be fully functional on Vercel with a small Clerk development badge.
+
+### Deploy to Production (`/deploy-to-prod`)
+
+When you're ready for a full production deployment with a custom domain, Stripe billing, and Clerk production keys:
+
+```bash
+claude
+# Then type: /deploy-to-prod
+```
+
+**Prerequisites (must have before running):**
+- A custom domain you own (e.g., `myapp.com`) — Clerk production requires this, `*.vercel.app` is not accepted
+- A Stripe account — for Clerk Billing integration
+- Google OAuth credentials (optional) — for Google social login
+
+| Manual Step | Where | Time |
+|-------------|-------|------|
+| Create Clerk production instance | Clerk Dashboard (with your custom domain) | ~1 min |
+| Copy & paste 2 Clerk production keys | Clerk Dashboard → API Keys | ~30 sec |
+| Connect Stripe to Clerk | Clerk Dashboard → Billing | ~2 min |
+| Google OAuth setup (optional) | Google Cloud Console + Clerk Dashboard | ~5-10 min |
+
+**What gets automated:**
+- GitHub repo creation (if not already done)
 - Clerk production key validation + JWT template creation
 - Frontend API URL derivation from production publishable key
-- Convex production deploy key generation via Management API
+- Convex production deploy key generation
 - Convex function deployment to production
 - Production webhook creation via Svix
-- Convex production env vars (CLERK_WEBHOOK_SECRET, NEXT_PUBLIC_CLERK_FRONTEND_API_URL, ADMIN_EMAIL)
-- `vercel.json` creation with Convex build command
-- Vercel project linking
-- Vercel production env vars (12+ variables)
-- Production deployment trigger
+- All Convex and Vercel production env vars
+- `vercel.json` with Convex build command
+- Production deployment to Vercel
 
 Alternatively, run the setup script directly:
 
@@ -1517,7 +1533,7 @@ NEXT_PUBLIC_CONVEX_URL=https://....convex.site
 
 ### Setting Up Production (Step-by-Step Walkthrough)
 
-> **Tip:** If you have [Claude Code](https://claude.ai/claude-code), the `/deploy` command automates most of these steps. See [Quick Deploy to Production](#quick-deploy-to-production-recommended) above.
+> **Tip:** If you have [Claude Code](https://claude.ai/claude-code), the `/deploy-to-prod` command automates most of these steps. See [Quick Deploy to Production](#quick-deploy-to-production-recommended) above.
 
 Follow this complete guide to deploy your application to production with Clerk, Convex, and Vercel.
 
@@ -1534,7 +1550,8 @@ Follow this complete guide to deploy your application to production with Clerk, 
 5. **Choose:**
    - **"Clone development settings"** (recommended - copies your dev config), OR
    - **"Use default settings"** (start fresh)
-6. **Click:** "Create"
+6. **Application domain:** Enter your custom domain (e.g., `myapp.com` or `app.mydomain.com`). Clerk requires a domain you own — `*.vercel.app` is not accepted. You can update this later in Clerk Dashboard → Domains.
+7. **Click:** "Create Instance"
 
 Clerk creates a separate production instance alongside your dev instance (dev instance is NOT removed).
 
