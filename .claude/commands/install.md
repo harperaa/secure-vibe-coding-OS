@@ -182,13 +182,5 @@ These are only needed when you're ready to enable paid subscriptions:
 Terminal 1: npx convex dev
 Terminal 2: npm run dev
 
-Your app will be at <DEV_URL>
+The URL to access your app will be shown in Terminal 2 output.
 ```
-
-**Port detection for DEV_URL:** Before showing the summary, detect the first available port:
-
-```bash
-node scripts/setup.mjs detect-port
-```
-
-This returns JSON like `{ "port": 3001, "url": "http://localhost:3001" }`. Use the `url` value for `<DEV_URL>` in the summary above.
