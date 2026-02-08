@@ -305,14 +305,16 @@ Parse and show each variable set.
 Run: `node scripts/deploy.mjs vercel-deploy`
 
 Parse JSON output:
-- Show deployment URL
+- The result contains `url` (deployment-specific URL) and `productionUrl` (short alias like `site.vercel.app`)
+- **Use `productionUrl` for display** if available, fall back to `url`
+- Show the URL with checkmark
 - If deploy fails, show error and retry instructions
 
 ## Phase 12: Write Summary + Completion
 
 Build write-summary arguments from all collected data. Include google-oauth status and billing status.
 
-Run: `node scripts/deploy.mjs write-summary --vercel-url="<URL>" --repo-url="<URL>" --convex-prod-url="<URL>" --convex-site-url="<URL>" --frontend-api-url="<URL>" --site-name="<NAME>" --admin-email="<EMAIL>" --google-oauth="<configured|skipped>" --webhook-url="<URL>" --completed-steps="<STEPS>" --skipped-steps="<STEPS>" --vercel-vars="<VARS>" --convex-vars="<VARS>"`
+Run: `node scripts/deploy.mjs write-summary --deploy-type="prod" --vercel-url="<URL>" --repo-url="<URL>" --convex-prod-url="<URL>" --convex-site-url="<URL>" --frontend-api-url="<URL>" --site-name="<NAME>" --admin-email="<EMAIL>" --google-oauth="<configured|skipped>" --webhook-url="<URL>" --completed-steps="<STEPS>" --skipped-steps="<STEPS>" --vercel-vars="<VARS>" --convex-vars="<VARS>"`
 
 Display:
 
@@ -343,7 +345,7 @@ Display:
 - Clerk Dashboard: https://dashboard.clerk.com (switch to Production)
 
 ### Deployment Summary Saved
-Full record saved to: **docs/DEPLOYMENT.md**
+Full record saved to: **docs/DEPLOYMENT-PROD.md**
 
 ### Verify Your Deployment
 1. Visit your production URL

@@ -93,14 +93,16 @@ Parse JSON output:
 Run: `node scripts/deploy.mjs vercel-deploy`
 
 Parse JSON output:
-- Show deployment URL with checkmark
+- The result contains `url` (deployment-specific URL) and `productionUrl` (short alias like `site.vercel.app`)
+- **Use `productionUrl` for display** if available, fall back to `url`
+- Show the URL with checkmark
 - If deploy fails, show error
 
 ## Step 8: Write Summary
 
-Run: `node scripts/deploy.mjs write-summary --vercel-url="<URL>" --repo-url="<REPO_URL>" --convex-prod-url="<CONVEX_URL>" --convex-site-url="<CONVEX_SITE_URL>" --frontend-api-url="<FRONTEND_URL>" --site-name="<NAME>" --admin-email="" --google-oauth="deferred" --webhook-url="" --completed-steps="GitHub repo created,Vercel project linked,Vercel env vars set,Deployed to Vercel" --skipped-steps="Clerk production (run /deploy-to-prod),Google OAuth (run /deploy-to-prod),Stripe billing (run /deploy-to-prod)"`
+Run: `node scripts/deploy.mjs write-summary --deploy-type="dev" --vercel-url="<PRODUCTION_URL or URL>" --repo-url="<REPO_URL>" --convex-prod-url="<CONVEX_URL>" --convex-site-url="<CONVEX_SITE_URL>" --frontend-api-url="<FRONTEND_URL>" --site-name="<NAME>" --admin-email="" --google-oauth="deferred" --webhook-url="" --completed-steps="GitHub repo created,Vercel project linked,Vercel env vars set,Deployed to Vercel" --skipped-steps="Clerk production (run /deploy-to-prod),Google OAuth (run /deploy-to-prod),Stripe billing (run /deploy-to-prod)"`
 
-Use the Convex URL from .env.local (dev instance) for convex-prod-url, and derive the site URL by replacing `.convex.cloud` with `.convex.site`.
+Use the Convex URL from .env.local (dev instance) for convex-prod-url, and derive the site URL by replacing `.convex.cloud` with `.convex.site`. For vercel-url, prefer `productionUrl` from the deploy result (the short alias).
 
 Display:
 
@@ -115,11 +117,11 @@ Your app is live on Vercel using Clerk and Convex development instances.
 - [x] Deployed to Vercel
 
 ### Your URLs
-- App: <VERCEL_URL>
+- App: <PRODUCTION_URL> (the short .vercel.app alias, not the deployment-specific URL)
 - GitHub: <REPO_URL>
 
 ### Deployment Summary Saved
-Full record saved to: **docs/DEPLOYMENT.md**
+Full record saved to: **docs/DEPLOYMENT-DEV.md**
 
 ### What to Know
 - Your app uses Clerk **development** keys — there will be a small Clerk dev badge

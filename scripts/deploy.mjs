@@ -14,7 +14,7 @@
  *   vercel-env-dev        - Set Vercel env vars from .env.local (for /deploy-to-dev)
  *   vercel-env            - Set Vercel production environment variables
  *   vercel-deploy         - Trigger production deployment
- *   write-summary         - Write deployment summary to docs/DEPLOYMENT.md
+ *   write-summary         - Write deployment summary to docs/DEPLOYMENT-DEV.md or docs/DEPLOYMENT-PROD.md
  *   update-vercel-clerk-keys - Update only Clerk-related Vercel env vars
  *
  * All input comes from CLI arguments (no interactive prompts).
@@ -1030,6 +1030,30 @@ async function runVercelDeploy() {
     if (!result.url && lines.length > 0) {
       result.steps.push(`CLI output: ${lines.slice(-3).join(' | ')}`);
     }
+
+    // Get the production alias (short URL like site.vercel.app)
+    if (result.url) {
+      try {
+        const inspectOutput = execSync(`npx vercel inspect ${result.url} --format json`, {
+          cwd: ROOT_DIR,
+          encoding: 'utf-8',
+          stdio: 'pipe',
+          timeout: 30000,
+        });
+        const inspectData = JSON.parse(inspectOutput);
+        const aliases = inspectData.aliasAssigned || inspectData.alias || inspectData.aliases || [];
+        const aliasList = Array.isArray(aliases) ? aliases : [];
+        // Prefer the shortest alias (the .vercel.app domain, not the deployment-specific one)
+        if (aliasList.length > 0) {
+          const sorted = [...aliasList].sort((a, b) => a.length - b.length);
+          result.productionUrl = `https://${sorted[0]}`;
+          result.aliases = aliasList;
+          result.steps.push(`Production URL: ${result.productionUrl}`);
+        }
+      } catch {
+        // Inspect failed — not critical, we still have the deployment URL
+      }
+    }
   } catch (err) {
     const errOutput = ((err.stdout || '') + (err.stderr || '')).trim();
     console.log(JSON.stringify({
@@ -1058,6 +1082,7 @@ async function runWriteSummary(args) {
   const adminEmail = args['admin-email'] || '(not set)';
   const googleOAuth = args['google-oauth'] || 'skipped';
   const webhookUrl = args['webhook-url'] || '(not configured)';
+  const deployType = args['deploy-type'] || 'prod'; // 'dev' or 'prod'
 
   // Build lists from comma-separated args
   const completedSteps = (args['completed-steps'] || '').split(',').filter(Boolean);
@@ -1067,8 +1092,12 @@ async function runWriteSummary(args) {
 
   const timestamp = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
 
+  const isDev = deployType === 'dev';
+  const summaryTitle = isDev ? 'Dev Deployment Summary' : 'Production Deployment Summary';
+  const summaryFilename = isDev ? 'DEPLOYMENT-DEV.md' : 'DEPLOYMENT-PROD.md';
+
   const lines = [
-    `# Production Deployment Summary`,
+    `# ${summaryTitle}`,
     ``,
     `**Deployed:** ${timestamp}`,
     `**Site:** ${siteName}`,
@@ -1179,12 +1208,12 @@ async function runWriteSummary(args) {
     fs.mkdirSync(docsDir, { recursive: true });
   }
 
-  const summaryPath = path.join(docsDir, 'DEPLOYMENT.md');
+  const summaryPath = path.join(docsDir, summaryFilename);
   fs.writeFileSync(summaryPath, content, 'utf-8');
 
   console.log(JSON.stringify({
     success: true,
-    path: 'docs/DEPLOYMENT.md',
+    path: `docs/${summaryFilename}`,
     absolutePath: summaryPath,
   }));
 }
