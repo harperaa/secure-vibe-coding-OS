@@ -67,25 +67,37 @@ Parse the JSON output and display results to the user:
 
 ## Phase 4: Convex Setup
 
+Try running Convex setup automatically:
+
+```bash
+npx convex dev --once 2>&1
+```
+
+**If it succeeds** (exit code 0): continue to Phase 5.
+
+**If it fails** with "Cannot prompt for input in non-interactive terminals" or similar:
+This means the user needs to authenticate with Convex or create a project, which requires interactive terminal input.
+
 Tell the user:
 
 ```
-Now let's set up Convex. You'll be prompted to:
-1. Log in to Convex (or create an account)
-2. Create a new project (or select existing)
+Convex needs interactive terminal input for first-time setup (login + project creation).
 
-This is interactive - follow the prompts in the terminal.
+Please run this command in your terminal:
+
+    npx convex dev --once
+
+This will open your browser to log in and let you create a project.
+Let me know when it's done.
 ```
 
-Run: `npx convex dev --once`
+Use AskUserQuestion:
+- Question: "Have you finished running `npx convex dev --once` in your terminal?"
+- Options: "Yes, it completed successfully", "I ran into an error"
+- Header: "Convex setup"
 
-This will:
-- Prompt user to log in (opens browser)
-- Let them create/select a project
-- Write CONVEX_DEPLOYMENT and NEXT_PUBLIC_CONVEX_URL to .env.local
-- Deploy Convex functions
-
-After it completes, verify `.env.local` has `NEXT_PUBLIC_CONVEX_URL` set.
+**After success (either automated or manual)**: Read `.env.local` and verify `NEXT_PUBLIC_CONVEX_URL` is set to a real URL (not empty, not a placeholder).
+If it's still empty, tell the user to try `npx convex dev --once` again.
 
 ## Phase 5: Run Configure Script
 

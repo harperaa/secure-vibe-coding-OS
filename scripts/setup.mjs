@@ -129,6 +129,19 @@ async function runInit(args) {
   ensureEnvFile();
   result.steps.push('Ensured .env.local exists');
 
+  // Step 1b: Clear Convex placeholder values so `npx convex dev` will prompt for fresh setup
+  const placeholders = [
+    { key: 'CONVEX_DEPLOYMENT', patterns: ['your_convex_deployment'] },
+    { key: 'NEXT_PUBLIC_CONVEX_URL', patterns: ['your-convex-url', 'your_convex'] },
+  ];
+  for (const { key, patterns } of placeholders) {
+    const val = getEnvValue(readEnvFile(ENV_FILE), key);
+    if (val && patterns.some(p => val.includes(p))) {
+      writeEnvVar(ENV_FILE, key, '');
+      result.steps.push(`Cleared placeholder for ${key}`);
+    }
+  }
+
   // Step 2: Generate CSRF and Session secrets
   const envContent = readEnvFile(ENV_FILE);
   const existingCsrf = getEnvValue(envContent, 'CSRF_SECRET');
