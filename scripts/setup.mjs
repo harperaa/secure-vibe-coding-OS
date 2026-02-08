@@ -637,6 +637,32 @@ async function runConvexSetup(args) {
 }
 
 // ---------------------------------------------------------------------------
+// detect-port Subcommand
+// ---------------------------------------------------------------------------
+
+import net from 'node:net';
+
+function checkPort(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => {
+      server.close();
+      resolve(true);
+    });
+    server.listen(port, '127.0.0.1');
+  });
+}
+
+async function runDetectPort() {
+  let port = 3000;
+  while (!(await checkPort(port))) {
+    port++;
+  }
+  console.log(JSON.stringify({ port, url: `http://localhost:${port}` }));
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -653,10 +679,14 @@ switch (command) {
   case 'convex-setup':
     await runConvexSetup(args);
     break;
+  case 'detect-port':
+    await runDetectPort();
+    break;
   default:
     console.error(`Usage:
   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
   node scripts/setup.mjs convex-setup --project-name="My App" [--team=SLUG]
-  node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"`);
+  node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"
+  node scripts/setup.mjs detect-port`);
     process.exit(1);
 }

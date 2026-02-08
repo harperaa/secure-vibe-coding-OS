@@ -35,8 +35,13 @@ function getBlogPosts() {
     const content = fs.readFileSync(filePath, 'utf8')
     const { data } = matter(content)
 
+    // Use actual file modification time for accurate lastmod timestamps
+    const stats = fs.statSync(filePath)
+    const fileModTime = stats.mtime.toISOString()
+
     const slug = file.replace(/\.mdx?$/, '')
-    const date = data.lastModified || data.date || new Date().toISOString()
+    // Use file modification time, falling back to frontmatter date
+    const date = data.lastModified || fileModTime
 
     posts.push({
       slug,

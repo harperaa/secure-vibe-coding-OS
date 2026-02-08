@@ -42,6 +42,7 @@
     "convex": "^1.31.3",
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
+    "dotenv": "^17.2.4",
     "framer-motion": "^12.23.3",
     "gray-matter": "^4.0.3",
     "lucide-react": "^0.525.0",

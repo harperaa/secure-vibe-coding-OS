@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node scripts/setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Bash(lsof *), Read, Edit
+allowed-tools: AskUserQuestion, Bash(node scripts/setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Read, Edit
 description: Automated installation and setup of Secure Vibe Coding OS
 ---
 
@@ -185,10 +185,10 @@ Terminal 2: npm run dev
 Your app will be at <DEV_URL>
 ```
 
-**Port detection for DEV_URL:** Before showing the summary, find the first available port starting from 3000. Run this loop:
+**Port detection for DEV_URL:** Before showing the summary, detect the first available port:
 
 ```bash
-PORT=3000; while lsof -i :$PORT -sTCP:LISTEN -P -n >/dev/null 2>&1; do PORT=$((PORT + 1)); done; echo $PORT
+node scripts/setup.mjs detect-port
 ```
 
-Use the output as the port in the dev URL: `http://localhost:<PORT>`
+This returns JSON like `{ "port": 3001, "url": "http://localhost:3001" }`. Use the `url` value for `<DEV_URL>` in the summary above.
