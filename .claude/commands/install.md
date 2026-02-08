@@ -67,37 +67,71 @@ Parse the JSON output and display results to the user:
 
 ## Phase 4: Convex Setup
 
-Try running Convex setup automatically:
+Run the automated Convex setup:
 
 ```bash
-npx convex dev --once 2>&1
+node scripts/setup.mjs convex-setup --project-name="<SITE_NAME>"
 ```
 
-**If it succeeds** (exit code 0): continue to Phase 5.
+Parse the JSON output and handle each case:
 
-**If it fails** with "Cannot prompt for input in non-interactive terminals" or similar:
-This means the user needs to authenticate with Convex or create a project, which requires interactive terminal input.
+### Case: `needsLogin: true`
 
-Tell the user:
+The user is not logged in to Convex. Tell them:
 
 ```
-Convex needs interactive terminal input for first-time setup (login + project creation).
-
-Please run this command in your terminal:
-
-    npx convex dev --once
-
-This will open your browser to log in and let you create a project.
-Let me know when it's done.
+Convex requires authentication. I'll start the login process — a URL will appear below.
+Please open it in your browser to log in (or create an account).
 ```
+
+Then run the login command with poll mode (this prints a URL and waits for browser auth):
+
+```bash
+npx convex login --login-flow poll --no-open --device-name "claude-setup" 2>&1
+```
+
+**Important:** Set a 5-minute timeout (300000ms) on this command — it blocks until the user completes browser login.
+
+After login completes successfully, re-run the convex-setup command:
+
+```bash
+node scripts/setup.mjs convex-setup --project-name="<SITE_NAME>"
+```
+
+If login fails or times out, use AskUserQuestion:
+- Question: "Convex login didn't complete. Would you like to try again, or log in manually?"
+- Options: "Try again", "I'll run `npx convex login` in my terminal"
+- Header: "Convex login"
+
+If they choose manual: ask them to run `npx convex login` in their terminal, then use AskUserQuestion to confirm completion before re-running convex-setup.
+
+### Case: `needsTeamSelection: true`
+
+Multiple Convex teams were found. The response includes a `teams` array with `{ name, slug }` objects.
 
 Use AskUserQuestion:
-- Question: "Have you finished running `npx convex dev --once` in your terminal?"
-- Options: "Yes, it completed successfully", "I ran into an error"
+- Question: "Which Convex team should this project be created under?"
+- Options: One option per team, using the team name as label and slug as description
+- Header: "Convex team"
+
+Then re-run with the selected team:
+
+```bash
+node scripts/setup.mjs convex-setup --project-name="<SITE_NAME>" --team="<SELECTED_SLUG>"
+```
+
+### Case: `success: true`
+
+Convex is set up. Show the completed steps with checkmarks and continue to Phase 5.
+
+### Case: Other errors
+
+Display the error and hint. Use AskUserQuestion:
+- Question: "Convex setup ran into an issue. Would you like to retry or set it up manually?"
+- Options: "Retry", "I'll run `npx convex dev --once` in my terminal"
 - Header: "Convex setup"
 
-**After success (either automated or manual)**: Read `.env.local` and verify `NEXT_PUBLIC_CONVEX_URL` is set to a real URL (not empty, not a placeholder).
-If it's still empty, tell the user to try `npx convex dev --once` again.
+If manual: wait for user confirmation, then read `.env.local` to verify `NEXT_PUBLIC_CONVEX_URL` is set.
 
 ## Phase 5: Run Configure Script
 
@@ -134,7 +168,7 @@ Display a final summary, adjusting based on what actually succeeded:
 
 ### Claim Your Clerk App (if accountless)
 Visit: <CLAIM_URL>
-This creates your Clerk account and gives you full dashboard access.
+Click the **Claim** button to create your Clerk account — then skip the remaining setup steps on that page, as the installer has already configured everything for you. Refresh the page after claiming to access your Clerk dashboard.
 
 ### Remaining Manual Steps
 1. **Enable Billing** in Clerk Dashboard:

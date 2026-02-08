@@ -4,8 +4,9 @@
  * Automated Setup Script for Secure Vibe Coding OS
  *
  * Subcommands:
- *   init       - Create Clerk app, generate secrets, write .env.local
- *   configure  - Set up webhook + Convex env vars (run after Convex setup)
+ *   init         - Create Clerk app, generate secrets, write .env.local
+ *   convex-setup - Login check, team selection, project creation (non-interactive)
+ *   configure    - Set up webhook + Convex env vars (run after Convex setup)
  *
  * All input comes from CLI arguments (no interactive prompts).
  * Designed to be called by the /install Claude Code command.
@@ -13,6 +14,7 @@
  * Usage:
  *   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com"
  *   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" --clerk-pk=pk_test_... --clerk-sk=sk_test_...
+ *   node scripts/setup.mjs convex-setup --project-name="My App" [--team=team-slug]
  *   node scripts/setup.mjs configure --clerk-sk=sk_test_... --admin-email="me@example.com"
  */
 
@@ -433,6 +435,195 @@ async function runConfigure(args) {
 }
 
 // ---------------------------------------------------------------------------
+// convex-setup Subcommand
+// ---------------------------------------------------------------------------
+
+async function runConvexSetup(args) {
+  const projectName = args['project-name'];
+  const teamSlug = args['team'];
+
+  if (!projectName) {
+    console.error(JSON.stringify({
+      success: false,
+      error: 'Missing required argument: --project-name',
+    }));
+    process.exit(1);
+  }
+
+  const result = {
+    success: false,
+    steps: [],
+  };
+
+  // Step 1: Check if already configured with valid deployment
+  const envContent = readEnvFile(ENV_FILE);
+  const deployment = getEnvValue(envContent, 'CONVEX_DEPLOYMENT');
+  const convexUrl = getEnvValue(envContent, 'NEXT_PUBLIC_CONVEX_URL');
+
+  if (deployment && !deployment.includes('your_') && deployment !== '' &&
+      convexUrl && !convexUrl.includes('your_') && convexUrl !== '') {
+    // Already configured — try syncing
+    try {
+      execSync('npx convex dev --once', {
+        cwd: ROOT_DIR,
+        stdio: 'pipe',
+        timeout: 120000,
+      });
+      result.success = true;
+      result.alreadyConfigured = true;
+      result.steps.push('Convex already configured, synced successfully');
+      result.deployment = deployment;
+      result.url = convexUrl;
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    } catch {
+      // Config exists but sync failed — fall through to fresh setup
+      result.steps.push('Existing configuration found but sync failed, proceeding with setup');
+    }
+  }
+
+  // Step 2: Check login status
+  let loginOutput = '';
+  try {
+    loginOutput = execSync('npx convex login status 2>&1', {
+      cwd: ROOT_DIR,
+      encoding: 'utf-8',
+      timeout: 15000,
+    });
+  } catch (err) {
+    loginOutput = (err.stdout || '') + (err.stderr || '');
+  }
+
+  const isLoggedIn = loginOutput.includes('Logged in');
+
+  if (!isLoggedIn) {
+    console.log(JSON.stringify({
+      success: false,
+      needsLogin: true,
+      message: 'Not logged in to Convex. Run the login command first.',
+    }));
+    return;
+  }
+
+  result.steps.push('Convex login verified');
+
+  // Step 3: Parse teams from login status output
+  const teams = [];
+  const teamRegex = /^\s+-\s+(.+?)\s+\(([^)]+)\)\s*$/gm;
+  let match;
+  while ((match = teamRegex.exec(loginOutput)) !== null) {
+    teams.push({ name: match[1], slug: match[2] });
+  }
+
+  if (teams.length === 0) {
+    console.log(JSON.stringify({
+      success: false,
+      error: 'No Convex teams found. Create a team at https://dashboard.convex.dev first.',
+    }));
+    return;
+  }
+
+  // Step 4: Select team
+  const selectedTeam = teamSlug || (teams.length === 1 ? teams[0].slug : null);
+
+  if (!selectedTeam) {
+    console.log(JSON.stringify({
+      success: false,
+      needsTeamSelection: true,
+      teams,
+      message: 'Multiple teams found. Specify which team with --team=SLUG.',
+    }));
+    return;
+  }
+
+  result.steps.push(`Selected team: ${selectedTeam}`);
+
+  // Step 5: Derive project slug from project name
+  const projectSlug = projectName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 40);
+
+  result.steps.push(`Project slug: ${projectSlug}`);
+
+  // Step 6: Clear any stale/empty Convex values before configure=new
+  for (const key of ['CONVEX_DEPLOYMENT', 'NEXT_PUBLIC_CONVEX_URL']) {
+    const val = getEnvValue(readEnvFile(ENV_FILE), key);
+    if (val === '' || (val && val.includes('your_'))) {
+      writeEnvVar(ENV_FILE, key, '');
+    }
+  }
+
+  // Step 7: Create project via Convex CLI (non-interactive)
+  try {
+    const cmd = [
+      'npx convex dev --once',
+      `--configure=new`,
+      `--team="${selectedTeam}"`,
+      `--project="${projectSlug}"`,
+      `--dev-deployment=cloud`,
+    ].join(' ');
+
+    const output = execSync(cmd, {
+      cwd: ROOT_DIR,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+      timeout: 120000,
+    });
+    result.steps.push('Convex project created and functions deployed');
+
+    if (output) {
+      // Capture any useful info from output
+      const lines = output.split('\n').filter(l => l.trim());
+      if (lines.length > 0) {
+        result.steps.push(`CLI output: ${lines.slice(-3).join(' | ')}`);
+      }
+    }
+  } catch (err) {
+    const errOutput = ((err.stdout || '') + (err.stderr || '')).trim();
+    console.log(JSON.stringify({
+      success: false,
+      error: `Convex project creation failed`,
+      detail: errOutput.substring(0, 1000),
+      hint: 'Try running manually: npx convex dev --once',
+      steps: result.steps,
+    }));
+    return;
+  }
+
+  // Step 8: Verify .env.local was updated
+  const updatedEnv = readEnvFile(ENV_FILE);
+  const newDeployment = getEnvValue(updatedEnv, 'CONVEX_DEPLOYMENT');
+  const newUrl = getEnvValue(updatedEnv, 'NEXT_PUBLIC_CONVEX_URL');
+
+  if (!newDeployment || newDeployment === '' || !newUrl || newUrl === '') {
+    console.log(JSON.stringify({
+      success: false,
+      error: 'Convex CLI ran but .env.local was not updated with deployment info',
+      hint: 'Check .env.local manually or re-run: npx convex dev --once',
+      steps: result.steps,
+    }));
+    return;
+  }
+
+  result.success = true;
+  result.deployment = newDeployment;
+  result.url = newUrl;
+  result.steps.push(`Deployment: ${newDeployment}`);
+  result.steps.push(`URL: ${newUrl}`);
+
+  // Also set the local site URL
+  const existingSiteUrl = getEnvValue(updatedEnv, 'NEXT_PUBLIC_SITE_URL');
+  if (!existingSiteUrl || existingSiteUrl.includes('your_')) {
+    writeEnvVar(ENV_FILE, 'NEXT_PUBLIC_SITE_URL', 'http://localhost:3000');
+    result.steps.push('Set NEXT_PUBLIC_SITE_URL=http://localhost:3000');
+  }
+
+  console.log(JSON.stringify(result, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -446,9 +637,13 @@ switch (command) {
   case 'configure':
     await runConfigure(args);
     break;
+  case 'convex-setup':
+    await runConvexSetup(args);
+    break;
   default:
     console.error(`Usage:
   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
+  node scripts/setup.mjs convex-setup --project-name="My App" [--team=SLUG]
   node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"`);
     process.exit(1);
 }

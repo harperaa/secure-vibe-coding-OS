@@ -95,7 +95,7 @@ Alternatively, run the setup script directly:
 ```bash
 npm install
 node scripts/setup.mjs init --site-name="My App" --admin-email="you@example.com"
-npx convex dev --once
+node scripts/setup.mjs convex-setup --project-name="My App"
 node scripts/setup.mjs configure --clerk-sk="sk_test_..." --admin-email="you@example.com"
 ```
 
