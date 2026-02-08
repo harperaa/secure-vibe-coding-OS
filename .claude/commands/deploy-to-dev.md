@@ -51,13 +51,24 @@ Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
 - Show checkmark: "GitHub repo already configured"
 - Ensure code is pushed: `git push origin main`
 
-## Step 3: Handle vercel.json
+## Step 3: Ensure vercel.json has Next.js framework preset
+
+The `vercel.json` MUST include `"framework": "nextjs"` — without this, `vercel project add` via CLI defaults the framework to "Other", which causes Edge Function errors with Clerk middleware.
 
 Check if `vercel.json` exists by reading it.
 
-- If it exists and contains `convex deploy`: this is from a previous production deploy attempt. Remove `vercel.json` — for dev deployment, Vercel's default Next.js build (`npm run build`) is correct.
-- If it exists without `convex deploy`: leave it alone.
-- If it doesn't exist: do nothing (Vercel auto-detects Next.js).
+- If it exists and contains `convex deploy`: this is from a previous production deploy. Replace it with dev-only content (framework only, no buildCommand).
+- If it exists and already has `"framework": "nextjs"` without `convex deploy`: leave it alone.
+- If it doesn't exist: create it.
+
+For dev deployment, write `vercel.json` with:
+```json
+{
+  "framework": "nextjs"
+}
+```
+
+This ensures Vercel treats the project as Next.js (proper Edge Function handling for middleware) while using the default `npm run build` command.
 
 ## Step 4: Commit and Push
 

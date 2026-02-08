@@ -276,10 +276,13 @@ Parse JSON output and show each env var set.
 
 ## Phase 10: Vercel Setup + Environment Variables
 
-**Step 1:** Create `vercel.json` with production build command.
+**Step 1:** Create `vercel.json` with Next.js framework preset and production build command.
+The `"framework": "nextjs"` is REQUIRED — without it, `vercel project add` via CLI defaults the framework to "Other", which causes Edge Function errors with Clerk middleware.
+
 Write `vercel.json`:
 ```json
 {
+  "framework": "nextjs",
   "buildCommand": "npx convex deploy --cmd 'npm run build'"
 }
 ```
