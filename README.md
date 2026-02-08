@@ -1318,7 +1318,7 @@ This command:
 3. **Creates an AI banner image** — generates a 16:9 banner using Gemini Pro via `scripts/generate-image.js` and saves it to `public/blog/images/`
 4. **Saves everything** — writes the MDX file to `content/blog/` with complete frontmatter and the image in the correct location
 
-The banner image is generated automatically using the Gemini Pro API. You'll need a `GEMINI_API_KEY` in your `.env.local` — get one free at [Google AI Studio](https://aistudio.google.com/apikey).
+The banner image is generated automatically using the Gemini Pro API. You'll need a `GEMINI_API_KEY` in your `.env.local` — get one free at [Google AI Studio](https://aistudio.google.com/app/api-keys). This same key is also used by the `/technical-diagram` command to generate Nano Banana Pro architecture diagrams.
 
 You can also generate images independently:
 
@@ -1406,7 +1406,11 @@ The `/create-blog` command generates banner images automatically. To generate on
 node scripts/generate-image.js "Professional blog header about your topic, modern tech style, no text" "public/blog/images/your-slug.png" --aspect-ratio 16:9
 ```
 
-Requires `GEMINI_API_KEY` in `.env.local`.
+Requires `GEMINI_API_KEY` in `.env.local`. Get your key at [Google AI Studio](https://aistudio.google.com/app/api-keys), then add to `.env.local`:
+
+```bash
+GEMINI_API_KEY=your_gemini_api_key_here
+```
 
 ### Environment Variables for Blog
 
