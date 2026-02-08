@@ -71,12 +71,15 @@ If clean:
 
 ## Step 5: Vercel Link
 
-Run: `npx vercel link --yes`
+Derive the Vercel project name from the GitHub repo name (NOT the directory name):
+1. Parse the repo name from the origin remote URL: `git remote get-url origin` → extract the repo basename (e.g., `harperaa/test2` → `test2`)
+2. Run: `npx vercel project add <REPO_NAME> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
+3. Run: `npx vercel link --yes --project=<REPO_NAME>`
 
 If this fails (auth error):
 - STOP. Display: "Vercel CLI is not authenticated. Run `npx vercel login` in your terminal, then re-run `/deploy-to-dev`."
 
-Show checkmark: "Vercel project linked"
+Show checkmark: "Vercel project linked (<REPO_NAME>)"
 
 ## Step 6: Set Vercel Environment Variables
 

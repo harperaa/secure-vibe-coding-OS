@@ -290,7 +290,10 @@ Run `git status` — if there are changes:
 - If "Yes": `git add vercel.json && git commit -m "Add vercel.json for production builds" && git push origin main`
 
 **Step 3:** Vercel login + link.
-Run: `npx vercel link --yes`
+Derive the Vercel project name from the GitHub repo name (NOT the directory name):
+1. Parse the repo name from the origin remote URL: `git remote get-url origin` → extract the repo basename (e.g., `user/my-app` → `my-app`)
+2. Run: `npx vercel project add <REPO_NAME> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
+3. Run: `npx vercel link --yes --project=<REPO_NAME>`
 If auth error: tell user to run `npx vercel login`, AskUserQuestion to confirm, retry.
 
 **Step 4:** Set Vercel env vars.
