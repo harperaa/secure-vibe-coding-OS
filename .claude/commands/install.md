@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node scripts/setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Read, Edit
+allowed-tools: AskUserQuestion, Bash(node scripts/setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Bash(lsof *), Read, Edit
 description: Automated installation and setup of Secure Vibe Coding OS
 ---
 
@@ -26,12 +26,12 @@ Ask: "What would you like to name your site?"
 - Header: "Site name"
 
 ### Question 2: Admin Email
-Ask: "What email address will be your admin account? (Used for Security Monitoring dashboard access). Type your email using the 'Other' option."
+Ask: "What email address will you use to sign in as the site admin? This is required — it controls access to the Security Monitoring dashboard and admin functions. Please enter the email you'll use to log in. (Select 'Other' and type your email)"
 - Options:
-  - "example@gmail.com" — Use this placeholder (you can change it later)
+  - "I'll enter my email" — Select 'Other' below and type your admin email address
 - Header: "Admin email"
 
-Note: The user will most likely type their real email via the "Other" option. If they select the placeholder, use "example@gmail.com". Always ensure you have a non-empty email string before proceeding.
+**Important:** You MUST have a valid email before proceeding. If the user selects "I'll enter my email" without typing one via the Other option, ask again directly: "Please type your admin email address (select 'Other' and enter it)." Do NOT proceed with a placeholder or empty email. Keep asking until you have a real email address.
 
 ### Question 3: Clerk Keys
 Ask: "Do you already have a Clerk application with API keys?"
@@ -170,7 +170,8 @@ Display a final summary, adjusting based on what actually succeeded:
 Visit: <CLAIM_URL>
 Click the **Claim** button to create your Clerk account — then skip the remaining setup steps on that page, as the installer has already configured everything for you. Refresh the page after claiming to access your Clerk dashboard.
 
-### Remaining Manual Steps
+### Optional Steps (can be done later)
+These are only needed when you're ready to enable paid subscriptions:
 1. **Enable Billing** in Clerk Dashboard:
    - Go to Clerk Dashboard > Billing > Settings > Enable Billing
 2. **Create a Subscription Plan**:
@@ -181,5 +182,13 @@ Click the **Claim** button to create your Clerk account — then skip the remain
 Terminal 1: npx convex dev
 Terminal 2: npm run dev
 
-Your app will be at http://localhost:3000
+Your app will be at <DEV_URL>
 ```
+
+**Port detection for DEV_URL:** Before showing the summary, find the first available port starting from 3000. Run this loop:
+
+```bash
+PORT=3000; while lsof -i :$PORT -sTCP:LISTEN -P -n >/dev/null 2>&1; do PORT=$((PORT + 1)); done; echo $PORT
+```
+
+Use the output as the port in the dev URL: `http://localhost:<PORT>`
