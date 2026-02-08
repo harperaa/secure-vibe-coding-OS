@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git fetch:*), Bash(git checkout:*)
+allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git fetch:*), Bash(git checkout:*), Bash(git remote:*)
 description: Force pull latest commands (overwrites local changes)
 ---
 echo "🔍 Checking for local changes in .claude/commands/..."
@@ -27,14 +27,28 @@ if ! git diff --quiet -- .claude/commands/ || ! git diff --cached --quiet -- .cl
   read
 fi
 
-echo "📥 Pulling latest commands from origin/main..."
+# Set up upstream remote if needed
+UPSTREAM_URL="https://github.com/harperaa/secure-vibe-coding-OS.git"
+if ! git remote get-url upstream >/dev/null 2>&1; then
+  ORIGIN_URL=$(git remote get-url origin 2>/dev/null || echo "")
+  if echo "$ORIGIN_URL" | grep -q "harperaa/secure-vibe-coding-OS"; then
+    echo "❌ Your origin is still pointing at the template repo."
+    echo "   Run /deploy-to-dev first to set up your own GitHub repository,"
+    echo "   then re-run /pull-commands."
+    exit 1
+  fi
+  echo "📡 Adding upstream remote for template repo..."
+  git remote add upstream "$UPSTREAM_URL"
+fi
+
+echo "📥 Pulling latest commands from upstream/main..."
 echo ""
 
-git fetch origin && git checkout origin/main -- .claude/commands/
+git fetch upstream && git checkout upstream/main -- .claude/commands/
 
 if [ $? -eq 0 ]; then
   echo ""
-  echo "✅ Commands updated successfully from origin/main!"
+  echo "✅ Commands updated successfully from upstream/main!"
   echo "Changes are staged - run 'git commit' to save them"
   echo ""
   echo "💡 Let Claude Code help you:"
