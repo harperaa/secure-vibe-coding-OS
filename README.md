@@ -1303,7 +1303,30 @@ Blog posts are stored as Markdown/MDX files in:
 └── ...
 ```
 
-### Creating a New Blog Post
+### Creating a Blog Post with `/create-blog` (Recommended)
+
+The easiest way to create a blog post is with the `/create-blog` Claude Code command:
+
+```bash
+claude
+# Then type: /create-blog "How to implement rate limiting in Next.js"
+```
+
+This command:
+1. **Gathers requirements** — asks for topic, audience, category, and key points
+2. **Generates SEO-optimized content** — full MDX article with proper heading hierarchy, summary section, and LLM-friendly structure
+3. **Creates an AI banner image** — generates a 16:9 banner using Gemini Pro via `scripts/generate-image.js` and saves it to `public/blog/images/`
+4. **Saves everything** — writes the MDX file to `content/blog/` with complete frontmatter and the image in the correct location
+
+The banner image is generated automatically using the Gemini Pro API. You'll need a `GEMINI_API_KEY` in your `.env.local` — get one free at [Google AI Studio](https://aistudio.google.com/apikey).
+
+You can also generate images independently:
+
+```bash
+node scripts/generate-image.js "Your prompt here" "public/blog/images/output.png" --aspect-ratio 16:9
+```
+
+### Creating a Blog Post Manually
 
 Create a new `.mdx` file in `/content/blog/` with the following frontmatter:
 
@@ -1371,11 +1394,19 @@ This creates:
 
 ### Adding Blog Images
 
-Store blog images in `/public/blog/images/` and reference them in your frontmatter:
+Blog images are stored in `/public/blog/images/` and referenced in frontmatter:
 
 ```yaml
 image: "/blog/images/my-post-image.png"
 ```
+
+The `/create-blog` command generates banner images automatically. To generate one manually:
+
+```bash
+node scripts/generate-image.js "Professional blog header about your topic, modern tech style, no text" "public/blog/images/your-slug.png" --aspect-ratio 16:9
+```
+
+Requires `GEMINI_API_KEY` in `.env.local`.
 
 ### Environment Variables for Blog
 
