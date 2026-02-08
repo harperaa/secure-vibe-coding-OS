@@ -71,7 +71,35 @@ See two sample course modules, in the docs folder.
 - Clerk account for authentication and billing
 - Convex account for database
 
-### Installation
+### Quick Install (Recommended)
+
+If you have [Claude Code](https://claude.ai/claude-code) installed, run the `/install` command for a guided, automated setup:
+
+```bash
+claude
+# Then type: /install
+```
+
+This will:
+- Create a Clerk application automatically (no account needed upfront)
+- Generate all required secrets
+- Configure `.env.local` with all environment variables
+- Set up Convex project interactively
+- Create the webhook endpoint
+- Set Convex environment variables
+
+You'll receive a claim URL to create your Clerk account after setup completes.
+
+Alternatively, run the setup script directly:
+
+```bash
+npm install
+node scripts/setup.mjs init --site-name="My App" --admin-email="you@example.com"
+npx convex dev --once
+node scripts/setup.mjs configure --clerk-sk="sk_test_..." --admin-email="you@example.com"
+```
+
+### Manual Installation
 
 1. Download and set up the starter template:
 

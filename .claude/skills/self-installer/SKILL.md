@@ -5,6 +5,11 @@ description: Automated installation and setup of THIS Secure Vibe Coding OS SaaS
 
 # Self-Installer - Automated Application Installation
 
+**Prefer using the `/install` command** for a streamlined, interactive setup experience.
+The `/install` command uses `scripts/setup.mjs` to automate Clerk app creation (via accountless applications), secret generation, JWT template creation, webhook setup, and Convex env var configuration — all without requiring browser automation.
+
+This Playwright-based skill is the **legacy/alternative approach** for full browser-automated installation including visual testing.
+
 This skill automates the complete installation of THIS application by following the README.md instructions exactly.
 
 ## Installation Instructions Source

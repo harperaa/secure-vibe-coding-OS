@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "generate:sitemap": "node scripts/generate-sitemap.mjs",
-    "prebuild": "node scripts/generate-sitemap.mjs"
+    "prebuild": "node scripts/generate-sitemap.mjs",
+    "setup": "node scripts/setup.mjs"
   },
   "dependencies": {
     "@clerk/backend": "^2.4.1",
