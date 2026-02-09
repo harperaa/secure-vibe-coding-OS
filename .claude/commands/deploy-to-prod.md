@@ -292,12 +292,16 @@ Run `git status` — if there are changes:
 - AskUserQuestion: commit and push, or handle manually
 - If "Yes": `git add vercel.json && git commit -m "Add vercel.json for production builds" && git push origin main`
 
-**Step 3:** Vercel login + link.
+**Step 3:** Vercel login + link + git connect.
 Derive the Vercel project name from the GitHub repo name (NOT the directory name):
 1. Parse the repo name from the origin remote URL: `git remote get-url origin` → extract the repo basename (e.g., `user/my-app` → `my-app`)
 2. Run: `npx vercel project add <REPO_NAME> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
 3. Run: `npx vercel link --yes --project=<REPO_NAME>`
 If auth error: tell user to run `npx vercel login`, AskUserQuestion to confirm, retry.
+4. Connect the GitHub repo for automatic deployments on push:
+   Run: `npx vercel git connect --yes`
+   This enables Vercel to auto-rebuild and redeploy when you `git push origin main`.
+   If this fails, show warning but continue — the CLI deploy will still work. User can connect manually in Vercel Dashboard → Settings → Git.
 
 **Step 4:** Set Vercel env vars.
 Run: `node scripts/deploy.mjs vercel-env --clerk-pk="<PK>" --clerk-sk="<SK>" --deploy-key="<KEY>" --frontend-api-url="<URL>" --site-name="<NAME>" --convex-url="<PROD_CONVEX_URL>"`

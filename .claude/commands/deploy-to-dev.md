@@ -104,7 +104,7 @@ If there are changes:
 If clean:
 - Show checkmark: "Code is up to date"
 
-## Step 5: Vercel Link
+## Step 5: Vercel Link + Git Connect
 
 Derive the Vercel project name from the GitHub repo name (NOT the directory name):
 1. Parse the repo name from the origin remote URL: `git remote get-url origin` → extract the repo basename (e.g., `harperaa/test2` → `test2`)
@@ -115,6 +115,16 @@ If this fails (auth error):
 - STOP. Display: "Vercel CLI is not authenticated. Run `npx vercel login` in your terminal, then re-run `/deploy-to-dev`."
 
 Show checkmark: "Vercel project linked (<REPO_NAME>)"
+
+4. Connect the GitHub repo for automatic deployments on push:
+   Run: `npx vercel git connect --yes`
+   - This enables Vercel to auto-rebuild and redeploy when you `git push origin main`
+   - Without this step, only manual CLI deploys (`npx vercel deploy`) would work
+
+If this fails, show warning but continue (the initial CLI deploy in Step 7 will still work):
+"Warning: Could not auto-connect GitHub repo. You can connect it manually in Vercel Dashboard → Settings → Git."
+
+Show checkmark: "GitHub repo connected for auto-deploy"
 
 ## Step 6: Set Vercel Environment Variables
 
