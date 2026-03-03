@@ -9,7 +9,7 @@ interface BlogCardProps {
 
 export function BlogCard({ post }: BlogCardProps) {
   return (
-    <Card className="flex flex-col h-full hover:shadow-lg transition-shadow">
+    <Card className="flex flex-col h-full hover:shadow-lg transition-shadow pt-0 overflow-hidden">
       {/* Featured Image */}
       {post.image && (
         <Link href={`/blog/${post.slug}`}>
