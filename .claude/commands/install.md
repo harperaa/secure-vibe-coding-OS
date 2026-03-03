@@ -1,11 +1,13 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node *setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Bash(git *), Bash(sed *), Read, Edit
+allowed-tools: Bash(node *setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Bash(git *), Bash(sed *), Read, Edit
 description: Automated installation and setup of Secure Vibe Coding OS
 ---
 
 # /install - Automated Setup
 
 You are the installation assistant for Secure Vibe Coding OS. You will collect all required input from the user, then run the setup script to automate as much as possible.
+
+**CRITICAL: You MUST use AskUserQuestion in Phase 2 to ask the user every question listed below. Do NOT skip questions. Do NOT assume default values. Do NOT proceed to Phase 3 until the user has answered all questions. Every question MUST be asked using the AskUserQuestion tool and you MUST wait for the user's response before continuing.**
 
 ## Phase 1: Prerequisites
 
@@ -14,44 +16,74 @@ You are the installation assistant for Secure Vibe Coding OS. You will collect a
    - If not: run `npm install`
 3. Get the directory basename for a default site name: `basename "$PWD"`
 
-## Phase 2: Collect Input
+## Phase 2: Collect Input (MANDATORY — DO NOT SKIP)
 
-Use **AskUserQuestion** for each of these:
+**STOP. You MUST call AskUserQuestion for each question below. Do NOT assume answers or use defaults without asking.**
 
-### Question 1: Site Name
-Ask: "What would you like to name your site?"
-- Options:
-  - "[directory basename]" (Recommended) — Use the current directory name
-  - "Secure Vibe Coding OS" — Keep the default name
-- Header: "Site name"
+After Phase 1 completes, call AskUserQuestion with ALL THREE questions at once using the exact parameters below. Replace `DIRNAME` with the basename value from Phase 1:
 
-### Question 2: Admin Email
-Ask: "What email address will you use to sign in as the site admin? This controls access to the Security Monitoring dashboard and admin functions. (Select 'Other' and type your email, or skip to set later)"
-- Options:
-  - "I'll enter my email" — Select 'Other' below and type your admin email address
-  - "Skip for now" — Use a placeholder and configure later
-- Header: "Admin email"
+```json
+{
+  "questions": [
+    {
+      "question": "What would you like to name your site?",
+      "header": "Site name",
+      "multiSelect": false,
+      "options": [
+        { "label": "DIRNAME (Recommended)", "description": "Use the current directory name" },
+        { "label": "Secure Vibe Coding OS", "description": "Keep the default template name" }
+      ]
+    },
+    {
+      "question": "What email address will you use to sign in as the site admin? This controls access to the Security Monitoring dashboard and admin functions. (Select 'Other' and type your email, or skip to set later)",
+      "header": "Admin email",
+      "multiSelect": false,
+      "options": [
+        { "label": "I'll enter my email", "description": "Select 'Other' below and type your admin email address" },
+        { "label": "Skip for now", "description": "Use a placeholder and configure later" }
+      ]
+    },
+    {
+      "question": "Do you already have a Clerk application with API keys?",
+      "header": "Clerk setup",
+      "multiSelect": false,
+      "options": [
+        { "label": "No, create one for me (Recommended)", "description": "Creates a Clerk app automatically without needing a Clerk account. You'll get a link to claim it later." },
+        { "label": "Yes, I have API keys", "description": "You'll provide your existing Publishable Key and Secret Key" }
+      ]
+    }
+  ]
+}
+```
 
 If the user selects "I'll enter my email" without typing one via the Other option, ask once more. If the user selects "Skip for now", use `example@example.com` as the admin email and continue.
 
-### Question 3: Clerk Keys
-Ask: "Do you already have a Clerk application with API keys?"
-- Options:
-  - "No, create one for me (Recommended)" — Creates a Clerk app automatically without needing a Clerk account. You'll get a link to claim it later.
-  - "Yes, I have API keys" — You'll provide your existing Publishable Key and Secret Key
-- Header: "Clerk setup"
-
 ### If user chose "Yes, I have API keys":
 
-**Question 3a:** Ask: "Enter your Clerk Publishable Key (starts with pk_test_ or pk_live_)"
-- Options:
-  - "Enter below" — Paste your Publishable Key
-- Header: "Clerk PK"
+Call AskUserQuestion again with these two questions:
 
-**Question 3b:** Ask: "Enter your Clerk Secret Key (starts with sk_test_ or sk_live_)"
-- Options:
-  - "Enter below" — Paste your Secret Key
-- Header: "Clerk SK"
+```json
+{
+  "questions": [
+    {
+      "question": "Enter your Clerk Publishable Key (starts with pk_test_ or pk_live_)",
+      "header": "Clerk PK",
+      "multiSelect": false,
+      "options": [
+        { "label": "Enter below", "description": "Paste your Publishable Key" }
+      ]
+    },
+    {
+      "question": "Enter your Clerk Secret Key (starts with sk_test_ or sk_live_)",
+      "header": "Clerk SK",
+      "multiSelect": false,
+      "options": [
+        { "label": "Enter below", "description": "Paste your Secret Key" }
+      ]
+    }
+  ]
+}
+```
 
 ## Phase 3: Run Init Script
 
