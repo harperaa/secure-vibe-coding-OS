@@ -259,6 +259,51 @@ npm run dev
 
 Your application will be available at `http://localhost:3000`.
 
+## 🔀 Git Workflow Commands
+
+Secure Vibe Coding OS ships with 20 slash commands that cover the full git development lifecycle. Run them from Claude Code (`claude` in your terminal).
+
+```
+STARTING WORK
+  /start-feature user-auth        Create feat/user-auth from latest main
+
+DAILY WORKFLOW
+  /status                         Where am I? What's changed?
+  /save "feat: add login form"    Commit (runs secrets scan first)
+  /push                           Push to GitHub (gets you a preview URL)
+  /sync                           Rebase on latest main
+
+REVIEW & SHIP
+  /log                            See commits on this branch vs main
+  /scan-secrets                   Secrets check before PR
+  /pr "Add user login"            Open PR to main
+  /ci-status                      Is CI green?
+  /review 42                      Review PR #42
+
+TEAM / LARGE BUILDS
+  /merge-to-testing               Add this branch to testing env
+  /testing-status                 What's in testing right now?
+
+HOUSEKEEPING
+  /branches                       All branches, ahead/behind status
+  /cleanup                        Delete merged local branches
+  /stash                          Save work temporarily
+  /stash pop                      Restore stashed work
+  /undo                           Undo last commit (keep changes)
+  /discard                        Throw away uncommitted changes
+
+EMERGENCIES
+  /hotfix "login-crash"           Emergency fix from latest main
+
+SETUP
+  /setup-hooks                    Install Husky + lint-staged + detect-secrets
+  /standup                        Today's commits formatted for standup
+```
+
+Every push and PR automatically runs the CI pipeline (lint → test → security → build) defined in `.github/workflows/ci.yml`. All four jobs must pass before merging to `main`.
+
+For a detailed guide on branch strategy, commit conventions, CI/CD pipeline design, and deployment environments, see [`docs/git_cicd_workflow_guide.pdf`](docs/git_cicd_workflow_guide.pdf).
+
 ## 🧠 Continual Learning System
 
 Secure Vibe Coding OS includes a unique **self-improving learning system** that gets smarter over time as you use it.
