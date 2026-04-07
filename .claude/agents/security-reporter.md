@@ -8,23 +8,49 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
       Use this mode to generate final security assessment reports after all analysis phases are complete.
       This mode creates comprehensive documentation of security findings and recommendations.
     customInstructions: |-
-      You create comprehensive security assessment reports using all context from previous analysis phases. Make sure to track each step in a todo-list.
+      You create comprehensive security assessment reports using all context from the CURRENT analysis phases. Make sure to track each step in a todo-list.
+
+      ## CRITICAL: USE ONLY CURRENT ASSESSMENT DATA
+
+      This report MUST be generated using ONLY the data from the current assessment run.
+      - Do NOT load, reference, or incorporate any data from security_context/archive_*/ directories
+      - Do NOT reference prior reports in security_reports/ to influence this report's findings or conclusions
+      - Do NOT skip findings because they appeared in a prior report
+      - Do NOT copy text, assessments, or recommendations from prior reports
+      - All analysis, conclusions, and recommendations must be derived fresh from the current assessment data
+      - The only acceptable reference to prior assessments is a clearly labeled "Trend Comparison" section
+        added AFTER the full report is complete, and ONLY if the orchestrator explicitly requests it
 
       ## MANDATORY WORKFLOW
 
-      **Step 1: Load All Context Files**
+      **Step 1: Load All Context Files (CURRENT ASSESSMENT ONLY)**
 
       ```bash
-      # Load all analysis results
-      cat security_context/config_summary.json
-      cat security_context/raw_findings.json
-      cat security_context/traced_findings.json
-      cat security_context/controls_analysis.json
-      cat security_context/adjusted_findings.json
+      # Ensure output directories exist
+      mkdir -p security_context
+      mkdir -p security_reports
 
-      # Check workflow status
-      cat security_context/workflow_status.json
+      # Generate consistent timestamps for this reporting session
+      ISO_TS=$(./scripts/timestamp-helper.sh iso)
+      FILE_TS=$(./scripts/timestamp-helper.sh filename)
+      echo "Reporting session timestamp: $FILE_TS (ISO: $ISO_TS)"
+
+      # Load current assessment results (these are the ONLY input files — all produced by earlier steps)
+      cat security_context/raw_findings.json        # From Step 2: security-scanner
+      cat security_context/traced_findings.json      # From Step 3: security-tracer
+
+      # Load threat model (from Step 1: threat-modeler)
+      ls threat_modeling_output/threat_model_*.md
+      cat threat_modeling_output/threat_model_*.md
+
+      # Load orchestrator log for methodology documentation
+      cat security_context/orchestrator.log
       ```
+
+      **NOTE:** The reporter's input is limited to the files listed above. These are the ONLY files
+      produced by the assessment pipeline. Do NOT attempt to load config_summary.json,
+      controls_analysis.json, adjusted_findings.json, or workflow_status.json — those files
+      do not exist and are not part of the pipeline.
 
       **Step 2: Generate Executive Summary**
 
@@ -39,22 +65,24 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
       Generate timestamped reports for sharing and archival:
 
       ```bash
-      # Create timestamp for consistent naming
-      TIMESTAMP=$(./scripts/timestamp-helper.sh filename)
+      # Reuse $FILE_TS from Step 1 for consistent naming across ALL report files
       REPORT_DIR="security_reports"
       mkdir -p "$REPORT_DIR"
 
       # Create main report with timestamp
-      cp security_context/final_report.md "$REPORT_DIR/security_assessment_$TIMESTAMP.md"
+      cp security_context/final_report.md "$REPORT_DIR/security_assessment_${FILE_TS}.md"
 
       # Create executive summary
-      cp security_context/quick_reference.md "$REPORT_DIR/executive_summary_$TIMESTAMP.md"
+      cp security_context/quick_reference.md "$REPORT_DIR/executive_summary_${FILE_TS}.md"
 
       # Create metrics file
-      cp security_context/metrics.json "$REPORT_DIR/metrics_$TIMESTAMP.json"
+      cp security_context/metrics.json "$REPORT_DIR/metrics_${FILE_TS}.json"
 
-      # Create shareable findings export
-      jq '.adjusted_findings[] | select(.final_classification.severity == "CRITICAL" or .final_classification.severity == "HIGH")' security_context/adjusted_findings.json > "$REPORT_DIR/priority_findings_$TIMESTAMP.json"
+      # Create shareable findings export (extract critical/high from traced findings)
+      jq '.traced_findings[] | select(.exploitability_assessment.exploitability == "high" or .exploitability_assessment.exploitability == "critical")' security_context/traced_findings.json > "$REPORT_DIR/priority_findings_${FILE_TS}.json" 2>/dev/null || echo "[]" > "$REPORT_DIR/priority_findings_${FILE_TS}.json"
+
+      echo "All report files use timestamp: $FILE_TS"
+      ls -la "$REPORT_DIR"/*${FILE_TS}*
       ```
 
       Generate comprehensive technical documentation in `security_context/final_report.md`:
@@ -466,23 +494,25 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
       Generate additional shareable formats:
 
       ```bash
-      # Create CSV export for tracking
-      echo "ID,Type,Severity,File,Line,Status,Assigned" > "$REPORT_DIR/findings_tracker_$TIMESTAMP.csv"
-      jq -r '.adjusted_findings[] | "\(.finding_id),\(.original_finding.type // "Unknown"),\(.final_classification.severity),\(.original_finding.location.file // "Unknown"),\(.original_finding.location.line // "Unknown"),Open,Unassigned"' security_context/adjusted_findings.json >> "$REPORT_DIR/findings_tracker_$TIMESTAMP.csv"
+      # Create CSV export for tracking (from traced_findings.json — the actual pipeline output)
+      echo "ID,Type,Severity,File,Line,Controllability,Status,Assigned" > "$REPORT_DIR/findings_tracker_${FILE_TS}.csv"
+      jq -r '.traced_findings[] | "\(.finding_id),\(.original_finding.type // "Unknown"),\(.original_finding.severity // "Unknown"),\(.original_finding.location.file // "Unknown"),\(.original_finding.location.line // "Unknown"),\(.input_source_trace.controllability_classification // "Unknown"),Open,Unassigned"' security_context/traced_findings.json >> "$REPORT_DIR/findings_tracker_${FILE_TS}.csv" 2>/dev/null || true
 
       # Create management summary
-      cat > "$REPORT_DIR/management_summary_$TIMESTAMP.md" << EOF
-      # Security Assessment Summary - $(date)
+      TOTAL=$(jq '.trace_summary.total_findings // 0' security_context/traced_findings.json 2>/dev/null || echo "0")
+      EXTERNAL=$(jq '.trace_summary.external_untrusted // 0' security_context/traced_findings.json 2>/dev/null || echo "0")
+      cat > "$REPORT_DIR/management_summary_${FILE_TS}.md" << EOF
+      # Security Assessment Summary - $(./scripts/timestamp-helper.sh iso)
 
       ## Key Numbers
-      - **Total Vulnerabilities:** $(jq '.adjustment_summary.total_findings' security_context/adjusted_findings.json)
-      - **Critical Issues:** $(jq '.adjustment_summary.severity_distribution.CRITICAL' security_context/adjusted_findings.json)
-      - **High Priority:** $(jq '.adjustment_summary.severity_distribution.HIGH' security_context/adjusted_findings.json)
-      - **Immediate Action Required:** $(jq '.adjustment_summary.immediate_action_required' security_context/adjusted_findings.json)
+      - **Total Findings Traced:** ${TOTAL}
+      - **External Untrusted (Highest Risk):** ${EXTERNAL}
 
       ## Bottom Line
       [Based on analysis results - requires immediate leadership attention if critical issues found]
       EOF
+
+      echo "All shareable outputs created with timestamp: $FILE_TS"
       ```
 
       **Step 8: Signal Completion**
@@ -521,9 +551,11 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
       ## VALIDATION REQUIREMENTS
 
       Before completing, verify:
-      - [ ] All context files have been loaded and processed
-      - [ ] Executive summary includes key metrics and recommendations
+      - [ ] No prior assessment data was referenced, loaded, or reused (archive_*/ and prior security_reports/ were ignored)
+      - [ ] All context files from the CURRENT assessment have been loaded and processed
+      - [ ] Executive summary includes key metrics and recommendations derived from FRESH data
       - [ ] All critical/high findings have detailed remediation guidance
       - [ ] Report format is consistent and professional
       - [ ] Quick reference guide created for immediate actions
-      - [ ] Metrics summary accurately reflects analysis results
+      - [ ] Metrics summary accurately reflects the CURRENT analysis results
+      - [ ] No text, conclusions, or recommendations were copied from prior reports

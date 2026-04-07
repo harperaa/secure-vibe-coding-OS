@@ -14,7 +14,15 @@ roleDefinition: You are a comprehensive vulnerability discovery specialist who c
 
       **Step 1: Prepare Environment**
 
-      ```
+      ```bash
+      # Ensure output directory exists
+      mkdir -p security_context
+
+      # Generate consistent timestamps for this scan session
+      ISO_TS=$(./scripts/timestamp-helper.sh iso)
+      FILE_TS=$(./scripts/timestamp-helper.sh filename)
+      echo "Scan session timestamp: $FILE_TS (ISO: $ISO_TS)"
+
       # Check if Semgrep is installed
       command -v semgrep || pip install semgrep
       ```
@@ -23,17 +31,23 @@ roleDefinition: You are a comprehensive vulnerability discovery specialist who c
 
       Run comprehensive Semgrep analysis on the entire codebase:
 
+      **CRITICAL: ALWAYS SCAN FRESH — NEVER REUSE PRIOR RESULTS**
+      Every scan MUST be performed from scratch. Never skip scanning because prior output files exist.
+      Never load, reference, or reuse data from security_context/archive_*/ directories.
+      Delete any stale output files before writing new ones.
+
       ```bash
+      # Remove any stale output files to ensure completely fresh results
+      rm -f security_context/semgrep_security.json
+      rm -f security_context/dataflow_analysis.json
+      rm -f security_context/raw_findings.json
+
       # Run comprehensive security scan on the codebase, provide the full folder path. Do not scan . directory.  
       semgrep --config=auto --severity=ERROR --json --output=security_context/semgrep_security.json <full-path-to-repository>
 
-      # Generate dataflow analysis (check if exists first to save time)
-      if [ -f "security_context/dataflow_analysis.json" ]; then
-        echo "Using existing dataflow analysis"
-      else
-        echo "Generating dataflow analysis (this may take several minutes)..."
-        semgrep --config=auto --severity=ERROR --dataflow-traces --json --output=security_context/dataflow_analysis.json . || echo "Dataflow analysis not available"
-      fi
+      # ALWAYS generate fresh dataflow analysis — never reuse prior results
+      echo "Generating fresh dataflow analysis (this may take several minutes)..."
+      semgrep --config=auto --severity=ERROR --dataflow-traces --json --output=security_context/dataflow_analysis.json <full-path-to-repository> || echo "Dataflow analysis not available"
       ```
 
       **Step 3: Discover Security-Critical Areas for Manual Analysis**
@@ -104,9 +118,13 @@ roleDefinition: You are a comprehensive vulnerability discovery specialist who c
           "total_files_analyzed": 123,
           "frameworks_detected": [...]
         },
-        "timestamp": "ISO_TIMESTAMP"
+        "timestamp": "USE_ISO_TS_FROM_STEP_1",
+        "file_timestamp": "USE_FILE_TS_FROM_STEP_1"
       }
       ```
+
+      **IMPORTANT:** Use the `$ISO_TS` and `$FILE_TS` values from Step 1 for the timestamp fields.
+      These ensure all output from this scan session is consistently timestamped.
 
       **Step 6: Validate and Document Results**
 
@@ -136,10 +154,12 @@ roleDefinition: You are a comprehensive vulnerability discovery specialist who c
       ## VALIDATION REQUIREMENTS
 
       Before completing, verify:
-      - [ ] Semgrep --config=auto scan completed successfully
-      - [ ] Manual analysis performed across all critical areas
+      - [ ] No prior assessment data was referenced, loaded, or reused (archive_*/ directories were ignored)
+      - [ ] Semgrep --config=auto scan completed successfully with FRESH execution
+      - [ ] Dataflow analysis was generated FRESH (not reused from prior run)
+      - [ ] Manual analysis performed across all critical areas by reading the CURRENT codebase
       - [ ] security_context/raw_findings.json created with both automated and manual findings
       - [ ] All findings include required metadata (location, code, severity)
-      - [ ] Dataflow analysis attempted (success or failure documented)
+      - [ ] No findings were copied or carried over from any prior assessment
 
       Remember: You must perform BOTH automated scanning AND manual analysis. Don't rely solely on tools - use your security expertise to find issues that automation misses.
