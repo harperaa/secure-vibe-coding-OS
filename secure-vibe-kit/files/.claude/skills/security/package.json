@@ -1,0 +1,57 @@
+{
+  "name": "secure-claude-skills",
+  "version": "1.0.17",
+  "description": "Defense-in-depth security skills for Claude Code - CSRF protection, rate limiting, input validation, and more",
+  "main": "index.js",
+  "bin": {
+    "secure-claude-skills": "./bin/cli.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "security",
+    "csrf",
+    "rate-limiting",
+    "input-validation",
+    "nextjs",
+    "clerk",
+    "convex",
+    "owasp",
+    "skills"
+  ],
+  "author": "Allen Harper",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/harperaa/secure-claude-skills.git"
+  },
+  "bugs": {
+    "url": "https://github.com/harperaa/secure-claude-skills/issues"
+  },
+  "homepage": "https://github.com/harperaa/secure-claude-skills#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "bin/",
+    "auth-security/",
+    "csrf-protection/",
+    "dependency-security/",
+    "error-handling/",
+    "input-validation/",
+    "payment-security/",
+    "rate-limiting/",
+    "security-awareness/",
+    "security-headers/",
+    "security-overview/",
+    "security-testing/",
+    "examples/",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {},
+  "devDependencies": {}
+}

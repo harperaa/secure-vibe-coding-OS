@@ -1,61 +1,83 @@
 ---
 name: push
-description: Push the current branch to GitHub. Automatically detects whether this is the first push and sets the upstream tracking with -u. Handles the common case where developers forget the -u flag. Use whenever a developer wants to push, sync to GitHub, or get a preview URL.
+description: Push the current branch to GitHub. Checks for unstaged changes first, then handles both first-time pushes (sets upstream with -u) and subsequent pushes automatically. Triggers on "push", "push my code", "sync to GitHub", "get a preview URL", "push to remote".
 ---
 
 # Push
 
-Push the current branch to GitHub, handling first-push upstream tracking automatically.
+Push the current branch to GitHub.
 
 ## Instructions
 
-**Step 1 — Confirm current branch is not main or testing**
-
-Run: `git branch --show-current`
-
-If the current branch is `main`:
-> "You are on `main`. You should not push directly to main — it is a protected branch. Create a feature branch first with `/start-feature`."
-Stop here.
-
-If the current branch is `testing`:
-> "You are on `testing`. Use `/merge-to-testing` to merge your feature branch into testing rather than pushing to testing directly."
-Stop here.
-
-**Step 2 — Check for uncommitted changes**
+**Step 1 — Check for unstaged changes**
 
 Run: `git status --porcelain`
 
-If there are uncommitted changes, warn:
-> "You have uncommitted changes that won't be included in this push. Run `/save` first if you want to include them."
-Ask: "Push anyway without the uncommitted changes? (yes/no)"
-If no, stop.
+If output is non-empty, stop:
 
-**Step 3 — Detect whether upstream is already set**
+```
+⚠️  You have uncommitted changes:
+  <list files>
+
+Commit or stash them first:
+  /commit      → commit your changes
+  /stash-push  → stash them temporarily
+
+Then run /push again.
+```
+
+**Step 2 — Guard against pushing main or testing directly**
+
+Run: `git branch --show-current`
+
+If current branch is `main`:
+> "⛔  You are on main. Do not push directly to main — use a feature branch and open a PR instead."
+Stop here.
+
+If current branch is `testing`:
+> "⛔  You are on testing. Use /merge-to-testing to add your feature branch to testing rather than pushing directly."
+Stop here.
+
+**Step 3 — Check for commits to push**
+
+Run: `git rev-list --count @{u}..HEAD 2>/dev/null`
+
+If this returns 0 (or fails because no upstream yet), check if there are any commits at all:
+Run: `git log --oneline -1`
+
+If no commits exist on the branch:
+> "Nothing to push — no commits on this branch yet. Use /commit first."
+Stop here.
+
+**Step 4 — Detect first push vs subsequent push**
 
 Run: `git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null`
 
-If the command returns a value (upstream exists): this is a subsequent push.
-  Run: `git push`
+If no upstream is set → first push. Run:
+```
+git push -u origin <current-branch>
+```
 
-If the command returns nothing or an error: this is the first push for this branch.
-  Run: `git push -u origin <current-branch-name>`
+If upstream exists → subsequent push. Run:
+```
+git push
+```
 
-**Step 4 — Show result**
+**Step 5 — Confirm**
 
-On success, display:
+On success:
 ```
 ✓ Pushed: <branch-name> → origin/<branch-name>
 
-Preview URL will be available shortly at:
-  https://<project>-git-<branch-slug>.vercel.app
+Your preview URL will be live shortly:
+  https://<project>-git-<branch>.vercel.app
 
-  (Check Vercel dashboard or the PR for the exact URL)
-
-Next steps:
-  /pr "title"   → open a pull request when ready
+Next:
+  /create-pull-request  → open a PR when ready
+  /merge-to-testing     → add to testing for integrated validation
 ```
 
-On failure (e.g., rejected push), show the git error and suggest:
-> "Push was rejected. This usually means the remote has changes you don't have locally. Run `/sync` to rebase against the latest remote, then try `/push` again."
+On failure (rejected):
+> "Push was rejected — the remote branch has changes you don't have locally. Run /sync-feature-branch to rebase on the latest, then /push again."
 
 $ARGUMENTS

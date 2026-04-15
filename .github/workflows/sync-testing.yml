@@ -1,0 +1,73 @@
+name: Sync testing with main
+
+# Runs every time a PR is merged into main.
+# Merges the new main commits into testing so the integration
+# environment stays representative of production.
+#
+# Uses git merge (not rebase) because testing is a shared branch.
+# Rebasing would rewrite history and break every developer
+# who has testing checked out locally.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync-testing:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use a PAT or deploy key if the default GITHUB_TOKEN
+          # does not have permission to push to protected branches.
+          # token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check if testing branch exists
+        id: check-testing
+        run: |
+          if git ls-remote --exit-code --heads origin testing; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "testing branch does not exist — skipping sync"
+          fi
+
+      - name: Merge main into testing
+        if: steps.check-testing.outputs.exists == 'true'
+        run: |
+          git checkout testing
+          git pull origin testing
+
+          # Check if testing is already up to date
+          BEHIND=$(git rev-list --count testing..origin/main)
+          if [ "$BEHIND" -eq "0" ]; then
+            echo "testing is already up to date with main — nothing to merge"
+            exit 0
+          fi
+
+          echo "testing is behind main by $BEHIND commit(s) — merging..."
+
+          git merge origin/main \
+            --no-ff \
+            -m "chore: sync testing with main [skip ci]"
+
+          git push origin testing
+
+          echo "✓ testing synced with main ($BEHIND new commit(s) merged)"
+
+      - name: Report if testing does not exist
+        if: steps.check-testing.outputs.exists == 'false'
+        run: |
+          echo "⚠️  The testing branch does not exist yet."
+          echo "    Create it by running /merge-to-testing in Claude Code"
+          echo "    or: git checkout -b testing && git push -u origin testing"

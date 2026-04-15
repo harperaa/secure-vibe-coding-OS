@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git tag:*), Bash(git log:*), Bash(git diff:*), Bash(git push:*), Bash(gh release:*), Bash(cd secure-vibe-kit*), Bash(npm version*), Bash(npm publish*), Bash(node secure-vibe-kit*), Bash(cat secure-vibe-kit*), Read(**/SKILL.md), Read(**/README.md), Read(**/*.md), AskUserQuestion
+allowed-tools: Bash(git tag:*), Bash(git log:*), Bash(git diff:*), Bash(git push:*), Bash(gh release:*), Read(**/SKILL.md), Read(**/README.md), Read(**/*.md), AskUserQuestion
 description: Create and push a new release with automatic versioning and high-quality changelog generation
 ---
 
@@ -439,53 +439,7 @@ gh release create v2.1.0 \
 
 ---
 
-## Step 12: Publish secure-vibe-kit to npm
-
-After the GitHub release is created, sync and publish the `secure-vibe-kit` npm package so users get the latest agents, commands, skills, and workflows via `npx secure-vibe-kit update`.
-
-**Step 12A: Sync latest files into the package**
-
-```bash
-cd secure-vibe-kit && ./scripts/sync-from-source.sh
-```
-
-**Step 12B: Bump the package version to match the release type**
-
-Use the same release type chosen in Step 3:
-- Major release → `npm version major`
-- Minor release → `npm version minor`
-- Patch release → `npm version patch`
-
-```bash
-cd secure-vibe-kit && npm version patch  # (or minor/major to match)
-```
-
-**Step 12C: Publish to npm**
-
-```bash
-cd secure-vibe-kit && npm publish
-```
-
-**Show confirmation:**
-```
-✅ Published secure-vibe-kit@[new-version] to npm
-```
-
-**If npm publish fails (not logged in, etc.):**
-```
-⚠️  npm publish failed. You can publish manually later:
-  cd secure-vibe-kit
-  npm login
-  npm publish
-
-The git release was still created successfully.
-```
-
-Do NOT let an npm publish failure block the overall release — the git tag and GitHub release are the primary deliverables. Log the npm failure and continue to the summary.
-
----
-
-## Step 13: Summary
+## Step 12: Summary
 
 Display final summary:
 
@@ -499,13 +453,9 @@ Type: Minor Release
 Commits: 3 commits included
 Tag: Created and pushed
 Release: Published on GitHub
-npm: secure-vibe-kit@[version] published
 
 📦 Release URL:
 https://github.com/harperaa/secure-vibe-coding-OS/releases/tag/v2.1.0
-
-📦 npm package:
-https://www.npmjs.com/package/secure-vibe-kit
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
