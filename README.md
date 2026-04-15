@@ -261,43 +261,32 @@ Your application will be available at `http://localhost:3000`.
 
 ## 🔀 Git Workflow Commands
 
-Secure Vibe Coding OS ships with 20 slash commands that cover the full git development lifecycle. Run them from Claude Code (`claude` in your terminal).
+Secure Vibe Coding OS ships with 11 slash commands that cover the full development lifecycle. Run them from Claude Code (`claude` in your terminal).
 
 ```
-STARTING WORK
-  /start-feature user-auth        Create feat/user-auth from latest main
+/create-feature-branch [purpose]   Start new work from latest main
+/commit                            Stage all and commit with strong message
+/push                              Push branch to GitHub
+/merge-to-testing                  Add feature branch to testing environment
+/create-pull-request               Sync with main, open PR via GitHub CLI
+/stash-push                        Temporarily save uncommitted changes
+/stash-pop                         Restore most recently stashed changes
+/sync-feature-branch               Rebase feature branch on latest main
+/sync-testing-branch               Merge main into testing (safe for shared branch)
+/status                            Plain-English summary of current state
+/security-assessment               Run comprehensive security assessment via agents
+```
 
-DAILY WORKFLOW
-  /status                         Where am I? What's changed?
-  /save "feat: add login form"    Commit (runs secrets scan first)
-  /push                           Push to GitHub (gets you a preview URL)
-  /sync                           Rebase on latest main
+### Everyday Workflow
 
-REVIEW & SHIP
-  /log                            See commits on this branch vs main
-  /scan-secrets                   Secrets check before PR
-  /pr "Add user login"            Open PR to main
-  /ci-status                      Is CI green?
-  /review 42                      Review PR #42
-
-TEAM / LARGE BUILDS
-  /merge-to-testing               Add this branch to testing env
-  /testing-status                 What's in testing right now?
-
-HOUSEKEEPING
-  /branches                       All branches, ahead/behind status
-  /cleanup                        Delete merged local branches
-  /stash                          Save work temporarily
-  /stash pop                      Restore stashed work
-  /undo                           Undo last commit (keep changes)
-  /discard                        Throw away uncommitted changes
-
-EMERGENCIES
-  /hotfix "login-crash"           Emergency fix from latest main
-
-SETUP
-  /setup-hooks                    Install Husky + lint-staged + detect-secrets
-  /standup                        Today's commits formatted for standup
+```
+/create-feature-branch user-login     ← start
+  ... write code ...
+/commit                               ← save
+/push                                 ← sync to GitHub, get preview URL
+  ... test on preview URL ...
+/security-assessment                  ← assess before PR
+/create-pull-request                  ← open PR for review
 ```
 
 Every push and PR automatically runs the CI pipeline (lint → test → security → build) defined in `.github/workflows/ci.yml`. All four jobs must pass before merging to `main`.
