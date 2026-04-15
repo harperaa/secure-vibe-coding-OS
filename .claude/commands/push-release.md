@@ -449,39 +449,39 @@ After the GitHub release is created, sync and publish the `secure-vibe-kit` npm 
 cd secure-vibe-kit && ./scripts/sync-from-source.sh
 ```
 
-**Step 12B: Bump the package version to match the release type**
+**Step 12B: Set the package version to match the git release version**
 
-Use the same release type chosen in Step 3:
-- Major release → `npm version major`
-- Minor release → `npm version minor`
-- Patch release → `npm version patch`
+The secure-vibe-kit version MUST match the repo release version (e.g., v4.0.0 → "4.0.0").
+Use `npm pkg set` to write the exact version — do NOT use `npm version major/minor/patch`.
 
 ```bash
-cd secure-vibe-kit && npm version patch  # (or minor/major to match)
+cd secure-vibe-kit && npm pkg set version="X.Y.Z"
 ```
+
+Where X.Y.Z is the version number from Step 4 (without the "v" prefix).
 
 **Step 12C: Publish to npm**
 
-```bash
-cd secure-vibe-kit && npm publish
+npm publish requires browser-based OTP (2FA) which cannot complete non-interactively.
+After syncing and setting the version, tell the user to run the publish command themselves.
+
+Display this to the user:
+
+```
+📦 secure-vibe-kit is synced and versioned at X.Y.Z.
+
+To publish to npm, run this command (it will open a browser for OTP approval):
+
+  ! npm publish ./secure-vibe-kit
+
+After the browser authentication completes, the package will be published.
+You can verify with: npm view secure-vibe-kit versions --json
 ```
 
-**Show confirmation:**
-```
-✅ Published secure-vibe-kit@[new-version] to npm
-```
+**Wait for the user to confirm the publish succeeded, then continue to the summary.**
 
-**If npm publish fails (not logged in, etc.):**
-```
-⚠️  npm publish failed. You can publish manually later:
-  cd secure-vibe-kit
-  npm login
-  npm publish
-
-The git release was still created successfully.
-```
-
-Do NOT let an npm publish failure block the overall release — the git tag and GitHub release are the primary deliverables. Log the npm failure and continue to the summary.
+Do NOT attempt to run `npm publish` yourself — the OTP handshake requires the user's interactive terminal.
+Do NOT let an npm publish failure block the overall release — the git tag and GitHub release are the primary deliverables.
 
 ---
 

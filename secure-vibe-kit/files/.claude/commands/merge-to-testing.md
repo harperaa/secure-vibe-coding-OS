@@ -1,45 +1,51 @@
 ---
 name: merge-to-testing
-description: Merge the current feature branch into the shared testing branch for integrated validation. Used during large builds when multiple features need to be tested together before any PR to main. Handles the full sequence safely — stash, switch, pull, merge, push, switch back. Use when a developer says "merge to testing", "push to testing", "add to testing", or "combine features".
+description: Merge the current feature branch into the shared testing branch for integrated validation. Used when multiple features need to be tested together before any PR to main. Checks for unstaged changes, records the source branch, switches to testing, merges, then switches back. Triggers on "merge to testing", "push to testing", "add to testing", "test together", "integration test".
 ---
 
 # Merge to Testing
 
-Safely merge the current feature branch into `testing` for integrated validation.
+Add the current feature branch to the shared testing environment.
+
+## When to use this
+
+Use testing when you need to validate your feature alongside other features before opening a PR. For solo feature validation, your preview URL is sufficient — testing is for integrated validation only.
+
+**Remember:** testing is a scratchpad. Never merge testing into main. Each developer PRs their own feature branch to main independently after testing.
 
 ## Instructions
 
-**Important context to communicate:**
-- `testing` is a shared scratchpad — multiple developers may be merging simultaneously
-- `testing` is never merged back into `main` — each developer will open their own PR from their feature branch to main after validation
-- Merging to testing does NOT replace the PR process
+**Step 1 — Check for unstaged changes**
 
----
+Run: `git status --porcelain`
 
-**Step 1 — Record current branch**
+If output is non-empty, stop:
+
+```
+⚠️  You have uncommitted changes:
+  <list files>
+
+Commit or stash them first:
+  /commit      → commit your changes
+  /stash-push  → stash them temporarily
+
+Then run /merge-to-testing again.
+```
+
+**Step 2 — Record the current feature branch**
 
 Run: `git branch --show-current`
 Store as `FEATURE_BRANCH`.
 
-If on `main` or `testing`:
-> "You are on `<branch>`. Switch to your feature branch first."
+If current branch is `main` or `testing`:
+> "⛔  You must be on a feature branch to run /merge-to-testing. Switch to your feature branch first."
 Stop here.
 
-**Step 2 — Check for uncommitted changes**
-
-Run: `git status --porcelain`
-
-If uncommitted changes exist:
-> "You have uncommitted changes. Committing them before merging to testing..."
-Run `/save` flow (stage all + prompt for commit message) OR:
-> "Stash them first with `/save` or stash manually: `git stash`"
-Stop here — require a clean state before switching branches.
-
-**Step 3 — Confirm the feature branch is pushed**
+**Step 3 — Ensure the feature branch is pushed to remote**
 
 Run: `git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null`
 
-If no upstream: push the feature branch first.
+If no upstream — push first so the feature branch exists on remote:
 ```
 git push -u origin <FEATURE_BRANCH>
 ```
@@ -51,14 +57,13 @@ git checkout testing
 git pull origin testing
 ```
 
-If `testing` branch doesn't exist locally:
+If `testing` does not exist locally:
 ```
 git fetch origin
 git checkout -b testing origin/testing
 ```
 
-If `origin/testing` doesn't exist at all:
-> "The `testing` branch doesn't exist on remote. Creating it from main..."
+If `origin/testing` does not exist at all, create it from main:
 ```
 git fetch origin
 git checkout main
@@ -66,24 +71,26 @@ git pull origin main
 git checkout -b testing
 git push -u origin testing
 ```
+> "Created the testing branch from main."
 
 **Step 5 — Merge the feature branch**
 
-Run: `git merge <FEATURE_BRANCH> --no-ff -m "merge <FEATURE_BRANCH> into testing"`
-
-The `--no-ff` flag keeps merge commits visible in testing history.
-
-If merge has conflicts:
-> "⚠️  Merge conflict between `<FEATURE_BRANCH>` and `testing`."
-Run: `git diff --name-only --diff-filter=U`
-Show conflicting files.
-Instruct:
 ```
-Resolve each conflict, then:
-  git add <resolved-file>
+git merge <FEATURE_BRANCH> --no-ff -m "merge <FEATURE_BRANCH> into testing"
+```
+
+`--no-ff` keeps a visible merge commit in the history.
+
+If merge conflicts:
+```
+⚠️  Merge conflict between <FEATURE_BRANCH> and testing:
+  <list conflicting files>
+
+Resolve each file, then:
+  git add <file>
   git merge --continue
 
-To abort and go back to your feature branch:
+To cancel and go back:
   git merge --abort
   git checkout <FEATURE_BRANCH>
 ```
@@ -95,7 +102,7 @@ Stop here.
 git push origin testing
 ```
 
-**Step 7 — Switch back to the feature branch**
+**Step 7 — Return to feature branch**
 
 ```
 git checkout <FEATURE_BRANCH>
@@ -105,14 +112,15 @@ git checkout <FEATURE_BRANCH>
 
 ```
 ✓ Merged to testing
-  Feature branch:  <FEATURE_BRANCH>
-  Testing URL:     testing.yourapp.com
-  (allow ~1 min for Vercel to deploy)
+  From:    <FEATURE_BRANCH>
+  To:      testing
+  URL:     testing.yourapp.com (rebuilding — ~1 min)
+
+Back on:   <FEATURE_BRANCH>
 
 ⚠️  Remember:
-  testing is a scratchpad — never merge testing into main.
-  When validation is complete, open your own PR:
-    /pr "your PR title"
+  testing is a scratchpad — never merge testing → main
+  When validation passes, use /create-pull-request
 ```
 
 $ARGUMENTS

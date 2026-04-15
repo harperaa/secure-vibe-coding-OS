@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git tag:*), Bash(git log:*), Bash(git diff:*), Bash(git push:*), Bash(gh release:*), Read(**/SKILL.md), Read(**/README.md), Read(**/*.md), AskUserQuestion
+allowed-tools: Bash(git tag:*), Bash(git log:*), Bash(git diff:*), Bash(git push:*), Bash(gh release:*), Bash(cd secure-vibe-kit*), Bash(npm version*), Bash(npm publish*), Bash(node secure-vibe-kit*), Bash(cat secure-vibe-kit*), Read(**/SKILL.md), Read(**/README.md), Read(**/*.md), AskUserQuestion
 description: Create and push a new release with automatic versioning and high-quality changelog generation
 ---
 
@@ -439,7 +439,53 @@ gh release create v2.1.0 \
 
 ---
 
-## Step 12: Summary
+## Step 12: Publish secure-vibe-kit to npm
+
+After the GitHub release is created, sync and publish the `secure-vibe-kit` npm package so users get the latest agents, commands, skills, and workflows via `npx secure-vibe-kit update`.
+
+**Step 12A: Sync latest files into the package**
+
+```bash
+cd secure-vibe-kit && ./scripts/sync-from-source.sh
+```
+
+**Step 12B: Set the package version to match the git release version**
+
+The secure-vibe-kit version MUST match the repo release version (e.g., v4.0.0 → "4.0.0").
+Use `npm pkg set` to write the exact version — do NOT use `npm version major/minor/patch`.
+
+```bash
+cd secure-vibe-kit && npm pkg set version="X.Y.Z"
+```
+
+Where X.Y.Z is the version number from Step 4 (without the "v" prefix).
+
+**Step 12C: Publish to npm**
+
+npm publish requires browser-based OTP (2FA) which cannot complete non-interactively.
+After syncing and setting the version, tell the user to run the publish command themselves.
+
+Display this to the user:
+
+```
+📦 secure-vibe-kit is synced and versioned at X.Y.Z.
+
+To publish to npm, run this command (it will open a browser for OTP approval):
+
+  ! npm publish ./secure-vibe-kit
+
+After the browser authentication completes, the package will be published.
+You can verify with: npm view secure-vibe-kit versions --json
+```
+
+**Wait for the user to confirm the publish succeeded, then continue to the summary.**
+
+Do NOT attempt to run `npm publish` yourself — the OTP handshake requires the user's interactive terminal.
+Do NOT let an npm publish failure block the overall release — the git tag and GitHub release are the primary deliverables.
+
+---
+
+## Step 13: Summary
 
 Display final summary:
 
@@ -453,9 +499,13 @@ Type: Minor Release
 Commits: 3 commits included
 Tag: Created and pushed
 Release: Published on GitHub
+npm: secure-vibe-kit@[version] published
 
 📦 Release URL:
 https://github.com/harperaa/secure-vibe-coding-OS/releases/tag/v2.1.0
+
+📦 npm package:
+https://www.npmjs.com/package/secure-vibe-kit
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

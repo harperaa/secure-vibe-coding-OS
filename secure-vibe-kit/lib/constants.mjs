@@ -11,4 +11,6 @@ export const COPY_MAPPINGS = [
   { src: '.claude/skills',    dest: '.claude/skills',    mode: 'replace' },
   { src: '.github/workflows', dest: '.github/workflows', mode: 'merge' },
   { src: 'scripts/timestamp-helper.sh', dest: 'scripts/timestamp-helper.sh', mode: 'file' },
+  { src: '.claude/statusline.sh', dest: '.claude/statusline.sh', mode: 'file' },
+  { src: '.claude/settings.json', dest: '.claude/settings.json', mode: 'merge-json' },
 ];

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COPY_MAPPINGS } from '../lib/constants.mjs';
 import { copyRecursive, copySingleFile, removeDir, pathExists } from '../lib/fs-utils.mjs';
@@ -70,6 +70,18 @@ function copyMapping(mapping, projectRoot, dryRun) {
       copySingleFile(src, dest);
       count = 1;
       break;
+    case 'merge-json': {
+      const srcJson = JSON.parse(readFileSync(src, 'utf-8'));
+      let destJson = {};
+      if (existsSync(dest)) {
+        destJson = JSON.parse(readFileSync(dest, 'utf-8'));
+      }
+      const merged = { ...destJson, ...srcJson };
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, JSON.stringify(merged, null, 2) + '\n', 'utf-8');
+      count = 1;
+      break;
+    }
   }
 
   return count;
@@ -182,6 +194,8 @@ function runStatus(projectRoot) {
     { path: '.claude/skills', label: 'Skills library' },
     { path: '.github/workflows', label: 'CI workflows' },
     { path: 'scripts/timestamp-helper.sh', label: 'Timestamp helper' },
+    { path: '.claude/statusline.sh', label: 'Statusline' },
+    { path: '.claude/settings.json', label: 'Claude settings' },
     { path: 'CLAUDE.md', label: 'CLAUDE.md' },
   ];
 

@@ -1,65 +1,78 @@
 ---
 name: status
-description: Show a comprehensive workflow status for the current branch — what branch you are on, how many commits ahead or behind main, uncommitted changes, whether the branch is pushed, and recent commit history. Use whenever a developer wants to know where they are, what state things are in, or says "what's my status", "where am I", "what's going on".
+description: Show a clear, plain-English summary of the current git state — what branch you are on, what has changed, whether you are ahead or behind main, and what to do next. Designed to answer "where am I and what should I do?" at a glance. Triggers on "status", "where am I", "what's going on", "what state am I in", "git status", "show me the status".
 ---
 
-# Workflow Status
+# Status
 
-Show a complete picture of the current working state.
+Show a clear summary of where things stand.
 
 ## Instructions
 
-Gather and display all of the following in one clean summary.
+Run all of these commands to gather the full picture:
 
-**Gather data — run all commands:**
-
-```bash
+```
 git branch --show-current
-git status --porcelain
+git status --short
 git log --oneline -5
-git rev-list --count HEAD..origin/main 2>/dev/null || echo "0"
-git rev-list --count origin/main..HEAD 2>/dev/null || echo "0"
-git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "NO_UPSTREAM"
+git rev-list --count HEAD..origin/main 2>/dev/null
+git rev-list --count origin/main..HEAD 2>/dev/null
+git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null
 git stash list
 ```
 
-**Format and display the results:**
+Then display everything in plain English — no raw git output. Translate each piece into a clear statement a non-expert can understand.
+
+Format the output like this:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  WORKFLOW STATUS
+  STATUS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Branch:       <current branch>
-Upstream:     <origin/branch-name or "not set — run /push to create">
+Branch:   feat/user-login
+On GitHub: yes — connected to origin/feat/user-login
 
 Position vs main:
-  <N> commits ahead of main   (your work not yet in main)
-  <N> commits behind main     (main has moved — run /sync before PR)
+  You are 3 commits AHEAD of main
+    (your work is not in main yet — that is normal)
+  You are 0 commits BEHIND main
+    (you have the latest main changes)
 
-Uncommitted changes:
-  <list of modified/added/deleted files, or "Clean — nothing to commit">
+Changes in your working folder:
+  Modified (not yet committed):
+    src/components/LoginForm.tsx
+    src/styles/login.css
+  New file (not yet committed):
+    src/utils/auth.ts
 
-Stash:
-  <number> stash entries  (or "Empty")
+Recent commits on this branch:
+  abc1234  feat: add login form layout
+  def5678  feat: add email input validation
+  ghi9012  chore: create feature branch
 
-Recent commits (last 5):
-  <git log --oneline output>
+Stash: empty
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Suggested next step:
-  <context-aware suggestion based on state — see below>
+What to do next:
+  /commit               → save your uncommitted changes
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-**Context-aware next step logic:**
+**Plain-English rules for the "What to do next" section:**
 
-- If on `main` with clean state → "You are on main. Run `/start-feature <name>` to begin new work."
-- If on feature branch with uncommitted changes → "Run `/save` to commit your work."
-- If on feature branch, clean, no upstream → "Run `/push` to push your branch and get a preview URL."
-- If on feature branch, clean, upstream set, 0 commits ahead → "Nothing new to push."
-- If on feature branch, behind main by > 0 → "Run `/sync` to rebase against latest main before opening a PR."
-- If on feature branch, ahead of main, upstream set, clean → "Ready for PR. Run `/pr` when you are satisfied with the preview."
-- If stash is non-empty → "You have stashed changes — run `git stash pop` to restore them."
+Provide ONE clear next step based on the actual state. Use this logic:
+
+| State | Suggested next step |
+|---|---|
+| On `main`, nothing changed | `/create-feature-branch` — start new work |
+| On feature branch, uncommitted changes | `/commit` — save your work |
+| On feature branch, committed but not pushed | `/push` — sync to GitHub |
+| On feature branch, pushed, ahead of main, clean | `/create-pull-request` — open a PR when ready |
+| On feature branch, behind main | `/sync-feature-branch` — get latest main changes |
+| On `testing`, clean | `/sync-testing-branch` or switch to your feature branch |
+| Stash is non-empty | Consider: `/stash-pop` to restore your stashed changes |
+
+Never list multiple options. Pick the single most useful next action and state it clearly.
 
 $ARGUMENTS

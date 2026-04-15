@@ -1,11 +1,9 @@
 {
   "name": "secure-vibe-kit",
-  "version": "1.0.0",
+  "version": "3.0.1",
   "description": "Security-first Claude Code agents, commands, skills, and CI workflows for any project",
   "type": "module",
-  "bin": {
-    "secure-vibe-kit": "./bin/cli.mjs"
-  },
+  "bin": "./bin/cli.mjs",
   "files": [
     "bin/",
     "lib/",
@@ -30,7 +28,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/harperaa/secure-vibe-coding-OS.git",
+    "url": "git+https://github.com/harperaa/secure-vibe-coding-OS.git",
     "directory": "secure-vibe-kit"
   }
 }

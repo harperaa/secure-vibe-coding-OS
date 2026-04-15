@@ -17,6 +17,9 @@ rsync -av --delete "$SOURCE/.claude/commands/"  "$DEST/.claude/commands/"
 rsync -av --delete "$SOURCE/.claude/skills/"    "$DEST/.claude/skills/"
 rsync -av --delete "$SOURCE/.github/workflows/" "$DEST/.github/workflows/"
 cp "$SOURCE/scripts/timestamp-helper.sh"        "$DEST/scripts/timestamp-helper.sh"
+cp "$SOURCE/.claude/statusline.sh"              "$DEST/.claude/statusline.sh"
+chmod +x "$DEST/.claude/statusline.sh"
+cp "$SOURCE/.claude/settings.json"              "$DEST/.claude/settings.json"
 
 echo
 echo "Done. Remember to update files/CLAUDE.md manually if the source CLAUDE.md changed."
