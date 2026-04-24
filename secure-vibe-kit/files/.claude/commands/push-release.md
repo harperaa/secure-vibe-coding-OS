@@ -380,7 +380,42 @@ No tags or releases were created.
 
 ---
 
-## Step 9: Create Git Tag
+## Step 9: Sync and bump secure-vibe-kit (before tagging)
+
+The kit's `files/` directory must be synced with the source repo and the version must match
+the git release BEFORE the tag is created, so the tagged commit includes these changes.
+
+**Step 9A: Sync latest files into the package**
+
+```bash
+cd secure-vibe-kit && ./scripts/sync-from-source.sh
+```
+
+**Step 9B: Set the package version to match the release version**
+
+The secure-vibe-kit version MUST match the repo release version (e.g., v4.0.1 → "4.0.1").
+Use `npm pkg set` to write the exact version — do NOT use `npm version major/minor/patch`.
+
+```bash
+cd secure-vibe-kit && npm pkg set version="X.Y.Z"
+```
+
+Where X.Y.Z is the version number from Step 4 (without the "v" prefix).
+
+**Step 9C: Commit and push the sync + version bump**
+
+```bash
+git add secure-vibe-kit/
+git commit -m "chore: sync secure-vibe-kit files and bump to X.Y.Z for release"
+git push origin main
+```
+
+This ensures the tag we create in the next step points to a commit that contains the
+synced files and matching version.
+
+---
+
+## Step 10: Create Git Tag
 
 Create an annotated tag with the version:
 
@@ -401,7 +436,7 @@ git tag --list v2.1.0
 
 ---
 
-## Step 10: Push Tag to Remote
+## Step 11: Push Tag to Remote
 
 Push the tag to the remote repository:
 
@@ -416,7 +451,7 @@ git push origin v2.1.0
 
 ---
 
-## Step 11: Create GitHub Release
+## Step 12: Create GitHub Release
 
 Create the GitHub release with the generated changelog:
 
@@ -439,36 +474,16 @@ gh release create v2.1.0 \
 
 ---
 
-## Step 12: Publish secure-vibe-kit to npm
+## Step 13: Publish secure-vibe-kit to npm
 
-After the GitHub release is created, sync and publish the `secure-vibe-kit` npm package so users get the latest agents, commands, skills, and workflows via `npx secure-vibe-kit update`.
-
-**Step 12A: Sync latest files into the package**
-
-```bash
-cd secure-vibe-kit && ./scripts/sync-from-source.sh
-```
-
-**Step 12B: Set the package version to match the git release version**
-
-The secure-vibe-kit version MUST match the repo release version (e.g., v4.0.0 → "4.0.0").
-Use `npm pkg set` to write the exact version — do NOT use `npm version major/minor/patch`.
-
-```bash
-cd secure-vibe-kit && npm pkg set version="X.Y.Z"
-```
-
-Where X.Y.Z is the version number from Step 4 (without the "v" prefix).
-
-**Step 12C: Publish to npm**
-
-npm publish requires browser-based OTP (2FA) which cannot complete non-interactively.
-After syncing and setting the version, tell the user to run the publish command themselves.
+The kit was already synced and versioned in Step 9, so at this point `secure-vibe-kit/` is
+ready to publish. npm publish requires browser-based OTP (2FA) which cannot complete
+non-interactively — the user must run the publish command themselves.
 
 Display this to the user:
 
 ```
-📦 secure-vibe-kit is synced and versioned at X.Y.Z.
+📦 secure-vibe-kit is ready to publish at version X.Y.Z.
 
 To publish to npm, run this command (it will open a browser for OTP approval):
 
@@ -478,14 +493,14 @@ After the browser authentication completes, the package will be published.
 You can verify with: npm view secure-vibe-kit versions --json
 ```
 
-**Wait for the user to confirm the publish succeeded, then continue to the summary.**
+**Wait for the user to confirm the publish succeeded, then continue.**
 
 Do NOT attempt to run `npm publish` yourself — the OTP handshake requires the user's interactive terminal.
 Do NOT let an npm publish failure block the overall release — the git tag and GitHub release are the primary deliverables.
 
 ---
 
-## Step 13: Summary
+## Step 14: Summary
 
 Display final summary:
 
