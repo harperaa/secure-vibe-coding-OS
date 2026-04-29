@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: process.env.NEXT_PUBLIC_SITE_NAME || "More Secure Starter",
-  description: "A production-ready SaaS starter with Next.js 15, Clerk, Convex, and comprehensive security features",
+  description: process.env.NEXT_PUBLIC_SITE_NAME ||"A production-ready SaaS starter with Next.js 15, Clerk, Convex, and comprehensive security features",
 };
 
 export default function RootLayout({
