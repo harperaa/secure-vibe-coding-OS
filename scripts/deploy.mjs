@@ -1031,6 +1031,7 @@ async function runVercelEnvDoppler(opts = {}) {
   const args = opts && opts.env ? opts : parseArgs(process.argv);
   const vercelEnv = (args.env || 'development').toLowerCase();
   const config = (args.config || (vercelEnv === 'production' ? 'prd' : 'dev')).toLowerCase();
+  const forceOverwriteProd = args['force-overwrite-prod'] === 'true' || opts.forceOverwriteProd === true;
 
   if (vercelEnv !== 'development' && vercelEnv !== 'preview' && vercelEnv !== 'production') {
     console.error(JSON.stringify({
@@ -1045,6 +1046,40 @@ async function runVercelEnvDoppler(opts = {}) {
       error: `Invalid --config "${config}". Expected dev|prd.`,
     }));
     process.exit(1);
+  }
+
+  // Gate: prevent /deploy-to-dev from stomping the Vercel production target
+  // after /deploy-to-prod has already promoted it. Both deploys target the
+  // same Vercel project's primary URL — once prod has been promoted, running
+  // /deploy-to-dev would replace the prd-scoped DOPPLER_TOKEN with a dev one
+  // and the production URL would start serving a dev build to real users.
+  // The marker is set at the END of a successful prd run (below).
+  if (config === 'dev' && !forceOverwriteProd) {
+    try {
+      const devSecrets = downloadSecrets('dev');
+      const promotedAt = devSecrets._PROD_PROMOTED_AT;
+      if (promotedAt) {
+        console.error(JSON.stringify({
+          success: false,
+          error: 'production_already_promoted',
+          promotedAt,
+          message: `/deploy-to-prod was run for this Vercel project at ${promotedAt}. Running /deploy-to-dev now would overwrite the production target's prd-scoped DOPPLER_TOKEN with a dev-scoped one, causing the production URL to serve a dev build with test data to real users.`,
+          hint: [
+            'Recommended alternatives:',
+            '  - Push a feature branch to get a Vercel preview URL (preview target stays dev-scoped — no conflict).',
+            '  - Set up a separate Vercel project for dev work (see DEPLOYMENT.md).',
+            '  - To force-override anyway (rare; e.g. rolling back prod to a dev build for debugging),',
+            '    re-run with --force-overwrite-prod=true. This is destructive to production users.',
+            'To clear the marker entirely after sunsetting the prod deployment, run:',
+            '  doppler secrets unset _PROD_PROMOTED_AT --config dev',
+          ].join('\n'),
+        }));
+        process.exit(1);
+      }
+    } catch (err) {
+      // If we can't read Doppler, fall through and let the deploy attempt
+      // proceed — surfacing the Doppler error here would mask other issues.
+    }
   }
 
   const result = {
@@ -1126,6 +1161,22 @@ async function runVercelEnvDoppler(opts = {}) {
   } catch (err) {
     result.success = false;
     result.steps.push(`Convex sync error: ${err.message}`);
+  }
+
+  // 5. If this was a successful prd run, drop a marker into Doppler dev so
+  //    a future /deploy-to-dev knows the production target has been promoted
+  //    and refuses to overwrite it. See the gate at the top of this function.
+  //    The operator's local Doppler login can write to dev (full account access);
+  //    the marker just needs to exist for the gate to fire later.
+  if (config === 'prd' && result.success) {
+    try {
+      const promotedAt = new Date().toISOString();
+      setSecret('_PROD_PROMOTED_AT', promotedAt, 'dev');
+      result.steps.push(`Set _PROD_PROMOTED_AT=${promotedAt} in Doppler dev (gates future /deploy-to-dev runs)`);
+    } catch (err) {
+      // Marker is defense-in-depth; failing to write it shouldn't fail the deploy.
+      result.steps.push(`Warning: could not write _PROD_PROMOTED_AT marker: ${err.message}`);
+    }
   }
 
   console.log(JSON.stringify(result, null, 2));

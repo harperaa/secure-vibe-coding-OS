@@ -147,7 +147,8 @@ Run: `node scripts/deploy.mjs vercel-env-dev`
 Parse JSON output:
 - Show each variable set with checkmark — expect three `DOPPLER_TOKEN` entries (one per Vercel target) in `varsSet`
 - If `mode: "doppler"`, confirm only `DOPPLER_TOKEN` (no app values) is in `varsSet`
-- If any fail, show the error
+- **If `error: "production_already_promoted"`**: STOP. Display the `message` and `hint` fields verbatim — `/deploy-to-prod` has been run for this Vercel project, and proceeding would replace the prd-scoped DOPPLER_TOKEN on the production target with a dev-scoped one (real users would start seeing a dev build). Recommend the user instead push a feature branch (preview deploys are dev-scoped automatically and don't conflict), or set up a separate Vercel project for ongoing dev work. Do NOT auto-pass `--force-overwrite-prod=true` — that's a manual operator decision.
+- If any other failure, show the error
 
 ## Step 7: Deploy
 
