@@ -1063,6 +1063,17 @@ function commandAvailable(name) {
   return spawnSync('command', ['-v', name], { stdio: 'ignore', shell: true }).status === 0;
 }
 
+// Vercel is invoked via `npx vercel ...` everywhere in this repo (no global
+// install required). Probe with `npx vercel --version` — npx returns non-zero
+// if the package can't be resolved or the user has no internet to fetch it.
+function vercelAvailable() {
+  const r = spawnSync('npx', ['--no-install', 'vercel', '--version'], { stdio: 'ignore' });
+  if (r.status === 0) return true;
+  // Fall back to letting npx resolve from cache or registry once.
+  const r2 = spawnSync('npx', ['vercel', '--version'], { stdio: 'ignore' });
+  return r2.status === 0;
+}
+
 function readEnvFileAsMap(filePath) {
   if (!fs.existsSync(filePath)) return {};
   const map = {};
@@ -1105,15 +1116,15 @@ function readConvexEnvList() {
 
 // Returns { ok, byTarget: { production: {KEY:VAL}, preview: {...}, development: {...} } }
 function readVercelEnv() {
-  if (!commandAvailable('vercel')) {
-    return { ok: false, error: 'vercel CLI not installed (skipping Vercel migration)' };
+  if (!vercelAvailable()) {
+    return { ok: false, error: 'vercel CLI not resolvable via `npx vercel` (skipping Vercel migration)' };
   }
   const byTarget = { production: {}, preview: {}, development: {} };
   for (const target of Object.keys(byTarget)) {
     const tmp = path.join(os.tmpdir(), `vercel-env-${target}-${Date.now()}.txt`);
     const result = spawnSync(
-      'vercel',
-      ['env', 'pull', tmp, '--environment', target, '--yes'],
+      'npx',
+      ['vercel', 'env', 'pull', tmp, '--environment', target, '--yes'],
       { encoding: 'utf-8' }
     );
     if (result.status !== 0) {
@@ -1298,13 +1309,13 @@ async function runMigrateToDoppler(args) {
     }
 
     // 3. Remove migrated keys from Vercel env in each target.
-    if (inventory.vercel.ok && commandAvailable('vercel')) {
+    if (inventory.vercel.ok && vercelAvailable()) {
       for (const target of ['production', 'preview', 'development']) {
         const targetMap = inventory.vercel.byTarget?.[target] || {};
         for (const key of Object.keys(targetMap)) {
           if (!allMigrated.has(key)) continue;
           if (PROTECTED_KEYS.has(key)) continue;
-          const r = spawnSync('vercel', ['env', 'rm', key, target, '--yes'], { stdio: 'inherit' });
+          const r = spawnSync('npx', ['vercel', 'env', 'rm', key, target, '--yes'], { stdio: 'inherit' });
           if (r.status === 0) result.removedFromVercel[target].push(key);
         }
       }

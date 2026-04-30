@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(node *setup.mjs*), Bash(npx convex*), Bash(vercel*), Bash(gh*), Bash(doppler*), Bash(ls *), Bash(cat *), Read
+allowed-tools: Bash(node *setup.mjs*), Bash(npx convex*), Bash(npx vercel*), Bash(npx --no-install vercel*), Bash(vercel*), Bash(gh*), Bash(doppler*), Bash(ls *), Bash(cat *), Read
 description: Migrate an existing repo's secrets from .env.local + Vercel + Convex into Doppler, then remove them from the source locations
 ---
 
@@ -15,11 +15,11 @@ This is **destructive** — the cleanup phase removes secrets from Vercel and Co
    - If missing, run `node scripts/setup.mjs doppler-bootstrap` and wait for completion. If it fails, surface the error verbatim and STOP.
 2. Check tools available (note which ones — affects what gets migrated):
    - `node -v` (required)
-   - `vercel --version 2>&1` (optional — if missing, Vercel migration is skipped)
+   - `npx --no-install vercel --version 2>&1 || npx vercel --version 2>&1` (optional — Vercel CLI is invoked via `npx vercel` in this repo, no global install required. If `npx` can't resolve it, Vercel migration is skipped.)
    - `npx convex env list 2>&1 | head -1` (optional — if it fails, Convex migration is skipped)
    - `gh --version 2>&1` (optional — needed only to push DOPPLER_TOKEN to GitHub at the end)
 
-If `vercel` is missing, tell the user: "Vercel CLI not found — install with `npm i -g vercel` to include Vercel env vars in this migration. Continuing without Vercel."
+If `npx vercel --version` fails (no internet to fetch it, or `vercel` not in `package.json` and not cached), tell the user: "Vercel CLI not resolvable via npx — Vercel env vars will not be migrated this run. Run `npm i -g vercel` or ensure network access for npx, then re-run /migrate-to-doppler. Continuing without Vercel."
 
 ## Phase 1: Inventory (read-only)
 
@@ -133,25 +133,25 @@ Skipped: <list> (e.g. CONVEX_DEPLOY_KEY kept in Convex)
 
 ## Phase 6: Add DOPPLER_TOKEN to Vercel and GitHub
 
-If `vercel` is available, check whether `DOPPLER_TOKEN` is already in Vercel env:
+If Vercel is resolvable (`npx vercel`), check whether `DOPPLER_TOKEN` is already in Vercel env:
 
 ```bash
-vercel env ls 2>&1 | grep -i DOPPLER_TOKEN || echo "MISSING"
+npx vercel env ls 2>&1 | grep -i DOPPLER_TOKEN || echo "MISSING"
 ```
 
 If MISSING, create a Doppler service token for the dev config and push it to Vercel:
 
 ```bash
 DEV_TOKEN=$(doppler configs tokens create vercel-runtime-dev --plain --project $(node -e "console.log(require('./package.json').name)") --config dev)
-echo "$DEV_TOKEN" | vercel env add DOPPLER_TOKEN preview
-echo "$DEV_TOKEN" | vercel env add DOPPLER_TOKEN development
+echo "$DEV_TOKEN" | npx vercel env add DOPPLER_TOKEN preview
+echo "$DEV_TOKEN" | npx vercel env add DOPPLER_TOKEN development
 ```
 
 For production, create a separate `prd`-scoped token:
 
 ```bash
 PRD_TOKEN=$(doppler configs tokens create vercel-runtime-prd --plain --project $(node -e "console.log(require('./package.json').name)") --config prd)
-echo "$PRD_TOKEN" | vercel env add DOPPLER_TOKEN production
+echo "$PRD_TOKEN" | npx vercel env add DOPPLER_TOKEN production
 ```
 
 (Pass these via stdin to avoid the token landing in shell history.)
