@@ -24,6 +24,7 @@
 import { createClerkClient } from '@clerk/backend';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync, spawnSync } from 'node:child_process';
@@ -1023,6 +1024,304 @@ async function runDopplerCreateCiToken() {
 }
 
 // ---------------------------------------------------------------------------
+// migrate-to-doppler Subcommand
+// ---------------------------------------------------------------------------
+//
+// Walks an existing repo through migration to Doppler mode in three phases:
+//   --phase=inventory   read-only: list what's in .env.local, Convex env, and
+//                       Vercel env (per environment). Outputs JSON.
+//   --phase=migrate     push the discovered values into Doppler (dev for the
+//                       union of .env.local + Convex + Vercel-Development +
+//                       Vercel-Preview, prd for Vercel-Production). Idempotent.
+//   --phase=cleanup     destructive: remove the migrated keys from .env.local,
+//                       Convex env, and Vercel env. Adds DOPPLER_TOKEN to
+//                       Vercel as the only remaining env var. Requires --yes.
+//
+// Each phase is its own invocation so the slash command can prompt the user
+// between them. The data flow uses --inventory-file=<path> to pass discovered
+// values from `inventory` into `migrate` and `cleanup` without re-reading.
+
+const PROTECTED_KEYS = new Set([
+  // Bootstrap credential — never migrate this; we add it back at the end.
+  'DOPPLER_TOKEN',
+  // Vercel system vars — owned by the platform, never migrate.
+  'VERCEL', 'VERCEL_ENV', 'VERCEL_URL', 'VERCEL_REGION', 'VERCEL_GIT_COMMIT_SHA',
+  'VERCEL_GIT_COMMIT_REF', 'VERCEL_GIT_COMMIT_MESSAGE', 'VERCEL_GIT_COMMIT_AUTHOR_LOGIN',
+  'VERCEL_GIT_COMMIT_AUTHOR_NAME', 'VERCEL_GIT_PROVIDER', 'VERCEL_GIT_REPO_OWNER',
+  'VERCEL_GIT_REPO_SLUG', 'VERCEL_GIT_REPO_ID', 'VERCEL_GIT_PULL_REQUEST_ID',
+  'VERCEL_DEPLOYMENT_ID', 'VERCEL_PROJECT_PRODUCTION_URL', 'VERCEL_BRANCH_URL',
+  'VERCEL_TARGET_ENV', 'VERCEL_OIDC_TOKEN',
+]);
+
+// Convex-specific keys we do NOT migrate (Convex needs them in its own env).
+const CONVEX_LOCAL_KEYS = new Set(['CONVEX_DEPLOY_KEY']);
+
+function commandAvailable(name) {
+  if (os.platform() === 'win32') {
+    return spawnSync('where', [name], { stdio: 'ignore' }).status === 0;
+  }
+  return spawnSync('command', ['-v', name], { stdio: 'ignore', shell: true }).status === 0;
+}
+
+function readEnvFileAsMap(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+  const map = {};
+  const content = fs.readFileSync(filePath, 'utf-8');
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith(`'`) && value.endsWith(`'`))) {
+      value = value.slice(1, -1);
+    }
+    if (!key) continue;
+    if (!value || value.includes('your_') || value.includes('<')) continue;
+    map[key] = value;
+  }
+  return map;
+}
+
+function readConvexEnvList() {
+  const result = spawnSync('npx', ['convex', 'env', 'list'], { encoding: 'utf-8' });
+  if (result.status !== 0) {
+    return { ok: false, error: (result.stderr || result.stdout || '').trim() };
+  }
+  const map = {};
+  for (const line of (result.stdout || '').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1).trim();
+    if (key && value) map[key] = value;
+  }
+  return { ok: true, map };
+}
+
+// Returns { ok, byTarget: { production: {KEY:VAL}, preview: {...}, development: {...} } }
+function readVercelEnv() {
+  if (!commandAvailable('vercel')) {
+    return { ok: false, error: 'vercel CLI not installed (skipping Vercel migration)' };
+  }
+  const byTarget = { production: {}, preview: {}, development: {} };
+  for (const target of Object.keys(byTarget)) {
+    const tmp = path.join(os.tmpdir(), `vercel-env-${target}-${Date.now()}.txt`);
+    const result = spawnSync(
+      'vercel',
+      ['env', 'pull', tmp, '--environment', target, '--yes'],
+      { encoding: 'utf-8' }
+    );
+    if (result.status !== 0) {
+      // Project may not be linked yet, or no values for that target.
+      continue;
+    }
+    if (fs.existsSync(tmp)) {
+      byTarget[target] = readEnvFileAsMap(tmp);
+      try { fs.unlinkSync(tmp); } catch {}
+    }
+  }
+  return { ok: true, byTarget };
+}
+
+async function runMigrateToDoppler(args) {
+  const phase = args.phase || 'inventory';
+  const inventoryPath = args['inventory-file'] || path.join(os.tmpdir(), 'doppler-migration-inventory.json');
+  const yes = args.yes === 'true' || args.yes === true;
+
+  if (!dopplerIsEnabled() && phase !== 'inventory') {
+    console.error(JSON.stringify({
+      success: false,
+      error: 'Doppler is not enabled (.doppler.yaml missing). Run `node scripts/setup.mjs doppler-bootstrap` first.',
+    }));
+    process.exit(1);
+  }
+
+  if (phase === 'inventory') {
+    const inventory = {
+      envLocal: readEnvFileAsMap(ENV_FILE),
+      convex: { ok: false, map: {} },
+      vercel: { ok: false, byTarget: { production: {}, preview: {}, development: {} } },
+    };
+
+    const convex = readConvexEnvList();
+    inventory.convex = convex.ok ? { ok: true, map: convex.map } : { ok: false, error: convex.error, map: {} };
+
+    const vercel = readVercelEnv();
+    inventory.vercel = vercel.ok ? { ok: true, byTarget: vercel.byTarget } : { ok: false, error: vercel.error, byTarget: { production: {}, preview: {}, development: {} } };
+
+    fs.writeFileSync(inventoryPath, JSON.stringify(inventory, null, 2), 'utf-8');
+
+    const counts = {
+      envLocal: Object.keys(inventory.envLocal).length,
+      convex: Object.keys(inventory.convex.map).length,
+      vercelProduction: Object.keys(inventory.vercel.byTarget.production).length,
+      vercelPreview: Object.keys(inventory.vercel.byTarget.preview).length,
+      vercelDevelopment: Object.keys(inventory.vercel.byTarget.development).length,
+    };
+
+    console.log(JSON.stringify({ success: true, phase: 'inventory', inventoryPath, counts, inventory }, null, 2));
+    return;
+  }
+
+  if (!fs.existsSync(inventoryPath)) {
+    console.error(JSON.stringify({
+      success: false,
+      error: `Inventory file not found at ${inventoryPath}. Run --phase=inventory first.`,
+    }));
+    process.exit(1);
+  }
+
+  const inventory = JSON.parse(fs.readFileSync(inventoryPath, 'utf-8'));
+
+  if (phase === 'migrate') {
+    // Build the dev payload: union of .env.local + Convex + Vercel-Development + Vercel-Preview.
+    // Build the prd payload: Vercel-Production.
+    // Conflict resolution: .env.local > Convex > Vercel-Development > Vercel-Preview (most-local wins).
+    const devPayload = {};
+    const prdPayload = {};
+
+    const merge = (target, source) => {
+      for (const [k, v] of Object.entries(source || {})) {
+        if (PROTECTED_KEYS.has(k)) continue;
+        if (k in target) continue; // first writer wins
+        target[k] = v;
+      }
+    };
+
+    merge(devPayload, inventory.envLocal);
+    merge(devPayload, inventory.convex.map);
+    merge(devPayload, inventory.vercel.byTarget?.development);
+    merge(devPayload, inventory.vercel.byTarget?.preview);
+    merge(prdPayload, inventory.vercel.byTarget?.production);
+
+    const result = { success: true, phase: 'migrate', pushedDev: [], pushedPrd: [] };
+
+    if (Object.keys(devPayload).length > 0) {
+      try {
+        dopplerSetSecrets(devPayload, 'dev');
+        result.pushedDev = Object.keys(devPayload);
+      } catch (err) {
+        console.error(JSON.stringify({ success: false, step: 'doppler-set-dev', error: err.message }));
+        process.exit(1);
+      }
+    }
+
+    if (Object.keys(prdPayload).length > 0) {
+      try {
+        dopplerSetSecrets(prdPayload, 'prd');
+        result.pushedPrd = Object.keys(prdPayload);
+      } catch (err) {
+        console.error(JSON.stringify({ success: false, step: 'doppler-set-prd', error: err.message }));
+        process.exit(1);
+      }
+    }
+
+    // Persist what was migrated so cleanup knows exactly what to remove.
+    inventory._migrated = { dev: Object.keys(devPayload), prd: Object.keys(prdPayload) };
+    fs.writeFileSync(inventoryPath, JSON.stringify(inventory, null, 2), 'utf-8');
+
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (phase === 'cleanup') {
+    if (!yes) {
+      console.error(JSON.stringify({
+        success: false,
+        error: 'Cleanup is destructive. Re-run with --yes after confirming.',
+      }));
+      process.exit(1);
+    }
+
+    const migrated = inventory._migrated || { dev: [], prd: [] };
+    const allMigrated = new Set([...migrated.dev, ...migrated.prd]);
+
+    const result = {
+      success: true,
+      phase: 'cleanup',
+      removedFromEnvLocal: [],
+      removedFromConvex: [],
+      removedFromVercel: { production: [], preview: [], development: [] },
+      envLocalDeleted: false,
+      skipped: [],
+    };
+
+    // 1. Strip migrated keys out of .env.local. If the resulting file has
+    //    nothing left except comments/empty lines, delete it.
+    if (fs.existsSync(ENV_FILE)) {
+      const original = fs.readFileSync(ENV_FILE, 'utf-8').split('\n');
+      const kept = [];
+      for (const line of original) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) {
+          kept.push(line);
+          continue;
+        }
+        const eq = trimmed.indexOf('=');
+        if (eq === -1) {
+          kept.push(line);
+          continue;
+        }
+        const key = trimmed.slice(0, eq).trim();
+        if (allMigrated.has(key)) {
+          result.removedFromEnvLocal.push(key);
+        } else {
+          kept.push(line);
+        }
+      }
+      const remainingNonComment = kept.filter(l => l.trim() && !l.trim().startsWith('#'));
+      if (remainingNonComment.length === 0) {
+        fs.unlinkSync(ENV_FILE);
+        result.envLocalDeleted = true;
+      } else {
+        fs.writeFileSync(ENV_FILE, kept.join('\n'), 'utf-8');
+      }
+    }
+
+    // 2. Remove migrated keys from Convex env. Skip Convex-local keys
+    //    (e.g. CONVEX_DEPLOY_KEY) — those need to stay in Convex.
+    if (inventory.convex.ok) {
+      for (const key of Object.keys(inventory.convex.map)) {
+        if (!allMigrated.has(key)) continue;
+        if (CONVEX_LOCAL_KEYS.has(key)) {
+          result.skipped.push(`convex:${key} (Convex-local, kept)`);
+          continue;
+        }
+        const r = spawnSync('npx', ['convex', 'env', 'unset', key], { stdio: 'inherit' });
+        if (r.status === 0) result.removedFromConvex.push(key);
+      }
+    }
+
+    // 3. Remove migrated keys from Vercel env in each target.
+    if (inventory.vercel.ok && commandAvailable('vercel')) {
+      for (const target of ['production', 'preview', 'development']) {
+        const targetMap = inventory.vercel.byTarget?.[target] || {};
+        for (const key of Object.keys(targetMap)) {
+          if (!allMigrated.has(key)) continue;
+          if (PROTECTED_KEYS.has(key)) continue;
+          const r = spawnSync('vercel', ['env', 'rm', key, target, '--yes'], { stdio: 'inherit' });
+          if (r.status === 0) result.removedFromVercel[target].push(key);
+        }
+      }
+    }
+
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.error(JSON.stringify({
+    success: false,
+    error: `Unknown --phase "${phase}". Valid: inventory | migrate | cleanup`,
+  }));
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -1054,6 +1353,9 @@ switch (command) {
   case 'doppler-create-ci-token':
     await runDopplerCreateCiToken();
     break;
+  case 'migrate-to-doppler':
+    await runMigrateToDoppler(args);
+    break;
   default:
     console.error(`Usage:
   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
@@ -1063,6 +1365,9 @@ switch (command) {
   node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...]
   node scripts/setup.mjs doppler-bootstrap                        (Doppler mode opt-in: install CLI, login, create project, pin repo to dev)
   node scripts/setup.mjs doppler-sync-env-local                   (push .env.local values to Doppler dev)
-  node scripts/setup.mjs doppler-create-ci-token                  (create CI service token and push to GitHub via gh)`);
+  node scripts/setup.mjs doppler-create-ci-token                  (create CI service token and push to GitHub via gh)
+  node scripts/setup.mjs migrate-to-doppler --phase=inventory     (read .env.local + Convex + Vercel; writes inventory JSON)
+  node scripts/setup.mjs migrate-to-doppler --phase=migrate       (push inventory values to Doppler dev / prd)
+  node scripts/setup.mjs migrate-to-doppler --phase=cleanup --yes (remove migrated keys from .env.local, Convex, Vercel)`);
     process.exit(1);
 }
