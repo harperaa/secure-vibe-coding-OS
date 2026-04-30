@@ -33,6 +33,7 @@ import {
   ensureProject as dopplerEnsureProject,
   setupRepoForConfig as dopplerSetupRepoForConfig,
   setSecrets as dopplerSetSecrets,
+  downloadSecrets as dopplerDownloadSecrets,
   createServiceToken as dopplerCreateServiceToken,
   pushTokenToGithub as dopplerPushTokenToGithub,
   isDopplerEnabled as dopplerIsEnabled,
@@ -151,6 +152,22 @@ async function runInit(args) {
     process.exit(1);
   }
 
+  // Doppler mode is detected once at the start of init. If enabled, every value
+  // we'd otherwise write to .env.local is collected into pendingDopplerValues
+  // and pushed to Doppler `dev` in a single batch at the end of init. We never
+  // touch .env.local in Doppler mode — its own header tells the user secrets
+  // live in Doppler, and writing them locally would contradict that.
+  const dopplerMode = dopplerIsEnabled();
+  const pendingDopplerValues = {};
+
+  function persistEnvVar(key, value) {
+    if (dopplerMode) {
+      pendingDopplerValues[key] = value;
+    } else {
+      writeEnvVar(ENV_FILE, key, value);
+    }
+  }
+
   const result = {
     success: true,
     steps: [],
@@ -160,40 +177,50 @@ async function runInit(args) {
     nextSteps: [],
   };
 
-  // Step 1: Ensure .env.local exists
-  ensureEnvFile();
-  result.steps.push('Ensured .env.local exists');
+  // Step 1: Ensure .env.local exists (legacy mode only — Doppler mode never
+  // writes secrets to .env.local; Convex CLI may create the file later for its
+  // own deployment IDs, which is fine since those aren't secrets).
+  if (!dopplerMode) {
+    ensureEnvFile();
+    result.steps.push('Ensured .env.local exists');
 
-  // Step 1b: Clear Convex placeholder values so `npx convex dev` will prompt for fresh setup
-  const placeholders = [
-    { key: 'CONVEX_DEPLOYMENT', patterns: ['your_convex_deployment'] },
-    { key: 'NEXT_PUBLIC_CONVEX_URL', patterns: ['your-convex-url', 'your_convex'] },
-  ];
-  for (const { key, patterns } of placeholders) {
-    const val = getEnvValue(readEnvFile(ENV_FILE), key);
-    if (val && patterns.some(p => val.includes(p))) {
-      writeEnvVar(ENV_FILE, key, '');
-      result.steps.push(`Cleared placeholder for ${key}`);
+    // Step 1b: Clear Convex placeholder values so `npx convex dev` will prompt for fresh setup
+    const placeholders = [
+      { key: 'CONVEX_DEPLOYMENT', patterns: ['your_convex_deployment'] },
+      { key: 'NEXT_PUBLIC_CONVEX_URL', patterns: ['your-convex-url', 'your_convex'] },
+    ];
+    for (const { key, patterns } of placeholders) {
+      const val = getEnvValue(readEnvFile(ENV_FILE), key);
+      if (val && patterns.some(p => val.includes(p))) {
+        writeEnvVar(ENV_FILE, key, '');
+        result.steps.push(`Cleared placeholder for ${key}`);
+      }
     }
   }
 
-  // Step 2: Generate CSRF and Session secrets
-  const envContent = readEnvFile(ENV_FILE);
-  const existingCsrf = getEnvValue(envContent, 'CSRF_SECRET');
-  const existingSession = getEnvValue(envContent, 'SESSION_SECRET');
+  // Step 2: Generate CSRF and Session secrets. In legacy mode, reuse any existing
+  // secrets in .env.local (so re-running init is idempotent). In Doppler mode,
+  // always generate fresh — the bootstrap precondition is a clean Doppler config.
+  let csrfSecret;
+  let sessionSecret;
+  if (dopplerMode) {
+    csrfSecret = generateSecret();
+    sessionSecret = generateSecret();
+  } else {
+    const envContent = readEnvFile(ENV_FILE);
+    const existingCsrf = getEnvValue(envContent, 'CSRF_SECRET');
+    const existingSession = getEnvValue(envContent, 'SESSION_SECRET');
+    csrfSecret = (existingCsrf && !existingCsrf.includes('<')) ? existingCsrf : generateSecret();
+    sessionSecret = (existingSession && !existingSession.includes('<')) ? existingSession : generateSecret();
+  }
 
-  const csrfSecret = (existingCsrf && !existingCsrf.includes('<'))
-    ? existingCsrf : generateSecret();
-  const sessionSecret = (existingSession && !existingSession.includes('<'))
-    ? existingSession : generateSecret();
-
-  writeEnvVar(ENV_FILE, 'CSRF_SECRET', csrfSecret);
-  writeEnvVar(ENV_FILE, 'SESSION_SECRET', sessionSecret);
+  persistEnvVar('CSRF_SECRET', csrfSecret);
+  persistEnvVar('SESSION_SECRET', sessionSecret);
   result.steps.push('Generated CSRF_SECRET and SESSION_SECRET');
   result.envVarsSet.push('CSRF_SECRET', 'SESSION_SECRET');
 
   // Step 3: Site name
-  writeEnvVar(ENV_FILE, 'NEXT_PUBLIC_SITE_NAME', siteName);
+  persistEnvVar('NEXT_PUBLIC_SITE_NAME', siteName);
   result.steps.push(`Set NEXT_PUBLIC_SITE_NAME=${siteName}`);
   result.envVarsSet.push('NEXT_PUBLIC_SITE_NAME');
 
@@ -222,8 +249,8 @@ async function runInit(args) {
     result.steps.push('Using provided Clerk API keys');
   }
 
-  writeEnvVar(ENV_FILE, 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', clerkPk);
-  writeEnvVar(ENV_FILE, 'CLERK_SECRET_KEY', clerkSk);
+  persistEnvVar('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', clerkPk);
+  persistEnvVar('CLERK_SECRET_KEY', clerkSk);
   result.envVarsSet.push('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'CLERK_SECRET_KEY');
 
   // Step 5: Get Frontend API URL and create JWT template
@@ -261,7 +288,7 @@ async function runInit(args) {
   }
 
   if (frontendApiUrl) {
-    writeEnvVar(ENV_FILE, 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL', frontendApiUrl);
+    persistEnvVar('NEXT_PUBLIC_CLERK_FRONTEND_API_URL', frontendApiUrl);
     result.envVarsSet.push('NEXT_PUBLIC_CLERK_FRONTEND_API_URL');
   }
 
@@ -294,31 +321,21 @@ async function runInit(args) {
     'NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL': '/dashboard',
   };
   for (const [key, value] of Object.entries(redirectVars)) {
-    writeEnvVar(ENV_FILE, key, value);
+    persistEnvVar(key, value);
     result.envVarsSet.push(key);
   }
   result.steps.push('Set Clerk redirect URLs');
 
-  // Step 8 (Doppler mode only): mirror generated values to Doppler `dev` config.
-  // .env.local is still written above so legacy tooling keeps working; Doppler
-  // becomes the source of truth from here on. Convex outputs (CONVEX_DEPLOYMENT
-  // and NEXT_PUBLIC_CONVEX_URL) get pushed by `doppler-sync-env-local` after
-  // `npx convex dev` has populated them.
-  if (dopplerIsEnabled()) {
+  // Step 8 (Doppler mode only): flush all collected values to Doppler `dev`.
+  // No values were written to .env.local above — Doppler is the only store.
+  // Convex outputs (CONVEX_DEPLOYMENT, NEXT_PUBLIC_CONVEX_URL) come later from
+  // `npx convex dev` and are synced via `doppler-sync-env-local`.
+  if (dopplerMode) {
     try {
-      const dopplerPayload = {
-        CSRF_SECRET: csrfSecret,
-        SESSION_SECRET: sessionSecret,
-        NEXT_PUBLIC_SITE_NAME: siteName,
-        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: clerkPk,
-        CLERK_SECRET_KEY: clerkSk,
-        ...(frontendApiUrl ? { NEXT_PUBLIC_CLERK_FRONTEND_API_URL: frontendApiUrl } : {}),
-        ...redirectVars,
-      };
-      dopplerSetSecrets(dopplerPayload, 'dev');
-      result.steps.push(`Mirrored ${Object.keys(dopplerPayload).length} secrets to Doppler dev config`);
+      dopplerSetSecrets(pendingDopplerValues, 'dev');
+      result.steps.push(`Pushed ${Object.keys(pendingDopplerValues).length} secrets to Doppler dev config (no .env.local written)`);
     } catch (err) {
-      result.steps.push(`Warning: Doppler mirror failed: ${err.message}`);
+      result.steps.push(`Warning: Doppler push failed: ${err.message}`);
     }
   }
 
@@ -366,7 +383,8 @@ async function runConfigure(args) {
     manualSteps: [],
   };
 
-  // Step 1: Read Convex URL from .env.local
+  // Step 1: Read NEXT_PUBLIC_CONVEX_URL. Convex CLI always writes this to
+  // .env.local, even in Doppler mode, so .env.local is authoritative for it.
   const envContent = readEnvFile(ENV_FILE);
   const convexUrl = getEnvValue(envContent, 'NEXT_PUBLIC_CONVEX_URL');
 
@@ -383,8 +401,20 @@ async function runConfigure(args) {
   const webhookEndpointUrl = `${httpActionsUrl}/clerk-users-webhook`;
   result.steps.push(`Derived webhook endpoint URL: ${webhookEndpointUrl}`);
 
-  // Step 3: Get Frontend API URL
-  const frontendApiUrl = getEnvValue(envContent, 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL');
+  // Step 3: Get Frontend API URL. In Doppler mode this lives in Doppler, not
+  // .env.local (init pushed it straight to Doppler `dev`). Fall back to .env.local
+  // for legacy mode.
+  let frontendApiUrl;
+  if (dopplerIsEnabled()) {
+    try {
+      const dopplerSecrets = dopplerDownloadSecrets('dev');
+      frontendApiUrl = dopplerSecrets?.NEXT_PUBLIC_CLERK_FRONTEND_API_URL;
+    } catch (err) {
+      result.steps.push(`Warning: could not read NEXT_PUBLIC_CLERK_FRONTEND_API_URL from Doppler: ${err.message}`);
+    }
+  } else {
+    frontendApiUrl = getEnvValue(envContent, 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL');
+  }
 
   // Step 4: Create webhook endpoint via Svix
   const clerk = createClerkClient({ secretKey: clerkSk });
@@ -720,11 +750,21 @@ async function runConvexSetup(args) {
   result.steps.push(`Deployment: ${newDeployment}`);
   result.steps.push(`URL: ${newUrl}`);
 
-  // Also set the local site URL
+  // Also set the local site URL. In Doppler mode this goes straight to Doppler;
+  // in legacy mode it lands in .env.local like the other values.
   const existingSiteUrl = getEnvValue(updatedEnv, 'NEXT_PUBLIC_SITE_URL');
   if (!existingSiteUrl || existingSiteUrl.includes('your_')) {
-    writeEnvVar(ENV_FILE, 'NEXT_PUBLIC_SITE_URL', 'http://localhost:3000');
-    result.steps.push('Set NEXT_PUBLIC_SITE_URL=http://localhost:3000');
+    if (dopplerIsEnabled()) {
+      try {
+        dopplerSetSecrets({ NEXT_PUBLIC_SITE_URL: 'http://localhost:3000' }, 'dev');
+        result.steps.push('Pushed NEXT_PUBLIC_SITE_URL=http://localhost:3000 to Doppler dev');
+      } catch (err) {
+        result.steps.push(`Warning: Doppler push for NEXT_PUBLIC_SITE_URL failed: ${err.message}`);
+      }
+    } else {
+      writeEnvVar(ENV_FILE, 'NEXT_PUBLIC_SITE_URL', 'http://localhost:3000');
+      result.steps.push('Set NEXT_PUBLIC_SITE_URL=http://localhost:3000');
+    }
   }
 
   console.log(JSON.stringify(result, null, 2));

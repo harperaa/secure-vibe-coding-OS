@@ -224,19 +224,25 @@ Build the `write-install-summary` arguments from data collected during the insta
 
 - `--claim-url` from Phase 3 init result (if accountless app was created)
 - `--accountless` = "true" if an accountless app was created, "false" if user provided keys
-- `--completed-steps` = comma-separated list of steps that succeeded (e.g., "Dependencies installed,.env.local created and configured,CSRF and Session secrets generated,Clerk application created (accountless),JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)")
+- `--completed-steps` = comma-separated list of steps that succeeded. Adjust for the chosen mode:
+  - **Doppler mode** (`<USE_DOPPLER>` is true): "Dependencies installed,Doppler CLI installed and authenticated,Doppler project created with dev/prd configs,Repo pinned to dev (.doppler.yaml written),CSRF and Session secrets pushed to Doppler dev,Clerk application created (accountless),JWT template for Convex created,Frontend API URL pushed to Doppler dev,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL),Convex deployment IDs synced to Doppler dev,CI service token created and pushed to GitHub Actions"
+  - **Legacy mode**: "Dependencies installed,.env.local created and configured,CSRF and Session secrets generated,Clerk application created (accountless),JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)"
 - `--manual-steps` = comma-separated list of anything that failed and needs manual completion (from `manualSteps` arrays in configure output)
 
 Run: `node scripts/setup.mjs write-install-summary --claim-url="<URL>" --accountless="<BOOL>" --completed-steps="<STEPS>" --manual-steps="<STEPS>"`
 
-**Step 2:** Display the final summary, adjusting based on what actually succeeded. The on-screen summary and the saved INSTALL.md should contain the same information:
+**Step 2:** Display the final summary, adjusting based on the mode and what actually succeeded. The on-screen summary and the saved INSTALL.md should contain the same information.
+
+**In Doppler mode**, also call out that no secrets were written to `.env.local`. Convex CLI may have created `.env.local` with its deployment IDs (CONVEX_DEPLOYMENT, NEXT_PUBLIC_CONVEX_URL) — those are non-sensitive routing values and are also synced to Doppler `dev` so Doppler remains the source of truth.
 
 ```
 ## Installation Complete!
 
 ### Automated Steps
 - Dependencies installed
-- .env.local created and configured
+- (Doppler mode) Doppler CLI installed, project created, repo pinned to dev
+- (Doppler mode) Secrets pushed to Doppler dev — .env.local was NOT written
+- (Legacy mode) .env.local created and configured
 - CSRF and Session secrets generated
 - Clerk application created (accountless)
 - JWT template for Convex created
@@ -244,6 +250,8 @@ Run: `node scripts/setup.mjs write-install-summary --claim-url="<URL>" --account
 - Convex project set up and functions deployed
 - Webhook endpoint created via Svix
 - Convex environment variables set (CLERK_WEBHOOK_SECRET, ADMIN_EMAIL, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)
+- (Doppler mode) Convex deployment IDs synced to Doppler dev
+- (Doppler mode) CI service token created and pushed to GitHub as DOPPLER_TOKEN
 
 ### Claim Your Clerk App (if accountless)
 Visit: <CLAIM_URL>
