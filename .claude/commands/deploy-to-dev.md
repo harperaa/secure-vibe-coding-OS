@@ -142,11 +142,11 @@ Run: `node scripts/deploy.mjs vercel-env-dev`
 
 **In legacy mode**, this reads ALL values from `.env.local` and sets them on Vercel.
 
-**In Doppler mode**, this auto-delegates to `vercel-env-doppler`: it issues a fresh `dev`-scoped Doppler service token, pushes only `DOPPLER_TOKEN` to Vercel Development env, generates `REVALIDATE_TOKEN` in Doppler if absent, and runs `scripts/sync-convex-env.mjs --config dev`. App values (Clerk keys, NEXT_PUBLIC_*, etc.) are fetched at build time by `scripts/vercel-prebuild.mjs` and at runtime by `lib/secrets.ts` — they never sit in Vercel's env store.
+**In Doppler mode**, this auto-delegates to `vercel-env-doppler`: it issues a fresh `dev`-scoped Doppler service token and pushes `DOPPLER_TOKEN` to **all three** Vercel environment targets (development, preview, and production), all with the same dev-scoped token. This is intentional: the deploy step uses `vercel deploy --prod` to keep the project's primary alias URL stable, so the build runs against Vercel's `production` target — and that target needs the dev token for the prebuild fetch to succeed. `/deploy-to-prod` later overwrites the production target with a `prd`-scoped token. The command also generates `REVALIDATE_TOKEN` in Doppler if absent and runs `scripts/sync-convex-env.mjs --config dev`. App values (Clerk keys, NEXT_PUBLIC_*, etc.) are fetched at build time by `scripts/vercel-prebuild.mjs` and at runtime by `lib/secrets.ts` — they never sit in Vercel's env store.
 
 Parse JSON output:
-- Show each variable set with checkmark
-- If `mode: "doppler"`, confirm only `DOPPLER_TOKEN` is in `varsSet`
+- Show each variable set with checkmark — expect three `DOPPLER_TOKEN` entries (one per Vercel target) in `varsSet`
+- If `mode: "doppler"`, confirm only `DOPPLER_TOKEN` (no app values) is in `varsSet`
 - If any fail, show the error
 
 ## Step 7: Deploy

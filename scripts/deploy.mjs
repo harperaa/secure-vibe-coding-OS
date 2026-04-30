@@ -1084,14 +1084,30 @@ async function runVercelEnvDoppler(opts = {}) {
     result.steps.push(`Generated REVALIDATE_TOKEN in Doppler config=${config}`);
   }
 
-  // 3. Push DOPPLER_TOKEN to Vercel (only var in Vercel for app values).
-  const pushed = pushVercelEnvVar('DOPPLER_TOKEN', dopplerToken, vercelEnv);
-  if (pushed.ok) {
-    result.varsSet.push('DOPPLER_TOKEN');
-    result.steps.push(`Set Vercel env var: DOPPLER_TOKEN (${vercelEnv})`);
-  } else {
-    result.success = false;
-    result.steps.push(`Failed to set DOPPLER_TOKEN: ${pushed.error}`);
+  // 3. Push DOPPLER_TOKEN to Vercel. Which targets get it depends on the call:
+  //    - /deploy-to-dev (config=dev): push to ALL THREE Vercel targets
+  //      (development, preview, production) with the dev-scoped token. The
+  //      script invokes `vercel deploy --prod` to keep the project's primary
+  //      alias URL stable for dev testing — which makes it a "production-target"
+  //      build at the Vercel layer even though it uses dev credentials. So the
+  //      production target needs the dev token to make the prebuild fetch work.
+  //    - /deploy-to-prod (config=prd): push only to production with the
+  //      prd-scoped token. This intentionally overwrites the dev-scoped token
+  //      that /deploy-to-dev left there earlier — production deploys must use
+  //      prd Doppler config, not dev.
+  const targets = config === 'dev'
+    ? ['development', 'preview', 'production']
+    : ['production'];
+
+  for (const target of targets) {
+    const pushed = pushVercelEnvVar('DOPPLER_TOKEN', dopplerToken, target);
+    if (pushed.ok) {
+      result.varsSet.push(`DOPPLER_TOKEN (${target})`);
+      result.steps.push(`Set Vercel env var: DOPPLER_TOKEN (${target})`);
+    } else {
+      result.success = false;
+      result.steps.push(`Failed to set DOPPLER_TOKEN on ${target}: ${pushed.error}`);
+    }
   }
 
   // 4. Sync allowlisted secrets to Convex (no native Doppler integration).
