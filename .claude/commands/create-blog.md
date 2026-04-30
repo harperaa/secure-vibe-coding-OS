@@ -143,6 +143,14 @@ When referencing the product or team in blog content:
 
 **Use the Gemini Pro image generation script with 16:9 aspect ratio:**
 
+If `.doppler.yaml` exists (Doppler mode), wrap the call so `GEMINI_API_KEY` is injected from Doppler `dev`:
+
+```bash
+doppler run -- node scripts/generate-image.js "[Image prompt based on blog topic]" "public/blog/images/[slug].jpg" --aspect-ratio 16:9
+```
+
+Otherwise (legacy mode — `.env.local` has the key):
+
 ```bash
 node scripts/generate-image.js "[Image prompt based on blog topic]" "public/blog/images/[slug].jpg" --aspect-ratio 16:9
 ```

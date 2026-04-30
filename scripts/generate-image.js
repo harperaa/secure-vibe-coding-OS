@@ -6,13 +6,18 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
 
-// Load .env.local
+// Load .env.local if it exists (legacy mode). In Doppler mode, GEMINI_API_KEY
+// is injected by `doppler run --`, so this dotenv call is a no-op and we read
+// straight from process.env.
 config({ path: join(projectRoot, ".env.local") });
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 if (!GEMINI_API_KEY) {
-  console.error("Error: GEMINI_API_KEY not found in .env.local");
+  console.error("Error: GEMINI_API_KEY not found.");
+  console.error("  Doppler mode: run via `doppler run -- node scripts/generate-image.js ...`");
+  console.error("                or `doppler secrets set GEMINI_API_KEY=... --config dev` first.");
+  console.error("  Legacy mode:  add GEMINI_API_KEY=... to .env.local.");
   process.exit(1);
 }
 
