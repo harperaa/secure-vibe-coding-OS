@@ -190,14 +190,16 @@ Plan-doc skeleton (write this verbatim, filling in the placeholders):
 
 ## Phase 1 — Homepage
 - [ ] Branch `feat/port-1-homepage` cut from latest main
-- [ ] `app/layout.tsx` metadata.title and metadata.description updated
-- [ ] Hero copy rewritten to match old-site value prop
-- [ ] Hero banner image generated (16:9, projects backend UI)
-- [ ] Feature section images regenerated
-- [ ] Every other landing image regenerated
-- [ ] Feature sections rewritten from real old-site capabilities
-- [ ] Testimonials reconciled (real / removed / clearly placeholder)
-- [ ] FAQs derived from real old-site content
+- [ ] Old-site asset inventory complete — every homepage image and copy block catalogued
+- [ ] Old-site images copied into `public/` and wired to landing components (feature illustrations, section graphics, logos, etc.)
+- [ ] `app/layout.tsx` metadata.title and metadata.description updated (reuse old site's title/description if strong; improve otherwise)
+- [ ] Hero copy: reused from old site if strong, improved otherwise
+- [ ] **Hero banner: freshly generated 16:9 image projecting the backend UI** (per Phase 0 plan — dashboard / data / workflow this product's authenticated users will actually see). The old hero is NOT reused here — backend projection is the whole point of this image.
+- [ ] Feature section images: reused from old site
+- [ ] Every other landing image: reused from old site
+- [ ] Feature sections: copy reused verbatim from old site where strong, improved otherwise
+- [ ] Testimonials reconciled (real reused with attribution / removed / clearly placeholder)
+- [ ] FAQs reused from old-site content (light copy edits OK; do not invent)
 - [ ] CTAs point to existing routes
 - [ ] `npx tsc --noEmit` green
 - [ ] User accepted: <pending>
@@ -280,7 +282,7 @@ This protocol is mandatory. Do **not** skip steps and do **not** start the next 
 
 ## Phase 1 — Homepage port
 
-Goal: replace the new repo's landing page so that it is *fully relevant to the old site's product*, with all imagery regenerated for that product, and `<title>`/`<meta description>` updated.
+Goal: replace the new repo's landing page so that it is *fully relevant to the old site's product*. **Reuse the old site's images and copy** for the bulk of the page (feature sections, illustrations, testimonials, FAQs). The **hero banner is the one exception** — it is freshly generated to project the backend UI this product's authenticated users will see (per the Phase 0 plan), since the old site's hero typically advertises the marketing brand, not the application backend.
 
 ### 1.1 Branch
 
@@ -289,37 +291,50 @@ git checkout main && git pull
 git checkout -b feat/port-1-homepage
 ```
 
-### 1.2 Files in scope
+### 1.2 Inventory old-site assets
 
-- `app/layout.tsx` — `metadata.title`, `metadata.description`, OG tags. Update to reflect the old site's product.
+Before touching any landing component, walk the old site and catalogue:
+
+- **Images**: hero, feature illustrations, section graphics, logos, OG/social images. Note path on disk (or URL if remote), dimensions, and intended placement.
+- **Copy**: hero headline + subhead, feature section titles + body copy, testimonials (with attribution), FAQ Q+A pairs, CTA text, footer text.
+- **Brand**: color palette / typography hints — to keep the regenerated hero stylistically aligned.
+
+Write the inventory into the plan (`docs/PORT-PLAN.md`) under Phase 1 so the user can review what's being carried over.
+
+### 1.3 Files in scope
+
+- `app/layout.tsx` — `metadata.title`, `metadata.description`, OG tags. Reuse the old site's title/description if strong; improve only if weak (vague, keyword-stuffed, generic).
 - `app/(landing)/page.tsx` and every component it imports from `app/(landing)/` (hero, features, testimonials, FAQs, CTA, footer text, etc.).
-- All hero / feature / OG images referenced from those components — regenerate via `scripts/generate-image.js` (or wrap with `doppler run --` in Doppler mode). **Every** image used on the homepage must be regenerated for the old site's product — none of the boilerplate imagery may remain.
+- Old-site images: copy them into `public/` (e.g., `public/landing/<name>.jpg`) and rewire the imports in the landing components. Local files only — don't add new external image domains to `next.config` without explicit user approval (see security checks in 1.6).
+- Hero image only: freshly generated via `scripts/generate-image.js` (see 1.4). Save to `public/landing/hero.jpg` (or similar) and import from the hero component.
 
-### 1.3 Hero banner requirement
+### 1.4 Hero banner — generate fresh, project the backend UI
 
-The hero banner must (a) be visually relevant to the old site's product, and (b) **project what the backend of the application can look like** — i.e., suggest the dashboard / data / workflow that authenticated users will see. When you craft the prompt for `generate-image.js`, include: the product domain, the backend artifact being suggested (dashboard panels, data table, map, chart, queue, etc.), 16:9 framing, "no text in image", and a style aligned with the rest of the site.
+The hero is the one image that must be regenerated. The old site's hero almost certainly advertises a marketing brand, not the application backend the new site puts behind auth — so reusing it would mis-set expectations. Generate a new 16:9 hero that:
 
-### 1.4 Image generation
+- (a) Is visually relevant to the old site's product domain, and
+- (b) **Projects what the backend of the application can look like** — suggest the dashboard / data / workflow / map / chart / queue / table that authenticated users will see (pull these specifics from the Phase 0 plan).
 
-For each image you need:
+Prompt template (fill in from the plan):
 
 ```bash
 # Doppler mode
-doppler run -- node scripts/generate-image.js "<prompt>" "public/<path>.jpg" --aspect-ratio 16:9
+doppler run -- node scripts/generate-image.js "<product domain> dashboard hero — <specific backend artifact, e.g., 'analytics overview with KPI cards and time-series chart'>, modern UI, 16:9, no text in image, <brand-aligned style>" "public/landing/hero.jpg" --aspect-ratio 16:9
 # Legacy mode
-node scripts/generate-image.js "<prompt>" "public/<path>.jpg" --aspect-ratio 16:9
+node scripts/generate-image.js "<...same prompt...>" "public/landing/hero.jpg" --aspect-ratio 16:9
 ```
 
 If the script reports `GEMINI_API_KEY is not set`, follow the missing-key flow documented in `.claude/commands/create-blog.md` (offer "I'll add it" or "I'll paste it here, you handle it" — never echo the key back in chat).
 
-### 1.5 Copy & section content
+### 1.5 Copy & section content — reuse first, improve where weak
 
-Update the existing landing components so that:
-- Hero copy reflects the old site's value prop (use the user-confirmed summary from Phase 0.3).
-- Feature sections reflect 3–6 actual capabilities of the old site (not invented ones — pull from the old site's pages and copy).
-- Testimonials: if the old site has real ones, use them with attribution; otherwise either remove the section or replace with a placeholder labeled clearly as such.
-- FAQs: derive from the old site's actual FAQ / docs / support content; do not invent.
-- CTAs point to real routes that exist on the new site (sign-in, dashboard, contact). If a route doesn't exist yet, use `#` and add a note in the PR.
+For everything below the hero, the directive is **reuse**:
+
+- **Feature sections**: copy verbatim from the old site's actual sections (titles + body copy). Improve only if a block is genuinely weak — vague, broken, or full of dead-link CTAs. Do not invent capabilities the old site doesn't advertise.
+- **Testimonials**: if the old site has real testimonials with attribution, reuse them as-is. If they're stock/placeholder, either remove the section or mark it clearly as a placeholder.
+- **FAQs**: pull from the old site's actual FAQ / docs / support content. Light copy edits are fine; do not invent Q+A.
+- **Hero copy** (headline + subhead): reuse the old site's value prop verbatim if strong. If it's weak, improve it using the Phase 0.3 summary the user accepted.
+- **CTAs**: point to routes that exist on the new site (sign-in, dashboard, contact). If a route doesn't exist yet, use `#` and add a note in the PR.
 
 ### 1.6 Security checks for Phase 1
 
