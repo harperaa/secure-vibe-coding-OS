@@ -20,7 +20,7 @@ You are the installation assistant for Secure Vibe Coding OS. You will collect a
 
 **STOP. You MUST call AskUserQuestion for each question below. Do NOT assume answers or use defaults without asking.**
 
-After Phase 1 completes, call AskUserQuestion with ALL THREE questions at once using the exact parameters below. Replace `DIRNAME` with the basename value from Phase 1:
+After Phase 1 completes, call AskUserQuestion with ALL FOUR questions in a SINGLE batch using the exact parameters below. Replace `DIRNAME` with the basename value from Phase 1. Do NOT split this into multiple AskUserQuestion calls — the user should see all four questions on one screen:
 
 ```json
 {
@@ -35,12 +35,11 @@ After Phase 1 completes, call AskUserQuestion with ALL THREE questions at once u
       ]
     },
     {
-      "question": "What email address will you use to sign in as the site admin? This controls access to the Security Monitoring dashboard and admin functions. (Select 'Other' and type your email, or skip to set later)",
+      "question": "What email address will you use to sign in as the site admin? This controls access to the Security Monitoring dashboard and admin functions. (Select 'Other' below and type your email — this is required.)",
       "header": "Admin email",
       "multiSelect": false,
       "options": [
-        { "label": "I'll enter my email", "description": "Select 'Other' below and type your admin email address" },
-        { "label": "Skip for now", "description": "Use a placeholder and configure later" }
+        { "label": "I'll enter my email", "description": "Select 'Other' below and type your admin email address" }
       ]
     },
     {
@@ -51,12 +50,37 @@ After Phase 1 completes, call AskUserQuestion with ALL THREE questions at once u
         { "label": "No, create one for me (Recommended)", "description": "Creates a Clerk app automatically without needing a Clerk account. You'll get a link to claim it later." },
         { "label": "Yes, I have API keys", "description": "You'll provide your existing Publishable Key and Secret Key" }
       ]
+    },
+    {
+      "question": "Use Doppler for secrets management? (Recommended — single source of truth for all env vars; runtime fetch on Vercel; one-command incident rotation via /rotate)",
+      "header": "Secrets mgmt",
+      "multiSelect": false,
+      "options": [
+        { "label": "Yes — use Doppler (Recommended)", "description": "All env vars live in Doppler. Local dev, Vercel, Convex, and CI all fetch from there. Only DOPPLER_TOKEN ends up in Vercel env." },
+        { "label": "No — use legacy .env.local", "description": "Values live in .env.local locally and Vercel env vars in production. Skip Doppler bootstrap entirely." }
+      ]
     }
   ]
 }
 ```
 
-If the user selects "I'll enter my email" without typing one via the Other option, ask once more. If the user selects "Skip for now", use `example@example.com` as the admin email and continue.
+Admin email is required. If the user selects "I'll enter my email" without typing one via the Other option, OR types something that isn't a valid email (must contain `@` and a `.`), re-ask the same AskUserQuestion until a valid address is supplied. Do NOT proceed to Phase 3 with a placeholder email.
+
+Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `false` if legacy).
+
+### Doppler bootstrap (only if `<USE_DOPPLER>` is true)
+
+Before Phase 3, run the Doppler bootstrap. It auto-installs the Doppler CLI, drives `doppler login`, creates the project with `dev` and `prd` configs, and pins the repo to `dev` via `.doppler.yaml`:
+
+```bash
+node scripts/setup.mjs doppler-bootstrap
+```
+
+If this exits non-zero, show the error and STOP. The error message is structured to tell the user exactly what to do. Common causes:
+- macOS: helper tries `brew install dopplerhq/cli/doppler` first; on brew failure (often outdated Xcode CLT) or if brew is missing, it auto-falls back to Doppler's official `curl | sudo sh` installer — which will prompt for sudo. If that prompt was cancelled, re-run; if sudo is unavailable on this machine, point the user at https://docs.doppler.com/docs/install-cli for manual options.
+- No internet → retry
+- OAuth flow cancelled → re-run
+- Windows: the helper auto-tries `winget install Doppler.doppler` (currently fails because Doppler isn't in the winget repo yet) and then `scoop install doppler` (works if scoop is already installed). If neither succeeds, the error message gives the user three options: install scoop, use WSL, or download a release binary. Just pass the error through verbatim — it's already actionable.
 
 ### If user chose "Yes, I have API keys":
 
@@ -181,6 +205,17 @@ Parse the JSON output:
 - Show which Convex env vars were set
 - If `manualSteps` array is non-empty, display those as fallback instructions
 
+### Doppler post-init (only if `<USE_DOPPLER>` is true)
+
+After configure succeeds, sync Convex's outputs (`CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL`) from `.env.local` to Doppler `dev`, then create the CI service token and push it to GitHub.
+
+```bash
+node scripts/setup.mjs doppler-sync-env-local
+node scripts/setup.mjs doppler-create-ci-token
+```
+
+If `doppler-create-ci-token` fails because `gh` is not authenticated, prompt the user: "Run `gh auth login` then re-run `node scripts/setup.mjs doppler-create-ci-token` manually." Show a checkmark for each step that succeeded.
+
 ## Phase 6: Write Summary + Completion
 
 **Step 1:** Write the installation summary to `docs/INSTALL.md`.
@@ -189,19 +224,25 @@ Build the `write-install-summary` arguments from data collected during the insta
 
 - `--claim-url` from Phase 3 init result (if accountless app was created)
 - `--accountless` = "true" if an accountless app was created, "false" if user provided keys
-- `--completed-steps` = comma-separated list of steps that succeeded (e.g., "Dependencies installed,.env.local created and configured,CSRF and Session secrets generated,Clerk application created (accountless),JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)")
+- `--completed-steps` = comma-separated list of steps that succeeded. Adjust for the chosen mode:
+  - **Doppler mode** (`<USE_DOPPLER>` is true): "Dependencies installed,Doppler CLI installed and authenticated,Doppler project created with dev/prd configs,Repo pinned to dev (.doppler.yaml written),CSRF and Session secrets pushed to Doppler dev,Clerk application created (accountless),JWT template for Convex created,Frontend API URL pushed to Doppler dev,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL),Convex deployment IDs synced to Doppler dev,CI service token created and pushed to GitHub Actions"
+  - **Legacy mode**: "Dependencies installed,.env.local created and configured,CSRF and Session secrets generated,Clerk application created (accountless),JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)"
 - `--manual-steps` = comma-separated list of anything that failed and needs manual completion (from `manualSteps` arrays in configure output)
 
 Run: `node scripts/setup.mjs write-install-summary --claim-url="<URL>" --accountless="<BOOL>" --completed-steps="<STEPS>" --manual-steps="<STEPS>"`
 
-**Step 2:** Display the final summary, adjusting based on what actually succeeded. The on-screen summary and the saved INSTALL.md should contain the same information:
+**Step 2:** Display the final summary, adjusting based on the mode and what actually succeeded. The on-screen summary and the saved INSTALL.md should contain the same information.
+
+**In Doppler mode**, also call out that no secrets were written to `.env.local`. Convex CLI may have created `.env.local` with its deployment IDs (CONVEX_DEPLOYMENT, NEXT_PUBLIC_CONVEX_URL) — those are non-sensitive routing values and are also synced to Doppler `dev` so Doppler remains the source of truth.
 
 ```
 ## Installation Complete!
 
 ### Automated Steps
 - Dependencies installed
-- .env.local created and configured
+- (Doppler mode) Doppler CLI installed, project created, repo pinned to dev
+- (Doppler mode) Secrets pushed to Doppler dev — .env.local was NOT written
+- (Legacy mode) .env.local created and configured
 - CSRF and Session secrets generated
 - Clerk application created (accountless)
 - JWT template for Convex created
@@ -209,6 +250,8 @@ Run: `node scripts/setup.mjs write-install-summary --claim-url="<URL>" --account
 - Convex project set up and functions deployed
 - Webhook endpoint created via Svix
 - Convex environment variables set (CLERK_WEBHOOK_SECRET, ADMIN_EMAIL, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)
+- (Doppler mode) Convex deployment IDs synced to Doppler dev
+- (Doppler mode) CI service token created and pushed to GitHub as DOPPLER_TOKEN
 
 ### Claim Your Clerk App (if accountless)
 Visit: <CLAIM_URL>
@@ -226,8 +269,18 @@ These are only needed when you're ready to enable paid subscriptions:
    - Name it, set monthly price, save
 
 ### Start Development
-Terminal 1: npx convex dev
+
+If `<USE_DOPPLER>` is true, instruct:
+```
+Terminal 1: npm run convex:doppler
+Terminal 2: npm run dev:doppler
+```
+
+Otherwise:
+```
+Terminal 1: npm run convex
 Terminal 2: npm run dev
+```
 
 The URL to access your app will be shown in Terminal 2 output.
 ```

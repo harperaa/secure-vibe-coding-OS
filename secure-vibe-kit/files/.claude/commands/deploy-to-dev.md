@@ -46,7 +46,12 @@ Parse the check-tools result:
 - If `ghAuth` is false: STOP. Display: "GitHub CLI is not authenticated. Run `gh auth login` in your terminal, then re-run `/deploy-to-dev`."
 - If `vercel` tool check fails, that's OK — npx will handle it.
 
-4. Read `.env.local` and verify these keys exist and are not placeholders:
+4. **If Doppler mode is active** (`.doppler.yaml` exists in repo root):
+   - Run `doppler me --json` to verify the developer is logged in. If not: STOP. Display: "Doppler login required. Run `doppler login`, then re-run `/deploy-to-dev`."
+   - Run `doppler secrets --project $(node -p "require('./package.json').name") --config dev --only-names` to confirm the `dev` config has secrets. If empty: STOP. Display: "Doppler dev config is empty. Run `/install` to seed it."
+   - Skip the `.env.local` placeholder check below — values come from Doppler, not `.env.local`.
+
+   **If legacy mode** (no `.doppler.yaml`): read `.env.local` and verify these keys exist and are not placeholders:
    - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
    - `CLERK_SECRET_KEY`
    - `NEXT_PUBLIC_CLERK_FRONTEND_API_URL`
@@ -75,24 +80,29 @@ Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
 - Show checkmark: "GitHub repo already configured"
 - Ensure code is pushed: `git push origin main`
 
-## Step 3: Ensure vercel.json has Next.js framework preset
+## Step 3: Ensure vercel.json is correct for the active mode
 
 The `vercel.json` MUST include `"framework": "nextjs"` — without this, `vercel project add` via CLI defaults the framework to "Other", which causes Edge Function errors with Clerk middleware.
 
 Check if `vercel.json` exists by reading it.
 
-- If it exists and contains `convex deploy`: this is from a previous production deploy. Replace it with dev-only content (framework only, no buildCommand).
-- If it exists and already has `"framework": "nextjs"` without `convex deploy`: leave it alone.
-- If it doesn't exist: create it.
+**Doppler mode** (`.doppler.yaml` exists): write `vercel.json` with the prebuild chain so the build machine fetches secrets from Doppler before `next build` inlines `NEXT_PUBLIC_*`:
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "node scripts/vercel-prebuild.mjs && npm run build"
+}
+```
 
-For dev deployment, write `vercel.json` with:
+**Legacy mode** (no `.doppler.yaml`): write `vercel.json` with framework only (uses default `npm run build`):
 ```json
 {
   "framework": "nextjs"
 }
 ```
 
-This ensures Vercel treats the project as Next.js (proper Edge Function handling for middleware) while using the default `npm run build` command.
+If `vercel.json` already contains `convex deploy`, it's from a previous production deploy — overwrite with the appropriate version above.
 
 ## Step 4: Commit and Push
 
@@ -130,11 +140,15 @@ Show checkmark: "GitHub repo connected for auto-deploy"
 
 Run: `node scripts/deploy.mjs vercel-env-dev`
 
-This reads ALL values from `.env.local` and sets them on Vercel. No arguments needed.
+**In legacy mode**, this reads ALL values from `.env.local` and sets them on Vercel.
+
+**In Doppler mode**, this auto-delegates to `vercel-env-doppler`: it issues a fresh `dev`-scoped Doppler service token and pushes `DOPPLER_TOKEN` to **all three** Vercel environment targets (development, preview, and production), all with the same dev-scoped token. This is intentional: the deploy step uses `vercel deploy --prod` to keep the project's primary alias URL stable, so the build runs against Vercel's `production` target — and that target needs the dev token for the prebuild fetch to succeed. `/deploy-to-prod` later overwrites the production target with a `prd`-scoped token. The command also generates `REVALIDATE_TOKEN` in Doppler if absent and runs `scripts/sync-convex-env.mjs --config dev`. App values (Clerk keys, NEXT_PUBLIC_*, etc.) are fetched at build time by `scripts/vercel-prebuild.mjs` and at runtime by `lib/secrets.ts` — they never sit in Vercel's env store.
 
 Parse JSON output:
-- Show each variable set with checkmark
-- If any fail, show the error
+- Show each variable set with checkmark — expect three `DOPPLER_TOKEN` entries (one per Vercel target) in `varsSet`
+- If `mode: "doppler"`, confirm only `DOPPLER_TOKEN` (no app values) is in `varsSet`
+- **If `error: "production_already_promoted"`**: STOP. Display the `message` and `hint` fields verbatim — `/deploy-to-prod` has been run for this Vercel project, and proceeding would replace the prd-scoped DOPPLER_TOKEN on the production target with a dev-scoped one (real users would start seeing a dev build). Recommend the user instead push a feature branch (preview deploys are dev-scoped automatically and don't conflict), or set up a separate Vercel project for ongoing dev work. Do NOT auto-pass `--force-overwrite-prod=true` — that's a manual operator decision.
+- If any other failure, show the error
 
 ## Step 7: Deploy
 
@@ -151,6 +165,19 @@ Parse JSON output:
 Run: `node scripts/deploy.mjs write-summary --deploy-type="dev" --vercel-url="<PRODUCTION_URL or URL>" --dashboard-url="<DASHBOARD_URL>" --repo-url="<REPO_URL>" --convex-prod-url="<CONVEX_URL>" --convex-site-url="<CONVEX_SITE_URL>" --frontend-api-url="<FRONTEND_URL>" --site-name="<NAME>" --admin-email="" --google-oauth="deferred" --webhook-url="" --completed-steps="GitHub repo created,Vercel project linked,Vercel env vars set,Deployed to Vercel" --skipped-steps="Clerk production (run /deploy-to-prod),Google OAuth (run /deploy-to-prod),Stripe billing (run /deploy-to-prod)"`
 
 Use the Convex URL from .env.local (dev instance) for convex-prod-url, and derive the site URL by replacing `.convex.cloud` with `.convex.site`. For vercel-url, prefer `productionUrl` from the deploy result (the short alias). For dashboard-url, use the `dashboardUrl` from the deploy result.
+
+**Gathering values for the summary args:**
+
+- **Legacy mode** (`.env.local` is the source): `grep '^KEY=' .env.local | cut -d= -f2-` for each value you need.
+- **Doppler mode** (`.doppler.yaml` exists): `.env.local` contains only `CONVEX_DEPLOYMENT` and `NEXT_PUBLIC_CONVEX_URL` (Convex CLI writes those). Everything else (`NEXT_PUBLIC_CLERK_FRONTEND_API_URL`, `NEXT_PUBLIC_SITE_NAME`, etc.) lives in Doppler and must be fetched from there.
+
+  Use this exact command shape — do **NOT** add `--no-interactive` (it is not a valid flag on `doppler secrets get` and the command will fail):
+
+  ```
+  doppler secrets get NEXT_PUBLIC_CLERK_FRONTEND_API_URL NEXT_PUBLIC_SITE_NAME --plain
+  ```
+
+  Project and config are already pinned by `.doppler.yaml`, so `--project`/`--config` are optional. Multiple keys can be passed in one call; values are returned line-by-line in the same order.
 
 Display:
 

@@ -393,19 +393,24 @@ cd secure-vibe-kit && ./scripts/sync-from-source.sh
 
 **Step 9B: Set the package version to match the release version**
 
-The secure-vibe-kit version MUST match the repo release version (e.g., v4.0.1 → "4.0.1").
-Use `npm pkg set` to write the exact version — do NOT use `npm version major/minor/patch`.
+BOTH the root `package.json` and `secure-vibe-kit/package.json` versions MUST match
+the repo release version (e.g., v4.0.1 → "4.0.1"). Use `npm pkg set` to write the
+exact version — do NOT use `npm version major/minor/patch`.
 
 ```bash
-cd secure-vibe-kit && npm pkg set version="X.Y.Z"
+npm pkg set version="X.Y.Z"
+cd secure-vibe-kit && npm pkg set version="X.Y.Z" && cd ..
 ```
 
-Where X.Y.Z is the version number from Step 4 (without the "v" prefix).
+Where X.Y.Z is the version number from Step 4 (without the "v" prefix). The first
+command updates the root `package.json` (the app); the second updates the kit (the
+distributable starter package). Keeping both in sync makes `npm view` and the GitHub
+release page tell the same story about what's deployed.
 
 **Step 9C: Commit and push the sync + version bump**
 
 ```bash
-git add secure-vibe-kit/
+git add package.json secure-vibe-kit/
 git commit -m "chore: sync secure-vibe-kit files and bump to X.Y.Z for release"
 git push origin main
 ```
@@ -477,25 +482,33 @@ gh release create v2.1.0 \
 ## Step 13: Publish secure-vibe-kit to npm
 
 The kit was already synced and versioned in Step 9, so at this point `secure-vibe-kit/` is
-ready to publish. npm publish requires browser-based OTP (2FA) which cannot complete
-non-interactively — the user must run the publish command themselves.
+ready to publish. Both `npm login` and `npm publish` require browser-based authentication
+which cannot complete non-interactively — the user must run these commands themselves.
+
+First, check if the user is logged in by running `npm whoami`. If it fails with 401,
+tell the user to log in first.
 
 Display this to the user:
 
 ```
 📦 secure-vibe-kit is ready to publish at version X.Y.Z.
 
-To publish to npm, run this command (it will open a browser for OTP approval):
+Step 1 — Log in to npm (skip if already logged in):
+
+  ! npm login
+
+Step 2 — Publish (will open a browser for OTP approval):
 
   ! npm publish ./secure-vibe-kit
 
-After the browser authentication completes, the package will be published.
-You can verify with: npm view secure-vibe-kit versions --json
+Step 3 — Verify:
+
+  ! npm view secure-vibe-kit versions --json
 ```
 
 **Wait for the user to confirm the publish succeeded, then continue.**
 
-Do NOT attempt to run `npm publish` yourself — the OTP handshake requires the user's interactive terminal.
+Do NOT attempt to run `npm login` or `npm publish` yourself — both require the user's interactive terminal.
 Do NOT let an npm publish failure block the overall release — the git tag and GitHub release are the primary deliverables.
 
 ---
