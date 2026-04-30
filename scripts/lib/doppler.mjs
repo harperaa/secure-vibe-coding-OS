@@ -227,8 +227,18 @@ export function ensureProject(name = getProjectName()) {
 }
 
 export function setupRepoForConfig(config = 'dev', name = getProjectName()) {
-  // Pin this repo to <project>/<config>. Writes .doppler.yaml.
+  // Step 1: Update the operator's global ~/.doppler/.doppler.yaml so `doppler run`
+  // from this directory resolves to <project>/<config> without per-command flags.
   run(`doppler setup --no-interactive --project ${shellQuote(name)} --config ${shellQuote(config)}`);
+
+  // Step 2: Write the repo-root .doppler.yaml marker. `doppler setup` does NOT
+  // create this file — it only updates the operator's global config. Our scripts
+  // (isDopplerEnabled(), deploy.mjs, the install/deploy/rotate skills) all read
+  // this marker to detect Doppler mode, and Doppler CLI itself also honors it
+  // as a scoping hint, so a teammate cloning the repo doesn't have to re-run
+  // `doppler setup` to get the right project/config.
+  const markerContent = `setup:\n  project: ${name}\n  config: ${config}\n`;
+  fs.writeFileSync(DOPPLER_MARKER, markerContent, 'utf-8');
 }
 
 // ---------------------------------------------------------------------------
