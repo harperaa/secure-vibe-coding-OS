@@ -27,12 +27,23 @@ const CONVEX_ALLOWLIST = [
 ];
 
 function parseArgs(argv) {
+  // Accept both `--key=value` and `--key value` forms. The space-separated
+  // form is what `npm run sync:convex` produces (package.json calls
+  // `--config dev`), and the equals form matches what other scripts in this
+  // repo use — supporting both keeps everything working.
   const args = {};
-  for (const arg of argv.slice(2)) {
-    if (arg.startsWith('--')) {
-      const eqIndex = arg.indexOf('=');
-      if (eqIndex !== -1) {
-        args[arg.slice(2, eqIndex)] = arg.slice(eqIndex + 1);
+  const tokens = argv.slice(2);
+  for (let i = 0; i < tokens.length; i++) {
+    const arg = tokens[i];
+    if (!arg.startsWith('--')) continue;
+    const eqIndex = arg.indexOf('=');
+    if (eqIndex !== -1) {
+      args[arg.slice(2, eqIndex)] = arg.slice(eqIndex + 1);
+    } else {
+      const next = tokens[i + 1];
+      if (next !== undefined && !next.startsWith('--')) {
+        args[arg.slice(2)] = next;
+        i++;
       } else {
         args[arg.slice(2)] = 'true';
       }
