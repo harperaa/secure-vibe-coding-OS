@@ -16,7 +16,7 @@ import { ensureSecretsLoaded } from './lib/secrets'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let cachedHandler: ((req: NextRequest, event: any) => Promise<Response>) | null = null
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 async function getHandler() {
   if (cachedHandler) return cachedHandler
   await ensureSecretsLoaded()

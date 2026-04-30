@@ -41,7 +41,7 @@ export default function FeaturesOne() {
                     </div>
 
                     <blockquote className="before:bg-primary relative mt-12 max-w-xl pl-6 before:absolute before:inset-y-0 before:left-0 before:w-1 before:rounded-full">
-                        <p className="text-foreground text-lg">Wow, auto-generated pages are the kind of thing that you don't even know you need until you see it. It's like an AI-native CRM.</p>
+                        <p className="text-foreground text-lg">Wow, auto-generated pages are the kind of thing that you don&apos;t even know you need until you see it. It&apos;s like an AI-native CRM.</p>
                         <footer className="mt-4 flex items-center gap-2">
                             <cite>Artem Lazarev</cite>
                             <span

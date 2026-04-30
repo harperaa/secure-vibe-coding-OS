@@ -9,12 +9,14 @@
     "convex:doppler": "doppler run -- npx convex dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "generate:sitemap": "node scripts/generate-sitemap.mjs",
     "prebuild": "node scripts/generate-sitemap.mjs",
     "setup": "node scripts/setup.mjs",
     "sync:convex": "doppler run -- node scripts/sync-convex-env.mjs --config dev",
-    "deploy:vercel-env": "node scripts/deploy.mjs vercel-env-doppler"
+    "deploy:vercel-env": "node scripts/deploy.mjs vercel-env-doppler",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'no tests configured (placeholder)' && exit 0"
   },
   "dependencies": {
     "@clerk/backend": "^2.4.1",
@@ -79,10 +81,13 @@
     "postcss": "^8.5.12"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^15.5.15",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.5",
     "typescript": "^5"

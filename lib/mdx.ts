@@ -71,7 +71,7 @@ export function extractSummary(content: string, maxLength = 160): string {
   // Look for explicit summary section - using split instead of regex with 's' flag
   const lines = content.split('\n')
   let inSummary = false
-  let summaryLines: string[] = []
+  const summaryLines: string[] = []
 
   for (const line of lines) {
     if (line.startsWith('## Summary')) {
