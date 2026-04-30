@@ -1085,9 +1085,21 @@ function readEnvFileAsMap(filePath) {
     if (eq === -1) continue;
     const key = trimmed.slice(0, eq).trim();
     let value = trimmed.slice(eq + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith(`'`) && value.endsWith(`'`))) {
+    const isQuoted =
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith(`'`) && value.endsWith(`'`));
+    if (isQuoted) {
       value = value.slice(1, -1);
+    } else {
+      // Strip inline comments. Convex CLI in particular writes lines like
+      //   CONVEX_DEPLOYMENT=dev:foo-bar-1 # team: allen, project: x
+      // and we don't want the comment baked into the value when we push to
+      // Doppler. Convention (matches dotenv): a SPACE then `#` introduces a
+      // comment on an unquoted value. Values that legitimately contain `#`
+      // (URL fragments, cron schedules, hex colors) won't have a leading
+      // space, so they survive.
+      const hashIdx = value.indexOf(' #');
+      if (hashIdx !== -1) value = value.slice(0, hashIdx).trimEnd();
     }
     if (!key) continue;
     if (!value || value.includes('your_') || value.includes('<')) continue;
@@ -1262,7 +1274,24 @@ async function runMigrateToDoppler(args) {
       skipped: [],
     };
 
-    // 1. Strip migrated keys out of .env.local. If the resulting file has
+    // 1. Remove migrated keys from Convex env FIRST — `npx convex env unset`
+    //    needs CONVEX_DEPLOYMENT in process.env (which Convex CLI loads from
+    //    .env.local), so we must run Convex cleanup before stripping
+    //    .env.local. Skip Convex-local keys (CONVEX_DEPLOY_KEY) — those stay.
+    if (inventory.convex.ok) {
+      for (const key of Object.keys(inventory.convex.map)) {
+        if (!allMigrated.has(key)) continue;
+        if (CONVEX_LOCAL_KEYS.has(key)) {
+          result.skipped.push(`convex:${key} (Convex-local, kept)`);
+          continue;
+        }
+        // One key per call — `convex env unset` only accepts a single arg.
+        const r = spawnSync('npx', ['convex', 'env', 'unset', key], { stdio: 'inherit' });
+        if (r.status === 0) result.removedFromConvex.push(key);
+      }
+    }
+
+    // 2. Strip migrated keys out of .env.local. If the resulting file has
     //    nothing left except comments/empty lines, delete it.
     if (fs.existsSync(ENV_FILE)) {
       const original = fs.readFileSync(ENV_FILE, 'utf-8').split('\n');
@@ -1291,20 +1320,6 @@ async function runMigrateToDoppler(args) {
         result.envLocalDeleted = true;
       } else {
         fs.writeFileSync(ENV_FILE, kept.join('\n'), 'utf-8');
-      }
-    }
-
-    // 2. Remove migrated keys from Convex env. Skip Convex-local keys
-    //    (e.g. CONVEX_DEPLOY_KEY) — those need to stay in Convex.
-    if (inventory.convex.ok) {
-      for (const key of Object.keys(inventory.convex.map)) {
-        if (!allMigrated.has(key)) continue;
-        if (CONVEX_LOCAL_KEYS.has(key)) {
-          result.skipped.push(`convex:${key} (Convex-local, kept)`);
-          continue;
-        }
-        const r = spawnSync('npx', ['convex', 'env', 'unset', key], { stdio: 'inherit' });
-        if (r.status === 0) result.removedFromConvex.push(key);
       }
     }
 
