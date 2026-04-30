@@ -78,7 +78,7 @@ node scripts/setup.mjs doppler-bootstrap
 ```
 
 If this exits non-zero, show the error and STOP. The error message is structured to tell the user exactly what to do. Common causes:
-- macOS: brew not installed → instruct user to install brew from https://brew.sh
+- macOS: helper tries `brew install dopplerhq/cli/doppler` first; on brew failure (often outdated Xcode CLT) or if brew is missing, it auto-falls back to Doppler's official `curl | sudo sh` installer — which will prompt for sudo. If that prompt was cancelled, re-run; if sudo is unavailable on this machine, point the user at https://docs.doppler.com/docs/install-cli for manual options.
 - No internet → retry
 - OAuth flow cancelled → re-run
 - Windows: the helper auto-tries `winget install Doppler.doppler` (currently fails because Doppler isn't in the winget repo yet) and then `scoop install doppler` (works if scoop is already installed). If neither succeeds, the error message gives the user three options: install scoop, use WSL, or download a release binary. Just pass the error through verbatim — it's already actionable.

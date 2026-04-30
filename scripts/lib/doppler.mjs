@@ -79,19 +79,9 @@ export function ensureCliInstalled() {
   console.log('Doppler CLI not found — installing…');
 
   if (platform === 'darwin') {
-    if (!commandExists('brew')) {
-      throw new Error(
-        'Homebrew is required to install Doppler on macOS but is not installed.\n' +
-        'Install Homebrew from https://brew.sh and re-run this script.'
-      );
-    }
-    run('brew install gnupg', { stdio: 'inherit' });
-    run('brew install dopplerhq/cli/doppler', { stdio: 'inherit' });
+    installOnMac();
   } else if (platform === 'linux') {
-    run(
-      `(curl -Ls --tlsv1.2 --proto "=https" --retry 3 https://cli.doppler.com/install.sh | sudo sh)`,
-      { stdio: 'inherit' }
-    );
+    runOfficialCurlInstaller();
   } else if (platform === 'win32') {
     installOnWindows();
   } else {
@@ -105,6 +95,43 @@ export function ensureCliInstalled() {
     throw new Error('Doppler install completed but `doppler` is still not on PATH.');
   }
   console.log('Doppler CLI installed.');
+}
+
+/**
+ * Run Doppler's official curl|sh installer. Used directly on Linux, and as a
+ * fallback on macOS when brew is unavailable or fails (e.g. outdated Xcode CLT,
+ * broken brew install). Requires sudo because it writes to /usr/local/bin.
+ */
+function runOfficialCurlInstaller() {
+  run(
+    `(curl -Ls --tlsv1.2 --proto "=https" --retry 3 https://cli.doppler.com/install.sh | sudo sh)`,
+    { stdio: 'inherit' }
+  );
+}
+
+/**
+ * macOS install. Tries brew first (zero-sudo, easy uninstall), falls back to
+ * Doppler's official curl installer if brew is missing or fails. Brew failure
+ * is common when Xcode Command Line Tools are outdated — we don't want a
+ * stale CLT to block the whole install when a sudo curl|sh path works fine.
+ */
+function installOnMac() {
+  if (commandExists('brew')) {
+    console.log('Trying brew install dopplerhq/cli/doppler…');
+    // gnupg is a soft dep used for verifying signed releases; not fatal if it fails.
+    tryRun('brew install gnupg');
+    const brewInstall = tryRun('brew install dopplerhq/cli/doppler');
+    if (brewInstall.ok && commandExists('doppler')) {
+      return;
+    }
+    if (brewInstall.stderr) {
+      console.log(brewInstall.stderr);
+    }
+    console.log('brew install failed — falling back to Doppler\'s official curl installer (will prompt for sudo)…');
+  } else {
+    console.log('Homebrew not found — using Doppler\'s official curl installer (will prompt for sudo)…');
+  }
+  runOfficialCurlInstaller();
 }
 
 /**
