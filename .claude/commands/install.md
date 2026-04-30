@@ -35,12 +35,11 @@ After Phase 1 completes, call AskUserQuestion with ALL FOUR questions in a SINGL
       ]
     },
     {
-      "question": "What email address will you use to sign in as the site admin? This controls access to the Security Monitoring dashboard and admin functions. (Select 'Other' and type your email, or skip to set later)",
+      "question": "What email address will you use to sign in as the site admin? This controls access to the Security Monitoring dashboard and admin functions. (Select 'Other' below and type your email — this is required.)",
       "header": "Admin email",
       "multiSelect": false,
       "options": [
-        { "label": "I'll enter my email", "description": "Select 'Other' below and type your admin email address" },
-        { "label": "Skip for now", "description": "Use a placeholder and configure later" }
+        { "label": "I'll enter my email", "description": "Select 'Other' below and type your admin email address" }
       ]
     },
     {
@@ -65,7 +64,7 @@ After Phase 1 completes, call AskUserQuestion with ALL FOUR questions in a SINGL
 }
 ```
 
-If the user selects "I'll enter my email" without typing one via the Other option, ask once more. If the user selects "Skip for now", use `example@example.com` as the admin email and continue.
+Admin email is required. If the user selects "I'll enter my email" without typing one via the Other option, OR types something that isn't a valid email (must contain `@` and a `.`), re-ask the same AskUserQuestion until a valid address is supplied. Do NOT proceed to Phase 3 with a placeholder email.
 
 Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `false` if legacy).
 

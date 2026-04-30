@@ -114,6 +114,17 @@ function generateSecret() {
   return crypto.randomBytes(32).toString('base64url');
 }
 
+// Reject obviously-bad admin emails. We only block what's clearly wrong
+// (empty, malformed, or known placeholder strings) — actual deliverability
+// is verified later when Clerk sends the sign-in email.
+function isValidAdminEmail(email) {
+  if (typeof email !== 'string') return false;
+  const trimmed = email.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return false;
+  const blocked = ['example@example.com', 'admin@example.com', 'user@example.com', 'test@example.com'];
+  return !blocked.includes(trimmed.toLowerCase());
+}
+
 // ---------------------------------------------------------------------------
 // init Subcommand
 // ---------------------------------------------------------------------------
@@ -128,6 +139,14 @@ async function runInit(args) {
     console.error(JSON.stringify({
       success: false,
       error: 'Missing required arguments: --site-name and --admin-email',
+    }));
+    process.exit(1);
+  }
+
+  if (!isValidAdminEmail(adminEmail)) {
+    console.error(JSON.stringify({
+      success: false,
+      error: `Invalid --admin-email "${adminEmail}". Must be a real email; placeholders like example@example.com are not allowed.`,
     }));
     process.exit(1);
   }
@@ -328,6 +347,14 @@ async function runConfigure(args) {
     console.error(JSON.stringify({
       success: false,
       error: 'Missing required arguments: --clerk-sk and --admin-email',
+    }));
+    process.exit(1);
+  }
+
+  if (!isValidAdminEmail(adminEmail)) {
+    console.error(JSON.stringify({
+      success: false,
+      error: `Invalid --admin-email "${adminEmail}". Must be a real email; placeholders like example@example.com are not allowed.`,
     }));
     process.exit(1);
   }
