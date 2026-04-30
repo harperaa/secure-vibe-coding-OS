@@ -53,25 +53,25 @@ function parseArgs(argv) {
 }
 
 function listConvexEnv(deployKey) {
-  // `npx convex env list --json` returns an array of {name, value} pairs.
+  // `npx convex env list` outputs plain `KEY=value` lines (no --json flag exists).
   const env = { ...process.env };
   if (deployKey) env.CONVEX_DEPLOY_KEY = deployKey;
-  const result = spawnSync('npx', ['convex', 'env', 'list', '--json'], {
+  const result = spawnSync('npx', ['convex', 'env', 'list'], {
     encoding: 'utf-8',
     env,
   });
   if (result.status !== 0) {
     throw new Error(`convex env list failed:\n${result.stderr || result.stdout}`);
   }
-  let parsed;
-  try {
-    parsed = JSON.parse(result.stdout);
-  } catch (err) {
-    throw new Error(`Could not parse convex env list output: ${err.message}\n${result.stdout}`);
-  }
   const map = {};
-  for (const entry of parsed) {
-    if (entry && entry.name) map[entry.name] = entry.value ?? '';
+  for (const line of (result.stdout || '').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1);
+    if (key) map[key] = value;
   }
   return map;
 }
