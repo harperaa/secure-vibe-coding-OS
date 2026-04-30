@@ -967,10 +967,18 @@ async function runDopplerSyncEnvLocal() {
     if (eq === -1) continue;
     const key = trimmed.slice(0, eq).trim();
     let value = trimmed.slice(eq + 1).trim();
-    // Strip optional surrounding quotes.
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith(`'`) && value.endsWith(`'`))) {
+    const isQuoted =
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith(`'`) && value.endsWith(`'`));
+    if (isQuoted) {
       value = value.slice(1, -1);
+    } else {
+      // Strip inline comments. Convex CLI writes CONVEX_DEPLOYMENT with a
+      // trailing `# team: ..., project: ...` on the same line; without this
+      // strip, the comment ends up baked into the value pushed to Doppler,
+      // which then breaks `doppler run -- npx convex dev` later.
+      const hashIdx = value.indexOf(' #');
+      if (hashIdx !== -1) value = value.slice(0, hashIdx).trimEnd();
     }
     if (!key) continue;
     if (!value || value.includes('your_') || value.includes('<')) {
