@@ -48,7 +48,7 @@ Parse the check-tools result:
 
 4. **If Doppler mode is active** (`.doppler.yaml` exists in repo root):
    - Run `doppler me --json` to verify the developer is logged in. If not: STOP. Display: "Doppler login required. Run `doppler login`, then re-run `/deploy-to-dev`."
-   - Run `doppler secrets --project $(node -p "require('./package.json').name") --config dev --only-names --no-color` to confirm the `dev` config has secrets. If empty: STOP. Display: "Doppler dev config is empty. Run `/install` to seed it."
+   - Run `doppler secrets --project $(node -p "require('./package.json').name") --config dev --only-names` to confirm the `dev` config has secrets. If empty: STOP. Display: "Doppler dev config is empty. Run `/install` to seed it."
    - Skip the `.env.local` placeholder check below — values come from Doppler, not `.env.local`.
 
    **If legacy mode** (no `.doppler.yaml`): read `.env.local` and verify these keys exist and are not placeholders:
