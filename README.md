@@ -63,6 +63,7 @@ npm run dev               # Next.js dev
 - ✅ **Input Validation** - Zod-based validation with XSS sanitization
 - 🛡️ **Secure Error Handling** - Environment-aware error responses (no data leakage)
 - 📊 **Security Monitoring Dashboard** - Admin-only real-time security event tracking with severity levels, event filtering, and comprehensive attack detection
+- 🔑 **Doppler Secrets Management** - Single source of truth for env vars across local, Vercel, Convex, and CI; runtime fetch on Vercel (only `DOPPLER_TOKEN` lives there); one-command incident rotation via `/rotate`
 - 💰 **Payment Gating** - Subscription-based content access
 - 🎭 **Beautiful 404 Page** - Custom animated error page
 - 🌗 **Dark/Light Theme** - System-aware theme switching
