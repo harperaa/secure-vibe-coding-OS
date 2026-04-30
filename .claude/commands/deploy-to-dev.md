@@ -166,6 +166,19 @@ Run: `node scripts/deploy.mjs write-summary --deploy-type="dev" --vercel-url="<P
 
 Use the Convex URL from .env.local (dev instance) for convex-prod-url, and derive the site URL by replacing `.convex.cloud` with `.convex.site`. For vercel-url, prefer `productionUrl` from the deploy result (the short alias). For dashboard-url, use the `dashboardUrl` from the deploy result.
 
+**Gathering values for the summary args:**
+
+- **Legacy mode** (`.env.local` is the source): `grep '^KEY=' .env.local | cut -d= -f2-` for each value you need.
+- **Doppler mode** (`.doppler.yaml` exists): `.env.local` contains only `CONVEX_DEPLOYMENT` and `NEXT_PUBLIC_CONVEX_URL` (Convex CLI writes those). Everything else (`NEXT_PUBLIC_CLERK_FRONTEND_API_URL`, `NEXT_PUBLIC_SITE_NAME`, etc.) lives in Doppler and must be fetched from there.
+
+  Use this exact command shape — do **NOT** add `--no-interactive` (it is not a valid flag on `doppler secrets get` and the command will fail):
+
+  ```
+  doppler secrets get NEXT_PUBLIC_CLERK_FRONTEND_API_URL NEXT_PUBLIC_SITE_NAME --plain
+  ```
+
+  Project and config are already pinned by `.doppler.yaml`, so `--project`/`--config` are optional. Multiple keys can be passed in one call; values are returned line-by-line in the same order.
+
 Display:
 
 ```

@@ -173,13 +173,19 @@ export const getSecuritySummary = query({
     eventTypeBreakdown: v.any(), // Record<string, number>
   }),
   handler: async (ctx, args) => {
-    // Admin-only access
     const isAdmin = await isCurrentUserAdmin(ctx);
     if (!isAdmin) {
-      throw new Error("Admin access required");
+      return {
+        totalEvents: 0,
+        unreadCount: 0,
+        criticalCount: 0,
+        highCount: 0,
+        mediumCount: 0,
+        lowCount: 0,
+        eventTypeBreakdown: {},
+      };
     }
 
-    // Get ALL events (no user filtering)
     let events = await ctx.db
       .query("securityEvents")
       .collect();
