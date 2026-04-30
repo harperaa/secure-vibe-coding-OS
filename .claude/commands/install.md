@@ -58,6 +58,36 @@ After Phase 1 completes, call AskUserQuestion with ALL THREE questions at once u
 
 If the user selects "I'll enter my email" without typing one via the Other option, ask once more. If the user selects "Skip for now", use `example@example.com` as the admin email and continue.
 
+### Doppler opt-in
+
+After the questions above, call AskUserQuestion one more time:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Use Doppler for secrets management? (Recommended — single source of truth for all env vars; runtime fetch on Vercel; one-command incident rotation via /rotate)",
+      "header": "Secrets mgmt",
+      "multiSelect": false,
+      "options": [
+        { "label": "Yes — use Doppler (Recommended)", "description": "All env vars live in Doppler. Local dev, Vercel, Convex, and CI all fetch from there. Only DOPPLER_TOKEN ends up in Vercel env." },
+        { "label": "No — use legacy .env.local", "description": "Values live in .env.local locally and Vercel env vars in production. Skip Doppler bootstrap entirely." }
+      ]
+    }
+  ]
+}
+```
+
+Persist the choice as `<USE_DOPPLER>` (`true` if "Yes", `false` if "No").
+
+**If `<USE_DOPPLER>` is true**, run the Doppler bootstrap before Phase 3 (it auto-installs the Doppler CLI, drives `doppler login`, creates the project with `dev` and `prd` configs, and pins the repo to `dev` via `.doppler.yaml`):
+
+```bash
+node scripts/setup.mjs doppler-bootstrap
+```
+
+If this exits non-zero, show the error and STOP. Common causes: brew not installed on macOS (instruct user to install brew), no internet (retry), user cancelled the OAuth flow.
+
 ### If user chose "Yes, I have API keys":
 
 Call AskUserQuestion again with these two questions:
@@ -181,6 +211,17 @@ Parse the JSON output:
 - Show which Convex env vars were set
 - If `manualSteps` array is non-empty, display those as fallback instructions
 
+### Doppler post-init (only if `<USE_DOPPLER>` is true)
+
+After configure succeeds, sync Convex's outputs (`CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL`) from `.env.local` to Doppler `dev`, then create the CI service token and push it to GitHub.
+
+```bash
+node scripts/setup.mjs doppler-sync-env-local
+node scripts/setup.mjs doppler-create-ci-token
+```
+
+If `doppler-create-ci-token` fails because `gh` is not authenticated, prompt the user: "Run `gh auth login` then re-run `node scripts/setup.mjs doppler-create-ci-token` manually." Show a checkmark for each step that succeeded.
+
 ## Phase 6: Write Summary + Completion
 
 **Step 1:** Write the installation summary to `docs/INSTALL.md`.
@@ -226,8 +267,18 @@ These are only needed when you're ready to enable paid subscriptions:
    - Name it, set monthly price, save
 
 ### Start Development
-Terminal 1: npx convex dev
+
+If `<USE_DOPPLER>` is true, instruct:
+```
+Terminal 1: npm run convex:doppler
+Terminal 2: npm run dev:doppler
+```
+
+Otherwise:
+```
+Terminal 1: npm run convex
 Terminal 2: npm run dev
+```
 
 The URL to access your app will be shown in Terminal 2 output.
 ```

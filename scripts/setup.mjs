@@ -26,7 +26,18 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
+import {
+  ensureCliInstalled as dopplerEnsureCli,
+  ensureLoggedIn as dopplerEnsureLoggedIn,
+  ensureProject as dopplerEnsureProject,
+  setupRepoForConfig as dopplerSetupRepoForConfig,
+  setSecrets as dopplerSetSecrets,
+  createServiceToken as dopplerCreateServiceToken,
+  pushTokenToGithub as dopplerPushTokenToGithub,
+  isDopplerEnabled as dopplerIsEnabled,
+  getProjectName as dopplerGetProjectName,
+} from './lib/doppler.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -269,11 +280,37 @@ async function runInit(args) {
   }
   result.steps.push('Set Clerk redirect URLs');
 
+  // Step 8 (Doppler mode only): mirror generated values to Doppler `dev` config.
+  // .env.local is still written above so legacy tooling keeps working; Doppler
+  // becomes the source of truth from here on. Convex outputs (CONVEX_DEPLOYMENT
+  // and NEXT_PUBLIC_CONVEX_URL) get pushed by `doppler-sync-env-local` after
+  // `npx convex dev` has populated them.
+  if (dopplerIsEnabled()) {
+    try {
+      const dopplerPayload = {
+        CSRF_SECRET: csrfSecret,
+        SESSION_SECRET: sessionSecret,
+        NEXT_PUBLIC_SITE_NAME: siteName,
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: clerkPk,
+        CLERK_SECRET_KEY: clerkSk,
+        ...(frontendApiUrl ? { NEXT_PUBLIC_CLERK_FRONTEND_API_URL: frontendApiUrl } : {}),
+        ...redirectVars,
+      };
+      dopplerSetSecrets(dopplerPayload, 'dev');
+      result.steps.push(`Mirrored ${Object.keys(dopplerPayload).length} secrets to Doppler dev config`);
+    } catch (err) {
+      result.steps.push(`Warning: Doppler mirror failed: ${err.message}`);
+    }
+  }
+
   // Build next steps
   if (accountless) {
     result.nextSteps.push(`Claim your Clerk app at: ${result.claimUrl}`);
   }
   result.nextSteps.push('Run: npx convex dev --once (to set up Convex project)');
+  if (dopplerIsEnabled()) {
+    result.nextSteps.push('Run: node scripts/setup.mjs doppler-sync-env-local (push Convex outputs to Doppler)');
+  }
   result.nextSteps.push('Run: node scripts/setup.mjs configure --clerk-sk=<key> --admin-email=<email>');
 
   console.log(JSON.stringify(result, null, 2));
@@ -412,20 +449,47 @@ async function runConfigure(args) {
   }
   convexVarsToSet['ADMIN_EMAIL'] = adminEmail;
 
-  for (const [key, value] of Object.entries(convexVarsToSet)) {
+  // In Doppler mode: push the values to Doppler dev first, then run the sync
+  // script so Doppler is the source of truth and Convex's env mirrors it.
+  if (dopplerIsEnabled()) {
     try {
-      execSync(`npx convex env set ${key} "${value}"`, {
-        cwd: ROOT_DIR,
-        stdio: 'pipe',
-        timeout: 30000,
-      });
-      result.convexEnvVarsSet.push(key);
-      result.steps.push(`Set Convex env var: ${key}`);
+      dopplerSetSecrets(convexVarsToSet, 'dev');
+      result.steps.push(`Mirrored Convex-bound secrets to Doppler dev config`);
     } catch (err) {
-      result.steps.push(`Failed to set Convex env var ${key}: ${err.message}`);
+      result.steps.push(`Warning: Doppler mirror failed: ${err.message}`);
+    }
+    const sync = spawnSync('node', ['scripts/sync-convex-env.mjs', '--config=dev'], {
+      cwd: ROOT_DIR,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
+    if (sync.status === 0) {
+      const last = (sync.stdout || '').trim().split('\n').pop();
+      result.steps.push(`Synced Convex env via Doppler: ${last}`);
+      // Best-effort: report which keys actually got set (Convex sync output mentions them)
+      result.convexEnvVarsSet = Object.keys(convexVarsToSet);
+    } else {
+      result.steps.push(`Convex sync failed: ${(sync.stderr || sync.stdout || '').trim()}`);
       result.manualSteps.push(
-        `Set ${key} in Convex Dashboard > Settings > Environment Variables`
+        'Run `node scripts/sync-convex-env.mjs --config=dev` after fixing the error.'
       );
+    }
+  } else {
+    for (const [key, value] of Object.entries(convexVarsToSet)) {
+      try {
+        execSync(`npx convex env set ${key} "${value}"`, {
+          cwd: ROOT_DIR,
+          stdio: 'pipe',
+          timeout: 30000,
+        });
+        result.convexEnvVarsSet.push(key);
+        result.steps.push(`Set Convex env var: ${key}`);
+      } catch (err) {
+        result.steps.push(`Failed to set Convex env var ${key}: ${err.message}`);
+        result.manualSteps.push(
+          `Set ${key} in Convex Dashboard > Settings > Environment Variables`
+        );
+      }
     }
   }
 
@@ -721,8 +785,15 @@ async function runWriteInstallSummary(args) {
 
   lines.push(`## Start Development`);
   lines.push(``);
-  lines.push(`Terminal 1: \`npx convex dev\``);
-  lines.push(`Terminal 2: \`npm run dev\``);
+  if (dopplerIsEnabled()) {
+    lines.push(`Doppler mode is active — env vars come from your Doppler \`dev\` config.`);
+    lines.push(``);
+    lines.push(`Terminal 1: \`npm run convex:doppler\``);
+    lines.push(`Terminal 2: \`npm run dev:doppler\``);
+  } else {
+    lines.push(`Terminal 1: \`npm run convex\``);
+    lines.push(`Terminal 2: \`npm run dev\``);
+  }
   lines.push(``);
   lines.push(`The URL to access your app will be shown in Terminal 2 output.`);
   lines.push(``);
@@ -741,6 +812,147 @@ async function runWriteInstallSummary(args) {
     path: 'docs/INSTALL.md',
     absolutePath: summaryPath,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// doppler-bootstrap Subcommand (Doppler mode opt-in)
+// ---------------------------------------------------------------------------
+//
+// Auto-installs Doppler CLI, drives `doppler login`, creates the project
+// with `dev` and `prd` configs, and pins the repo to `dev` via .doppler.yaml.
+// Idempotent — safe to re-run.
+
+async function runDopplerBootstrap() {
+  const result = { success: true, steps: [], project: null };
+
+  try {
+    dopplerEnsureCli();
+    result.steps.push('Doppler CLI present');
+  } catch (err) {
+    console.error(JSON.stringify({ success: false, step: 'install', error: err.message }));
+    process.exit(1);
+  }
+
+  try {
+    dopplerEnsureLoggedIn();
+    result.steps.push('Doppler login confirmed');
+  } catch (err) {
+    console.error(JSON.stringify({ success: false, step: 'login', error: err.message }));
+    process.exit(1);
+  }
+
+  const projectName = dopplerGetProjectName();
+  result.project = projectName;
+
+  try {
+    dopplerEnsureProject(projectName);
+    result.steps.push(`Doppler project "${projectName}" ready (configs: dev, prd)`);
+  } catch (err) {
+    console.error(JSON.stringify({ success: false, step: 'project', error: err.message }));
+    process.exit(1);
+  }
+
+  try {
+    dopplerSetupRepoForConfig('dev', projectName);
+    result.steps.push('Repo pinned to project/config dev (.doppler.yaml written)');
+  } catch (err) {
+    console.error(JSON.stringify({ success: false, step: 'setup-repo', error: err.message }));
+    process.exit(1);
+  }
+
+  console.log(JSON.stringify(result, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// doppler-sync-env-local Subcommand
+// ---------------------------------------------------------------------------
+//
+// Reads non-empty, non-placeholder values from .env.local and pushes them to
+// the Doppler `dev` config. Used after `npx convex dev` writes
+// CONVEX_DEPLOYMENT and NEXT_PUBLIC_CONVEX_URL — those then need to land in
+// Doppler so it remains the source of truth.
+
+async function runDopplerSyncEnvLocal() {
+  if (!dopplerIsEnabled()) {
+    console.error(JSON.stringify({
+      success: false,
+      error: 'Doppler is not enabled for this repo (.doppler.yaml not found). Run `node scripts/setup.mjs doppler-bootstrap` first.',
+    }));
+    process.exit(1);
+  }
+
+  const result = { success: true, pushed: [], skipped: [] };
+
+  if (!fs.existsSync(ENV_FILE)) {
+    console.error(JSON.stringify({ success: false, error: '.env.local not found' }));
+    process.exit(1);
+  }
+
+  const content = readEnvFile(ENV_FILE);
+  const lines = content.split('\n');
+  const payload = {};
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    // Strip optional surrounding quotes.
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith(`'`) && value.endsWith(`'`))) {
+      value = value.slice(1, -1);
+    }
+    if (!key) continue;
+    if (!value || value.includes('your_') || value.includes('<')) {
+      result.skipped.push(key);
+      continue;
+    }
+    payload[key] = value;
+  }
+
+  try {
+    dopplerSetSecrets(payload, 'dev');
+    result.pushed = Object.keys(payload);
+  } catch (err) {
+    console.error(JSON.stringify({ success: false, error: err.message }));
+    process.exit(1);
+  }
+
+  console.log(JSON.stringify(result, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// doppler-create-ci-token Subcommand
+// ---------------------------------------------------------------------------
+//
+// Creates a read-only Doppler service token for the `dev` config and stores
+// it as the GitHub Actions secret DOPPLER_TOKEN, so CI can run
+// `doppler run -- npm run build` for branches that need NEXT_PUBLIC_* baked in.
+
+async function runDopplerCreateCiToken() {
+  const tokenName = 'github-actions-ci';
+  const result = { success: true, steps: [] };
+
+  let token;
+  try {
+    token = dopplerCreateServiceToken('dev', tokenName);
+    result.steps.push(`Created Doppler service token "${tokenName}" (config=dev)`);
+  } catch (err) {
+    console.error(JSON.stringify({ success: false, step: 'create-token', error: err.message }));
+    process.exit(1);
+  }
+
+  try {
+    dopplerPushTokenToGithub(token, 'DOPPLER_TOKEN');
+    result.steps.push('Pushed DOPPLER_TOKEN to GitHub repo secrets via gh');
+  } catch (err) {
+    console.error(JSON.stringify({ success: false, step: 'gh-secret-set', error: err.message }));
+    process.exit(1);
+  }
+
+  console.log(JSON.stringify(result, null, 2));
 }
 
 // ---------------------------------------------------------------------------
@@ -766,12 +978,24 @@ switch (command) {
   case 'write-install-summary':
     await runWriteInstallSummary(args);
     break;
+  case 'doppler-bootstrap':
+    await runDopplerBootstrap();
+    break;
+  case 'doppler-sync-env-local':
+    await runDopplerSyncEnvLocal();
+    break;
+  case 'doppler-create-ci-token':
+    await runDopplerCreateCiToken();
+    break;
   default:
     console.error(`Usage:
   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
   node scripts/setup.mjs convex-setup --project-name="My App" [--team=SLUG]
   node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"
   node scripts/setup.mjs detect-port
-  node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...]`);
+  node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...]
+  node scripts/setup.mjs doppler-bootstrap                        (Doppler mode opt-in: install CLI, login, create project, pin repo to dev)
+  node scripts/setup.mjs doppler-sync-env-local                   (push .env.local values to Doppler dev)
+  node scripts/setup.mjs doppler-create-ci-token                  (create CI service token and push to GitHub via gh)`);
     process.exit(1);
 }

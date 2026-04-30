@@ -4,12 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:doppler": "doppler run -- next dev --turbopack",
+    "convex": "npx convex dev",
+    "convex:doppler": "doppler run -- npx convex dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "generate:sitemap": "node scripts/generate-sitemap.mjs",
     "prebuild": "node scripts/generate-sitemap.mjs",
-    "setup": "node scripts/setup.mjs"
+    "setup": "node scripts/setup.mjs",
+    "sync:convex": "doppler run -- node scripts/sync-convex-env.mjs --config dev",
+    "deploy:vercel-env": "node scripts/deploy.mjs vercel-env-doppler"
   },
   "dependencies": {
     "@clerk/backend": "^2.4.1",

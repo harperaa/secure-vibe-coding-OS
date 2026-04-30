@@ -49,6 +49,8 @@ jobs:
   build:
     needs: [test]
     runs-on: ubuntu-latest
+    env:
+      DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,4 +58,17 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run build
+      # If a Doppler service token is configured (set during /install), inject
+      # secrets at build time so NEXT_PUBLIC_* values get inlined into the
+      # client bundle. Otherwise (forks, legacy mode) the build runs without
+      # Doppler — the build will type-check and may fail to bundle if it
+      # references missing env vars; that's expected for legacy mode.
+      - name: Install Doppler CLI
+        if: env.DOPPLER_TOKEN != ''
+        uses: dopplerhq/cli-action@v3
+      - name: Build (Doppler)
+        if: env.DOPPLER_TOKEN != ''
+        run: doppler run -- npm run build
+      - name: Build (legacy)
+        if: env.DOPPLER_TOKEN == ''
+        run: npm run build

@@ -12,6 +12,39 @@ This Secure Vibe Coding OS is part of the [Secure Vibe Coding Masterclass](https
 
 See two sample course modules, in the docs folder.
 
+## 🔐 Secrets Management — Doppler (recommended) or Legacy `.env.local`
+
+This template supports two flows for environment variables. Pick one when running `/install`.
+
+### Doppler mode (recommended)
+
+[Doppler](https://docs.doppler.com/docs/start) is the single source of truth for all secrets across local dev, Vercel, Convex, and CI. The architecture is a **runtime fetch**: only `DOPPLER_TOKEN` lives in Vercel — actual app values are pulled from Doppler at build time and at function cold start. This means:
+
+- Rotate any secret in Doppler → next cold start uses the new value (zero redeploy for server secrets).
+- If Vercel is compromised, run `/rotate` — revokes the Vercel-side token in 5 seconds and walks per-credential rotation.
+- One CLI-driven setup; no dashboard clicks required.
+
+```bash
+# Local dev (two terminals):
+npm run convex:doppler   # Convex dev with Doppler env injected
+npm run dev:doppler      # Next.js dev with Doppler env injected
+
+# Sync Doppler dev secrets into Convex env:
+npm run sync:convex
+```
+
+### Legacy `.env.local` mode
+
+Values live in `.env.local` (gitignored), pushed to Vercel via `vercel env add` at deploy time. Use this if you don't want to use a secrets manager:
+
+```bash
+# Local dev (two terminals):
+npm run convex            # Convex dev
+npm run dev               # Next.js dev
+```
+
+`/install` asks which mode you want. The presence of `.doppler.yaml` in the repo signals Doppler mode for everything downstream (`/deploy-to-dev`, `/deploy-to-prod`, CI). For incident response in Doppler mode, run `/rotate`.
+
 ## Features
 
 - 🚀 **Next.js 15 with App Router** - Latest React framework with server components

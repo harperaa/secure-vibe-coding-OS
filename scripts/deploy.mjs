@@ -38,7 +38,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
+import {
+  isDopplerEnabled,
+  createServiceToken,
+  revokeServiceToken,
+  setSecret,
+  downloadSecrets,
+} from './lib/doppler.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -836,6 +843,12 @@ async function runConvexProdEnv(args) {
 // ---------------------------------------------------------------------------
 
 async function runVercelEnvDev() {
+  // Doppler mode: only DOPPLER_TOKEN ever lives in Vercel; everything else
+  // is fetched at build/runtime. Delegate to the Doppler-aware subcommand.
+  if (isDopplerEnabled()) {
+    return runVercelEnvDoppler({ env: 'development', config: 'dev' });
+  }
+
   const result = {
     success: true,
     steps: [],
@@ -913,6 +926,12 @@ async function runVercelEnvDev() {
 // ---------------------------------------------------------------------------
 
 async function runVercelEnv(args) {
+  // Doppler mode: only DOPPLER_TOKEN lives in Vercel — production keys are
+  // sourced from the Doppler `prd` config at build/runtime, not pushed here.
+  if (isDopplerEnabled()) {
+    return runVercelEnvDoppler({ env: 'production', config: 'prd' });
+  }
+
   const clerkPk = args['clerk-pk'];
   const clerkSk = args['clerk-sk'];
   const deployKey = args['deploy-key'];
@@ -993,6 +1012,131 @@ async function runVercelEnv(args) {
   }
 
   console.log(JSON.stringify(result, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// vercel-env-doppler Subcommand (Doppler mode — runtime fetch architecture)
+// ---------------------------------------------------------------------------
+//
+// In Doppler mode the only env vars in Vercel are DOPPLER_TOKEN (used by
+// scripts/vercel-prebuild.mjs at build time AND lib/secrets.ts at runtime)
+// and REVALIDATE_TOKEN (used by /api/revalidate-secrets). Everything else
+// is fetched from Doppler.
+//
+// Defaults to dev/development if --env or --config args are not provided,
+// so it's safe to invoke as `node scripts/deploy.mjs vercel-env-doppler`
+// from package.json's `deploy:vercel-env` script.
+
+async function runVercelEnvDoppler(opts = {}) {
+  const args = opts && opts.env ? opts : parseArgs(process.argv);
+  const vercelEnv = (args.env || 'development').toLowerCase();
+  const config = (args.config || (vercelEnv === 'production' ? 'prd' : 'dev')).toLowerCase();
+
+  if (vercelEnv !== 'development' && vercelEnv !== 'preview' && vercelEnv !== 'production') {
+    console.error(JSON.stringify({
+      success: false,
+      error: `Invalid --env "${vercelEnv}". Expected development|preview|production.`,
+    }));
+    process.exit(1);
+  }
+  if (config !== 'dev' && config !== 'prd') {
+    console.error(JSON.stringify({
+      success: false,
+      error: `Invalid --config "${config}". Expected dev|prd.`,
+    }));
+    process.exit(1);
+  }
+
+  const result = {
+    success: true,
+    mode: 'doppler',
+    vercelEnv,
+    dopplerConfig: config,
+    steps: [],
+    varsSet: [],
+  };
+
+  // 1. Issue a fresh service token for this Vercel environment.
+  //    Token name encodes config so dev/prd tokens never collide.
+  const tokenName = `vercel-runtime-${config}`;
+  // Revoke any existing token with the same name (idempotent — ignores absence)
+  // so re-running this command always produces a freshly-scoped credential.
+  revokeServiceToken(config, tokenName);
+  let dopplerToken;
+  try {
+    dopplerToken = createServiceToken(config, tokenName);
+    result.steps.push(`Issued Doppler service token (${tokenName}) for config=${config}`);
+  } catch (err) {
+    console.error(JSON.stringify({
+      success: false,
+      error: `Failed to create Doppler service token: ${err.message}`,
+    }));
+    process.exit(1);
+  }
+
+  // 2. Ensure REVALIDATE_TOKEN exists in Doppler. Generate one if absent so
+  //    the /api/revalidate-secrets route can authenticate calls from /rotate.
+  const dopplerSecrets = downloadSecrets(config);
+  let revalidateToken = dopplerSecrets.REVALIDATE_TOKEN;
+  if (!revalidateToken || revalidateToken.length < 32) {
+    revalidateToken = crypto.randomBytes(32).toString('base64url');
+    setSecret('REVALIDATE_TOKEN', revalidateToken, config);
+    result.steps.push(`Generated REVALIDATE_TOKEN in Doppler config=${config}`);
+  }
+
+  // 3. Push DOPPLER_TOKEN to Vercel (only var in Vercel for app values).
+  const pushed = pushVercelEnvVar('DOPPLER_TOKEN', dopplerToken, vercelEnv);
+  if (pushed.ok) {
+    result.varsSet.push('DOPPLER_TOKEN');
+    result.steps.push(`Set Vercel env var: DOPPLER_TOKEN (${vercelEnv})`);
+  } else {
+    result.success = false;
+    result.steps.push(`Failed to set DOPPLER_TOKEN: ${pushed.error}`);
+  }
+
+  // 4. Sync allowlisted secrets to Convex (no native Doppler integration).
+  try {
+    const sync = spawnSync(
+      'node',
+      ['scripts/sync-convex-env.mjs', `--config=${config}`],
+      { cwd: ROOT_DIR, encoding: 'utf-8', stdio: 'pipe' }
+    );
+    if (sync.status === 0) {
+      result.steps.push(`Synced Convex env (${config}): ${(sync.stdout || '').trim().split('\n').pop()}`);
+    } else {
+      result.success = false;
+      result.steps.push(`Convex sync failed: ${(sync.stderr || sync.stdout || '').trim()}`);
+    }
+  } catch (err) {
+    result.success = false;
+    result.steps.push(`Convex sync error: ${err.message}`);
+  }
+
+  console.log(JSON.stringify(result, null, 2));
+}
+
+// Helper: push a single value to Vercel env, replacing any existing one.
+function pushVercelEnvVar(key, value, vercelEnv) {
+  try {
+    // Best-effort remove first so `add` doesn't error on duplicates.
+    spawnSync('npx', ['vercel', 'env', 'rm', key, vercelEnv, '--yes'], {
+      cwd: ROOT_DIR,
+      stdio: 'pipe',
+      timeout: 30000,
+    });
+    const add = spawnSync('npx', ['vercel', 'env', 'add', key, vercelEnv], {
+      cwd: ROOT_DIR,
+      input: value,
+      encoding: 'utf-8',
+      timeout: 30000,
+    });
+    if (add.status !== 0) {
+      return { ok: false, error: ((add.stderr || '') + (add.stdout || '')).trim().slice(0, 200) };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1360,6 +1504,9 @@ switch (command) {
   case 'vercel-env':
     await runVercelEnv(args);
     break;
+  case 'vercel-env-doppler':
+    await runVercelEnvDoppler();
+    break;
   case 'vercel-deploy':
     await runVercelDeploy();
     break;
@@ -1378,8 +1525,9 @@ switch (command) {
   node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...
   node scripts/deploy.mjs prod-webhook --clerk-sk=... --convex-site-url=https://xxx.convex.site [--admin-email=admin@example.com]
   node scripts/deploy.mjs convex-prod-env --deploy-key=prod:...|... --webhook-secret=whsec_... --frontend-api-url=https://... --admin-email=admin@example.com
-  node scripts/deploy.mjs vercel-env-dev                          (reads all from .env.local)
+  node scripts/deploy.mjs vercel-env-dev                          (reads all from .env.local; auto-delegates to vercel-env-doppler in Doppler mode)
   node scripts/deploy.mjs vercel-env --clerk-pk=... --clerk-sk=... --deploy-key=... --frontend-api-url=... --site-name=... [--convex-url=...]
+  node scripts/deploy.mjs vercel-env-doppler [--env=development|production] [--config=dev|prd]   (Doppler mode: pushes only DOPPLER_TOKEN; syncs Convex)
   node scripts/deploy.mjs vercel-deploy
   node scripts/deploy.mjs write-summary --vercel-url=... --repo-url=... [--completed-steps=...] [--skipped-steps=...]
   node scripts/deploy.mjs update-vercel-clerk-keys --clerk-pk=pk_live_... --clerk-sk=sk_live_... --frontend-api-url=https://...`);

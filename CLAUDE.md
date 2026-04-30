@@ -117,6 +117,22 @@ Deploy: Vercel
 
 ---
 
+## Secrets Management
+
+This project supports two flows for environment variables:
+
+**Doppler mode (recommended)** — single source of truth in Doppler, runtime fetch on Vercel:
+- Active when `.doppler.yaml` exists in the repo root.
+- Local dev: `npm run dev:doppler` and `npm run convex:doppler` (Doppler CLI injects env).
+- Vercel: only `DOPPLER_TOKEN` lives in Vercel env. The build fetches from Doppler via `scripts/vercel-prebuild.mjs`; runtime fetches via `lib/secrets.ts` + `instrumentation.ts`.
+- Rotation: run `/rotate` for incident response — revokes the Vercel-side token in seconds (containment), then walks per-credential rotation.
+
+**Legacy `.env.local` mode** — values live in `.env.local`, pushed to Vercel via `vercel env add`. Use when Doppler is unavailable or unwanted. Same scripts and skills support it without Doppler.
+
+`/install` asks which mode to use. Both can coexist on the same machine across different repos.
+
+---
+
 ## Security
 
 Run `/security-assessment` before opening any PR.

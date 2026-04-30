@@ -9,6 +9,21 @@ You are the production deployment assistant for Secure Vibe Coding OS. You will 
 
 **Important context:** The user has already run `/install` and has a working local development setup. They may or may not have run `/deploy-to-dev` first.
 
+## Doppler-Mode Note (Read First)
+
+If `.doppler.yaml` exists in the repo root, this deployment runs in **Doppler mode**. Secrets are sourced from the Doppler `prd` config rather than from `.env.local` and `vercel env`. The architectural differences:
+
+- The operator must populate the Doppler `prd` config **before** the corresponding phase runs. As you collect each production credential (Clerk prod keys in Phase 3, Stripe in Phase 5, Convex deploy key in Phase 6, etc.), push it immediately to Doppler:
+  ```
+  doppler secrets set CLERK_SECRET_KEY="$SK" --project $(node -p "require('./package.json').name") --config prd
+  ```
+- Phase 9 (Convex prod env): `sync-convex-env.mjs --config prd` is the source-of-truth path; the legacy `convex-prod-env` subcommand still works but the script supersedes it.
+- Phase 10 (Vercel env): `node scripts/deploy.mjs vercel-env` automatically delegates to `vercel-env-doppler`. Only `DOPPLER_TOKEN` and `REVALIDATE_TOKEN` end up in Vercel — production app values live exclusively in Doppler.
+- `vercel.json` must use the prebuild chain so Vercel's build machine fetches secrets from Doppler before `next build` inlines `NEXT_PUBLIC_*`. The repo's checked-in `vercel.json` already does this.
+- After deployment, run `/rotate` if any compromise is suspected — it revokes the Vercel-side `DOPPLER_TOKEN` in seconds.
+
+The legacy mode (`.env.local` → `vercel env add` → secrets stored in Vercel) is preserved as the default when `.doppler.yaml` is absent.
+
 **Prerequisites the user must have BEFORE running this command:**
 - A custom domain they own (e.g., `myapp.com`) — Clerk production requires this, `*.vercel.app` is not accepted
 - A Stripe account (for Clerk Billing integration)
@@ -280,6 +295,16 @@ Parse JSON output and show each env var set.
 The `"framework": "nextjs"` is REQUIRED — without it, `vercel project add` via CLI defaults the framework to "Other", which causes Edge Function errors with Clerk middleware.
 
 Write `vercel.json`:
+
+**Doppler mode** (`.doppler.yaml` exists): chain prebuild → Convex deploy → Next.js build. The prebuild script fetches secrets from Doppler so `next build` can inline `NEXT_PUBLIC_*`:
+```json
+{
+  "framework": "nextjs",
+  "buildCommand": "node scripts/vercel-prebuild.mjs && npx convex deploy --cmd 'npm run build'"
+}
+```
+
+**Legacy mode** (no `.doppler.yaml`):
 ```json
 {
   "framework": "nextjs",
@@ -304,11 +329,30 @@ If auth error: tell user to run `npx vercel login`, AskUserQuestion to confirm, 
    If this fails, show warning but continue — the CLI deploy will still work. User can connect manually in Vercel Dashboard → Settings → Git.
 
 **Step 4:** Set Vercel env vars.
+
+**Doppler mode** (`.doppler.yaml` exists): make sure all production keys are already in Doppler `prd`. Push them now if you haven't:
+```bash
+PROJECT=$(node -p "require('./package.json').name")
+doppler secrets set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="<PK>" --project $PROJECT --config prd
+doppler secrets set CLERK_SECRET_KEY="<SK>" --project $PROJECT --config prd
+doppler secrets set CONVEX_DEPLOY_KEY="<KEY>" --project $PROJECT --config prd
+doppler secrets set NEXT_PUBLIC_CLERK_FRONTEND_API_URL="<URL>" --project $PROJECT --config prd
+doppler secrets set NEXT_PUBLIC_SITE_NAME="<NAME>" --project $PROJECT --config prd
+doppler secrets set NEXT_PUBLIC_CONVEX_URL="<PROD_CONVEX_URL>" --project $PROJECT --config prd
+# CSRF_SECRET, SESSION_SECRET, redirect URLs — generate or carry over from dev
+```
+Then run: `node scripts/deploy.mjs vercel-env`
+
+The command auto-delegates to `vercel-env-doppler`: issues a fresh `prd`-scoped Doppler service token, pushes only `DOPPLER_TOKEN` (and generates `REVALIDATE_TOKEN` if absent) to Vercel Production, and runs `scripts/sync-convex-env.mjs --config prd`. The `--clerk-*`, `--deploy-key`, `--frontend-api-url`, `--site-name`, `--convex-url` arguments are ignored in Doppler mode — values come from Doppler.
+
+**Legacy mode** (no `.doppler.yaml`):
 Run: `node scripts/deploy.mjs vercel-env --clerk-pk="<PK>" --clerk-sk="<SK>" --deploy-key="<KEY>" --frontend-api-url="<URL>" --site-name="<NAME>" --convex-url="<PROD_CONVEX_URL>"`
 
 Use the production Convex URL from Phase 8 (`prodUrl`). This is required — server-side code (middleware, rate limiting, CSRF) needs `NEXT_PUBLIC_CONVEX_URL` at runtime.
 
 Parse and show each variable set.
+
+**Doppler mode verification:** After this step, `npx vercel env ls production` should show ONLY `DOPPLER_TOKEN`. App values are NOT in Vercel — they're fetched from Doppler at build time (via `scripts/vercel-prebuild.mjs`) and runtime (via `lib/secrets.ts`).
 
 ## Phase 11: Production Deployment
 

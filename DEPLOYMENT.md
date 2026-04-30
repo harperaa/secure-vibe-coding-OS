@@ -2,8 +2,57 @@
 
 This guide covers deploying your Secure Vibe Coding OS application from local development through to production.
 
-**Last Updated:** February 8, 2026
+**Last Updated:** April 29, 2026
 **For:** Secure Vibe Coding OS / More Secure Starter
+
+---
+
+## Secrets Management Architecture
+
+The deployment story depends on which secrets-management mode `/install` configured. Both modes are fully supported.
+
+### Doppler mode (recommended)
+
+```
+                         ┌─────────────────────────────┐
+                         │         Doppler             │
+                         │   (single source of truth)  │
+                         │   configs: dev, prd         │
+                         └────────────┬────────────────┘
+                                      │
+        ┌─────────────────────────────┼─────────────────────────────┐
+        │                             │                             │
+        ▼                             ▼                             ▼
+   Local dev                 Vercel build                  Vercel runtime
+   (doppler run)             (vercel-prebuild.mjs          (lib/secrets.ts
+                              writes .env.production         + instrumentation.ts
+                              .local for next build)         fetches at cold start)
+
+                             ▼
+                       Convex env
+                       (sync-convex-env.mjs)
+
+                             ▼
+                       GitHub Actions
+                       (dopplerhq/cli-action)
+```
+
+**What lives where:**
+
+- **In Doppler:** every app value (`CLERK_SECRET_KEY`, `CSRF_SECRET`, `SESSION_SECRET`, `NEXT_PUBLIC_*`, `CONVEX_DEPLOY_KEY`, etc.) plus `REVALIDATE_TOKEN` for the runtime cache invalidation route.
+- **In Vercel env:** only `DOPPLER_TOKEN` (read-only, scoped to one Doppler config).
+- **In Convex env:** the allowlisted subset Convex functions need (`CLERK_WEBHOOK_SECRET`, `NEXT_PUBLIC_CLERK_FRONTEND_API_URL`, `ADMIN_EMAIL`), kept in sync via `scripts/sync-convex-env.mjs`.
+- **In GitHub Actions secrets:** `DOPPLER_TOKEN` (separate `dev`-scoped service token for CI builds).
+
+**Rotation runbook:**
+
+- For any suspected compromise, run `/rotate`. It revokes the Vercel-side `DOPPLER_TOKEN` first (containment in seconds), then walks per-credential rotation.
+- `NEXT_PUBLIC_*` rotation requires a redeploy (Next.js inlines them at build time). Other server secrets propagate on next cold start, or immediately via `POST /api/revalidate-secrets` with the `REVALIDATE_TOKEN`.
+- Rotating `SESSION_SECRET` or `CSRF_SECRET` invalidates active sessions — `/rotate` warns explicitly.
+
+### Legacy `.env.local` mode
+
+Active when `.doppler.yaml` is absent. `setup.mjs` writes `.env.local`; `deploy.mjs` reads `.env.local` and pushes each value to Vercel via `vercel env add`. Convex env is set via `npx convex env set`. No runtime fetch — secrets sit in Vercel's env store at rest. Use this if Doppler isn't an option for your team.
 
 ---
 

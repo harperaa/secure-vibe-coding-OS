@@ -46,7 +46,12 @@ Parse the check-tools result:
 - If `ghAuth` is false: STOP. Display: "GitHub CLI is not authenticated. Run `gh auth login` in your terminal, then re-run `/deploy-to-dev`."
 - If `vercel` tool check fails, that's OK — npx will handle it.
 
-4. Read `.env.local` and verify these keys exist and are not placeholders:
+4. **If Doppler mode is active** (`.doppler.yaml` exists in repo root):
+   - Run `doppler me --json` to verify the developer is logged in. If not: STOP. Display: "Doppler login required. Run `doppler login`, then re-run `/deploy-to-dev`."
+   - Run `doppler secrets --project $(node -p "require('./package.json').name") --config dev --only-names --no-color` to confirm the `dev` config has secrets. If empty: STOP. Display: "Doppler dev config is empty. Run `/install` to seed it."
+   - Skip the `.env.local` placeholder check below — values come from Doppler, not `.env.local`.
+
+   **If legacy mode** (no `.doppler.yaml`): read `.env.local` and verify these keys exist and are not placeholders:
    - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
    - `CLERK_SECRET_KEY`
    - `NEXT_PUBLIC_CLERK_FRONTEND_API_URL`
@@ -75,24 +80,29 @@ Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
 - Show checkmark: "GitHub repo already configured"
 - Ensure code is pushed: `git push origin main`
 
-## Step 3: Ensure vercel.json has Next.js framework preset
+## Step 3: Ensure vercel.json is correct for the active mode
 
 The `vercel.json` MUST include `"framework": "nextjs"` — without this, `vercel project add` via CLI defaults the framework to "Other", which causes Edge Function errors with Clerk middleware.
 
 Check if `vercel.json` exists by reading it.
 
-- If it exists and contains `convex deploy`: this is from a previous production deploy. Replace it with dev-only content (framework only, no buildCommand).
-- If it exists and already has `"framework": "nextjs"` without `convex deploy`: leave it alone.
-- If it doesn't exist: create it.
+**Doppler mode** (`.doppler.yaml` exists): write `vercel.json` with the prebuild chain so the build machine fetches secrets from Doppler before `next build` inlines `NEXT_PUBLIC_*`:
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "node scripts/vercel-prebuild.mjs && npm run build"
+}
+```
 
-For dev deployment, write `vercel.json` with:
+**Legacy mode** (no `.doppler.yaml`): write `vercel.json` with framework only (uses default `npm run build`):
 ```json
 {
   "framework": "nextjs"
 }
 ```
 
-This ensures Vercel treats the project as Next.js (proper Edge Function handling for middleware) while using the default `npm run build` command.
+If `vercel.json` already contains `convex deploy`, it's from a previous production deploy — overwrite with the appropriate version above.
 
 ## Step 4: Commit and Push
 
@@ -130,10 +140,13 @@ Show checkmark: "GitHub repo connected for auto-deploy"
 
 Run: `node scripts/deploy.mjs vercel-env-dev`
 
-This reads ALL values from `.env.local` and sets them on Vercel. No arguments needed.
+**In legacy mode**, this reads ALL values from `.env.local` and sets them on Vercel.
+
+**In Doppler mode**, this auto-delegates to `vercel-env-doppler`: it issues a fresh `dev`-scoped Doppler service token, pushes only `DOPPLER_TOKEN` to Vercel Development env, generates `REVALIDATE_TOKEN` in Doppler if absent, and runs `scripts/sync-convex-env.mjs --config dev`. App values (Clerk keys, NEXT_PUBLIC_*, etc.) are fetched at build time by `scripts/vercel-prebuild.mjs` and at runtime by `lib/secrets.ts` — they never sit in Vercel's env store.
 
 Parse JSON output:
 - Show each variable set with checkmark
+- If `mode: "doppler"`, confirm only `DOPPLER_TOKEN` is in `varsSet`
 - If any fail, show the error
 
 ## Step 7: Deploy

@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# doppler — per-developer marker pointing repo at a Doppler config (not secret, but local)
+.doppler.yaml
+
 # vercel
 .vercel
 
