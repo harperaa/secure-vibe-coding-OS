@@ -1053,8 +1053,19 @@ const PROTECTED_KEYS = new Set([
   'VERCEL_TARGET_ENV', 'VERCEL_OIDC_TOKEN',
 ]);
 
-// Convex-specific keys we do NOT migrate (Convex needs them in its own env).
-const CONVEX_LOCAL_KEYS = new Set(['CONVEX_DEPLOY_KEY']);
+// Keys that must stay in Convex env after migration. Two reasons a key lands here:
+//   1. Convex-local: lives only in Convex, never elsewhere (deploy keys).
+//   2. Convex-mirrored: source of truth lives in Doppler, but Convex functions
+//      run in Convex's runtime — they read process.env from Convex's env store,
+//      not Doppler. So these have to be in BOTH places (Doppler upstream,
+//      Convex mirror). `scripts/sync-convex-env.mjs` keeps the mirror current.
+//      Keep this list in sync with sync-convex-env.mjs's CONVEX_ALLOWLIST.
+const KEEP_IN_CONVEX = new Set([
+  'CONVEX_DEPLOY_KEY',                    // Convex-local
+  'CLERK_WEBHOOK_SECRET',                 // Convex-mirrored (used by convex/http.ts)
+  'NEXT_PUBLIC_CLERK_FRONTEND_API_URL',   // Convex-mirrored (used by convex/auth.config.ts)
+  'ADMIN_EMAIL',                          // Convex-mirrored (used by admin queries)
+]);
 
 function commandAvailable(name) {
   if (os.platform() === 'win32') {
@@ -1277,12 +1288,14 @@ async function runMigrateToDoppler(args) {
     // 1. Remove migrated keys from Convex env FIRST — `npx convex env unset`
     //    needs CONVEX_DEPLOYMENT in process.env (which Convex CLI loads from
     //    .env.local), so we must run Convex cleanup before stripping
-    //    .env.local. Skip Convex-local keys (CONVEX_DEPLOY_KEY) — those stay.
+    //    .env.local. Keys in KEEP_IN_CONVEX stay put — Convex-local deploy
+    //    keys plus Convex-mirrored runtime values (sync-convex-env.mjs keeps
+    //    the latter in sync with Doppler).
     if (inventory.convex.ok) {
       for (const key of Object.keys(inventory.convex.map)) {
         if (!allMigrated.has(key)) continue;
-        if (CONVEX_LOCAL_KEYS.has(key)) {
-          result.skipped.push(`convex:${key} (Convex-local, kept)`);
+        if (KEEP_IN_CONVEX.has(key)) {
+          result.skipped.push(`convex:${key} (kept — Convex runtime needs it)`);
           continue;
         }
         // One key per call — `convex env unset` only accepts a single arg.
