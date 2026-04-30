@@ -139,22 +139,39 @@ If Vercel is resolvable (`npx vercel`), check whether `DOPPLER_TOKEN` is already
 npx vercel env ls 2>&1 | grep -i DOPPLER_TOKEN || echo "MISSING"
 ```
 
-If MISSING, create a Doppler service token for the dev config and push it to Vercel:
+Decide which scope to use for the **production** Vercel target. The rule mirrors `/deploy-to-dev`:
+
+- **Production NOT promoted yet** (no `_PROD_PROMOTED_AT` marker in either Doppler `dev` secrets or Vercel Production env): push the **dev**-scoped token to all three Vercel targets. Doppler `prd` is empty at this point, so a prd-scoped token would make the runtime fetch return nothing and the production deploy would 500. The first run of `/deploy-to-prod` will overwrite Production's token with a prd-scoped one once real prod keys are populated.
+- **Production already promoted**: dev-scoped token to development+preview, prd-scoped token to production (the original design).
+
+Detect promotion state:
 
 ```bash
-DEV_TOKEN=$(doppler configs tokens create vercel-runtime-dev --plain --project $(node -e "console.log(require('./package.json').name)") --config dev)
-echo "$DEV_TOKEN" | npx vercel env add DOPPLER_TOKEN preview
-echo "$DEV_TOKEN" | npx vercel env add DOPPLER_TOKEN development
+PROD_PROMOTED=$(doppler secrets get _PROD_PROMOTED_AT --project $(node -e "console.log(require('./.doppler.yaml').toString().match(/project:\s*(\S+)/)?.[1] || require('./package.json').name)") --config dev --plain 2>/dev/null && echo "yes" || echo "no")
 ```
 
-For production, create a separate `prd`-scoped token:
+If MISSING, create a dev-scoped token. Use the `--value <v> --yes` non-interactive form for all three targets — and for **preview**, you MUST pass an empty string `""` as the third positional argument (Vercel CLI 52+ requires the branch positional even for "all preview branches"; the `--yes` flag alone does not skip the prompt):
 
 ```bash
-PRD_TOKEN=$(doppler configs tokens create vercel-runtime-prd --plain --project $(node -e "console.log(require('./package.json').name)") --config prd)
-echo "$PRD_TOKEN" | npx vercel env add DOPPLER_TOKEN production
+PROJECT=$(node -e "const m=require('fs').readFileSync('.doppler.yaml','utf-8').match(/project:\s*(\S+)/); console.log(m ? m[1] : require('./package.json').name)")
+DEV_TOKEN=$(doppler configs tokens create vercel-runtime-dev --plain --project "$PROJECT" --config dev)
+npx vercel env add DOPPLER_TOKEN development --value "$DEV_TOKEN" --yes
+npx vercel env add DOPPLER_TOKEN preview "" --value "$DEV_TOKEN" --yes
 ```
 
-(Pass these via stdin to avoid the token landing in shell history.)
+Production target — branch on the promotion state:
+
+```bash
+if [ "$PROD_PROMOTED" = "yes" ]; then
+  PRD_TOKEN=$(doppler configs tokens create vercel-runtime-prd --plain --project "$PROJECT" --config prd)
+  npx vercel env add DOPPLER_TOKEN production --value "$PRD_TOKEN" --yes
+else
+  # Use the same dev-scoped token; /deploy-to-prod will replace it later.
+  npx vercel env add DOPPLER_TOKEN production --value "$DEV_TOKEN" --yes
+fi
+```
+
+(The token is passed via `--value` — momentarily visible in `ps`/shell history, but acceptable for a one-time service-token bootstrap. Stdin form was deprecated by Vercel CLI 52 for env-add when combined with `--yes`.)
 
 If `gh` is available and the GitHub Actions secret isn't set, run the existing helper:
 
@@ -188,8 +205,9 @@ echo ""
 echo "Vercel env (should show only DOPPLER_TOKEN):"
 vercel env ls 2>&1 || echo "(skipped — vercel CLI not installed)"
 echo ""
-echo "Convex env (should NOT contain Doppler-migrated keys):"
-npx convex env list 2>&1 || echo "(skipped — Convex not configured)"
+echo "Convex env (should contain only the allowlist: ADMIN_EMAIL, CLERK_WEBHOOK_SECRET, NEXT_PUBLIC_CLERK_FRONTEND_API_URL, plus CONVEX_DEPLOY_KEY if set):"
+# Wrap in `doppler run` because the Convex CLI needs CONVEX_DEPLOYMENT injected — it's no longer in .env.local after migration.
+doppler run -- npx convex env list 2>&1 || echo "(skipped — Convex not configured)"
 echo ""
 echo ".env.local presence:"
 ls -la .env.local 2>&1 || echo "(deleted — fully migrated)"

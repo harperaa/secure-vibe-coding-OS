@@ -330,20 +330,48 @@ If auth error: tell user to run `npx vercel login`, AskUserQuestion to confirm, 
 
 **Step 4:** Set Vercel env vars.
 
-**Doppler mode** (`.doppler.yaml` exists): make sure all production keys are already in Doppler `prd`. Push them now if you haven't:
+**Doppler mode** (`.doppler.yaml` exists): seed the **complete** required key set in Doppler `prd` BEFORE invoking the deploy. The script now performs a preflight check — if any required key is missing it aborts with `error: "doppler_prd_incomplete"` and lists the missing keys.
+
+Required keys (the script's preflight allowlist):
 ```bash
-PROJECT=$(node -p "require('./package.json').name")
+# Read project name from .doppler.yaml (preferred) or package.json fallback
+PROJECT=$(node -e "const fs=require('fs'); const m=fs.readFileSync('.doppler.yaml','utf-8').match(/project:\s*(\S+)/); console.log(m ? m[1] : require('./package.json').name)")
+
+# Clerk production app
 doppler secrets set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="<PK>" --project $PROJECT --config prd
 doppler secrets set CLERK_SECRET_KEY="<SK>" --project $PROJECT --config prd
-doppler secrets set CONVEX_DEPLOY_KEY="<KEY>" --project $PROJECT --config prd
+doppler secrets set CLERK_WEBHOOK_SECRET="<WHSEC>" --project $PROJECT --config prd
 doppler secrets set NEXT_PUBLIC_CLERK_FRONTEND_API_URL="<URL>" --project $PROJECT --config prd
-doppler secrets set NEXT_PUBLIC_SITE_NAME="<NAME>" --project $PROJECT --config prd
+
+# Convex production
+doppler secrets set CONVEX_DEPLOY_KEY="<KEY>" --project $PROJECT --config prd
 doppler secrets set NEXT_PUBLIC_CONVEX_URL="<PROD_CONVEX_URL>" --project $PROJECT --config prd
-# CSRF_SECRET, SESSION_SECRET, redirect URLs — generate or carry over from dev
+
+# Site identity
+doppler secrets set NEXT_PUBLIC_SITE_NAME="<NAME>" --project $PROJECT --config prd
+
+# Runtime crypto (carry over from dev if you want sessions to persist; or generate new and accept that all sessions invalidate)
+DEV_CSRF=$(doppler secrets get CSRF_SECRET --project $PROJECT --config dev --plain)
+DEV_SESSION=$(doppler secrets get SESSION_SECRET --project $PROJECT --config dev --plain)
+doppler secrets set CSRF_SECRET="$DEV_CSRF" --project $PROJECT --config prd
+doppler secrets set SESSION_SECRET="$DEV_SESSION" --project $PROJECT --config prd
+
+# Admin (used by Convex queries)
+doppler secrets set ADMIN_EMAIL="<EMAIL>" --project $PROJECT --config prd
+
+# Clerk redirect URLs — typically the same as dev
+for KEY in NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL \
+           NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL; do
+  V=$(doppler secrets get "$KEY" --project $PROJECT --config dev --plain 2>/dev/null)
+  [ -n "$V" ] && doppler secrets set "$KEY"="$V" --project $PROJECT --config prd
+done
 ```
+
 Then run: `node scripts/deploy.mjs vercel-env`
 
-The command auto-delegates to `vercel-env-doppler`: issues a fresh `prd`-scoped Doppler service token, pushes only `DOPPLER_TOKEN` (and generates `REVALIDATE_TOKEN` if absent) to Vercel Production, and runs `scripts/sync-convex-env.mjs --config prd`. The `--clerk-*`, `--deploy-key`, `--frontend-api-url`, `--site-name`, `--convex-url` arguments are ignored in Doppler mode — values come from Doppler.
+**If the script returns `error: "doppler_prd_incomplete"`**: STOP. Display the `message` and `hint` fields verbatim, then run the `doppler secrets set` commands above for whatever's listed in `missing[]`, then retry `vercel-env`.
+
+The command auto-delegates to `vercel-env-doppler`: issues a fresh `prd`-scoped Doppler service token, pushes only `DOPPLER_TOKEN` (and generates `REVALIDATE_TOKEN` if absent) to Vercel Production, runs `scripts/sync-convex-env.mjs --config prd`, and writes the `_PROD_PROMOTED_AT` marker (which gates future `/deploy-to-dev` runs from stomping prod). The `--clerk-*`, `--deploy-key`, `--frontend-api-url`, `--site-name`, `--convex-url` arguments are ignored in Doppler mode — values come from Doppler.
 
 **Legacy mode** (no `.doppler.yaml`):
 Run: `node scripts/deploy.mjs vercel-env --clerk-pk="<PK>" --clerk-sk="<SK>" --deploy-key="<KEY>" --frontend-api-url="<URL>" --site-name="<NAME>" --convex-url="<PROD_CONVEX_URL>"`

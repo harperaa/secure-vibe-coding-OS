@@ -1087,6 +1087,44 @@ async function runVercelEnvDoppler(opts = {}) {
     }
   }
 
+  // Preflight (prd only): Doppler `prd` must contain the runtime essentials before
+  // we push a prd-scoped token to Vercel. Without these, the production deploy will
+  // boot, fetch from Doppler at runtime, get nothing back, and 500 on first request.
+  // The /deploy-to-prod skill instructs the operator to seed `prd` with `doppler
+  // secrets set ... --config prd` before invoking deploy; this check enforces that.
+  if (config === 'prd') {
+    const REQUIRED_PRD_KEYS = [
+      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+      'CLERK_SECRET_KEY',
+      'NEXT_PUBLIC_CLERK_FRONTEND_API_URL',
+      'NEXT_PUBLIC_CONVEX_URL',
+      'NEXT_PUBLIC_SITE_NAME',
+      'CSRF_SECRET',
+      'SESSION_SECRET',
+    ];
+    let prdSecrets;
+    try {
+      prdSecrets = downloadSecrets('prd');
+    } catch (err) {
+      console.error(JSON.stringify({
+        success: false,
+        error: `Could not read Doppler prd config: ${err.message}`,
+      }));
+      process.exit(1);
+    }
+    const missing = REQUIRED_PRD_KEYS.filter(k => !prdSecrets[k]);
+    if (missing.length > 0) {
+      console.error(JSON.stringify({
+        success: false,
+        error: 'doppler_prd_incomplete',
+        message: `Doppler 'prd' config is missing required keys: ${missing.join(', ')}`,
+        missing,
+        hint: 'Seed Doppler prd before running /deploy-to-prod. For each missing key: doppler secrets set KEY="<value>" --config prd. See .claude/commands/deploy-to-prod.md for the full list (Clerk prod PK/SK/webhook, Convex prod URL/deploy key, NEXT_PUBLIC_SITE_NAME, CSRF_SECRET, SESSION_SECRET).',
+      }, null, 2));
+      process.exit(1);
+    }
+  }
+
   const result = {
     success: true,
     mode: 'doppler',
@@ -1191,18 +1229,33 @@ async function runVercelEnvDoppler(opts = {}) {
 // Helper: push a single value to Vercel env, replacing any existing one.
 function pushVercelEnvVar(key, value, vercelEnv) {
   try {
-    // Best-effort remove first so `add` doesn't error on duplicates.
-    spawnSync('npx', ['vercel', 'env', 'rm', key, vercelEnv, '--yes'], {
-      cwd: ROOT_DIR,
-      stdio: 'pipe',
-      timeout: 30000,
-    });
-    const add = spawnSync('npx', ['vercel', 'env', 'add', key, vercelEnv], {
-      cwd: ROOT_DIR,
-      input: value,
-      encoding: 'utf-8',
-      timeout: 30000,
-    });
+    // Best-effort remove first so `add` doesn't error on duplicates. For preview the
+    // empty-string branch positional means "all preview branches" (CLI 52 requirement).
+    const rmArgs = vercelEnv === 'preview'
+      ? ['vercel', 'env', 'rm', key, vercelEnv, '', '--yes']
+      : ['vercel', 'env', 'rm', key, vercelEnv, '--yes'];
+    spawnSync('npx', rmArgs, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
+
+    let add;
+    if (vercelEnv === 'preview') {
+      // Vercel CLI 52+ requires an explicit branch positional even for "all preview branches"
+      // (empty string ""), and `--value`/`--yes` instead of stdin. The stdin form falls
+      // through to an interactive branch prompt and dies on EOF.
+      add = spawnSync('npx', ['vercel', 'env', 'add', key, vercelEnv, '', '--value', value, '--yes'], {
+        cwd: ROOT_DIR,
+        encoding: 'utf-8',
+        timeout: 30000,
+      });
+    } else {
+      // development / production: stdin form keeps the value out of argv (so it doesn't
+      // surface in `ps` or shell history).
+      add = spawnSync('npx', ['vercel', 'env', 'add', key, vercelEnv], {
+        cwd: ROOT_DIR,
+        input: value,
+        encoding: 'utf-8',
+        timeout: 30000,
+      });
+    }
     if (add.status !== 0) {
       return { ok: false, error: ((add.stderr || '') + (add.stdout || '')).trim().slice(0, 200) };
     }

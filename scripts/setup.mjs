@@ -1059,6 +1059,10 @@ const PROTECTED_KEYS = new Set([
   'VERCEL_GIT_REPO_SLUG', 'VERCEL_GIT_REPO_ID', 'VERCEL_GIT_PULL_REQUEST_ID',
   'VERCEL_DEPLOYMENT_ID', 'VERCEL_PROJECT_PRODUCTION_URL', 'VERCEL_BRANCH_URL',
   'VERCEL_TARGET_ENV', 'VERCEL_OIDC_TOKEN',
+  // Turborepo/Nx integration vars — set by Vercel's build integrations, not user secrets.
+  // Cleanup-then-rm would just be re-set on next deploy, so skip them entirely.
+  'NX_DAEMON', 'TURBO_CACHE', 'TURBO_DOWNLOAD_LOCAL_ENABLED',
+  'TURBO_REMOTE_ONLY', 'TURBO_RUN_SUMMARY',
 ]);
 
 // Keys that must stay in Convex env after migration. Two reasons a key lands here:
@@ -1221,8 +1225,10 @@ async function runMigrateToDoppler(args) {
   const inventory = JSON.parse(fs.readFileSync(inventoryPath, 'utf-8'));
 
   if (phase === 'migrate') {
-    // Build the dev payload: union of .env.local + Convex + Vercel-Development + Vercel-Preview.
-    // Build the prd payload: Vercel-Production.
+    // Build the dev payload: union of .env.local + Convex + Vercel-Development + Vercel-Preview
+    // (+ Vercel-Production when /deploy-to-prod has not run yet — see below).
+    // Build the prd payload: Vercel-Production, but only after /deploy-to-prod has promoted
+    // real production keys. Until then those values are dev-equivalent and belong in dev.
     // Conflict resolution: .env.local > Convex > Vercel-Development > Vercel-Preview (most-local wins).
     const devPayload = {};
     const prdPayload = {};
@@ -1235,11 +1241,25 @@ async function runMigrateToDoppler(args) {
       }
     };
 
+    // Detect prod-promotion state. In legacy mode the marker lives as a regular env var on
+    // Vercel's production target; once present, /deploy-to-prod has run at least once and
+    // the values in that target are real prod keys. In a fresh repo where /deploy-to-prod
+    // never ran, the production target just hosts dev-equivalent values (because /deploy-to-dev
+    // uses `vercel deploy --prod` to keep the alias URL stable). Routing those to Doppler prd
+    // would mis-tag them as production secrets, so route them into dev instead and leave prd
+    // empty for the eventual /deploy-to-prod step to populate.
+    const vercelProd = inventory.vercel.byTarget?.production;
+    const prodPromoted = !!vercelProd?.['_PROD_PROMOTED_AT'];
+
     merge(devPayload, inventory.envLocal);
     merge(devPayload, inventory.convex.map);
     merge(devPayload, inventory.vercel.byTarget?.development);
     merge(devPayload, inventory.vercel.byTarget?.preview);
-    merge(prdPayload, inventory.vercel.byTarget?.production);
+    if (prodPromoted) {
+      merge(prdPayload, vercelProd);
+    } else {
+      merge(devPayload, vercelProd);
+    }
 
     const result = { success: true, phase: 'migrate', pushedDev: [], pushedPrd: [] };
 
