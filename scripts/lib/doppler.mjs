@@ -61,6 +61,10 @@ function tryRun(cmd) {
 }
 
 function commandExists(name) {
+  // POSIX shells use `command -v`; Windows cmd.exe uses `where`. Try both.
+  if (os.platform() === 'win32') {
+    return tryRun(`where ${name}`).ok;
+  }
   return tryRun(`command -v ${name}`).ok;
 }
 
@@ -88,6 +92,8 @@ export function ensureCliInstalled() {
       `(curl -Ls --tlsv1.2 --proto "=https" --retry 3 https://cli.doppler.com/install.sh | sudo sh)`,
       { stdio: 'inherit' }
     );
+  } else if (platform === 'win32') {
+    installOnWindows();
   } else {
     throw new Error(
       `Unsupported platform "${platform}" for auto-install. ` +
@@ -99,6 +105,66 @@ export function ensureCliInstalled() {
     throw new Error('Doppler install completed but `doppler` is still not on PATH.');
   }
   console.log('Doppler CLI installed.');
+}
+
+/**
+ * Best-effort Windows install. Tries (in order):
+ *   1. winget — Doppler's docs claim winget support, but as of this writing
+ *      (verified 2026-04) Doppler is not in the official winget-pkgs repo, so
+ *      this attempt will usually fail. Kept first because it's zero-setup if
+ *      Doppler ever ships the manifest.
+ *   2. scoop — Doppler's recommended Windows path; requires user to have
+ *      installed scoop themselves (we don't auto-install scoop because that
+ *      requires changing PowerShell's execution policy).
+ *   3. Throws with a clear, actionable error pointing the user at three
+ *      options: install scoop, install via winget once Doppler ships there,
+ *      or download the binary directly.
+ */
+function installOnWindows() {
+  // Attempt 1: winget
+  const winget = tryRun('winget --version');
+  if (winget.ok) {
+    console.log('Trying winget install Doppler.doppler…');
+    const wingetInstall = tryRun(
+      'winget install --id Doppler.doppler -e --accept-source-agreements --accept-package-agreements'
+    );
+    if (wingetInstall.ok && commandExists('doppler')) {
+      console.log('Installed via winget.');
+      return;
+    }
+    // Don't error here — fall through to scoop.
+    console.log('winget did not install Doppler (package may not be published yet). Trying scoop…');
+  }
+
+  // Attempt 2: scoop (must be already installed; we don't bootstrap it)
+  if (commandExists('scoop')) {
+    console.log('Adding Doppler bucket and installing via scoop…');
+    run('scoop bucket add doppler https://github.com/DopplerHQ/scoop-doppler.git', { stdio: 'inherit' });
+    run('scoop install doppler', { stdio: 'inherit' });
+    return;
+  }
+
+  // Attempt 3: nothing worked — give the user a structured choice.
+  throw new Error(
+    [
+      'Could not auto-install Doppler on Windows.',
+      '',
+      'Pick one of these and re-run /install:',
+      '',
+      '  Option A — Install scoop (recommended), then re-run:',
+      '    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser',
+      '    irm get.scoop.sh | iex',
+      '',
+      '  Option B — Use WSL: open an Ubuntu/Debian shell and re-run /install',
+      '    from the project directory inside WSL. The Linux installer will run.',
+      '',
+      '  Option C — Download a release binary from',
+      '    https://github.com/DopplerHQ/cli/releases',
+      '    and add it to your PATH.',
+      '',
+      'Reference: https://docs.doppler.com/docs/install-cli',
+    ].join('\n')
+  );
 }
 
 // ---------------------------------------------------------------------------

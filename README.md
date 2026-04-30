@@ -45,6 +45,8 @@ npm run dev               # Next.js dev
 
 `/install` asks which mode you want. The presence of `.doppler.yaml` in the repo signals Doppler mode for everything downstream (`/deploy-to-dev`, `/deploy-to-prod`, CI). For incident response in Doppler mode, run `/rotate`.
 
+**Doppler CLI install:** the helper auto-installs Doppler on macOS (`brew install dopplerhq/cli/doppler`) and Linux (Doppler's `curl | sh` installer). On **Windows** it tries `winget install Doppler.doppler` first (currently fails — Doppler isn't in the winget repo yet) and then `scoop install doppler` if scoop is already installed. If neither works, you'll see a clear error with three paths: install [scoop](https://scoop.sh) and re-run, run `/install` from a WSL shell, or download a release binary from https://github.com/DopplerHQ/cli/releases. We don't auto-install scoop because that requires changing PowerShell's execution policy — that's a decision you should make consciously.
+
 ## Features
 
 - 🚀 **Next.js 15 with App Router** - Latest React framework with server components
