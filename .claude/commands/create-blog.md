@@ -155,6 +155,22 @@ Otherwise (legacy mode — `.env.local` has the key):
 node scripts/generate-image.js "[Image prompt based on blog topic]" "public/blog/images/[slug].jpg" --aspect-ratio 16:9
 ```
 
+### Handling a missing GEMINI_API_KEY
+
+If the script exits non-zero with `ERROR: GEMINI_API_KEY is not set.`, do NOT skip the image step silently. The script's stderr already prints the obtain-a-key instructions verbatim — surface them to the user, then offer two clear paths via `AskUserQuestion`:
+
+1. **"I'll add the key myself"** — instruct the user: open https://aistudio.google.com/app/apikey, create a key, then add it to the right place for the project's mode:
+   - Doppler mode: `doppler secrets set GEMINI_API_KEY=<key> --config dev`
+   - Legacy mode: append `GEMINI_API_KEY=<key>` to `.env.local` (one line, no quotes, no spaces around `=`)
+   Tell them to reply when done; on their next message, retry the same `node scripts/generate-image.js ...` (or `doppler run --` wrapped variant) command and continue Step 4.
+
+2. **"I'll paste the key here, you handle it"** — collect the key via `AskUserQuestion` with a single "Enter below" option (the user types it into "Other"). Validate the input: must start with `AIza` and be ≥ 35 characters; if not, re-ask. Then write it to the appropriate place WITHOUT echoing it back in chat:
+   - Doppler mode: `doppler secrets set GEMINI_API_KEY=<key> --config dev` (single bash call; do not print the key in updates)
+   - Legacy mode: append `GEMINI_API_KEY=<key>` as a new line to `.env.local`. If the file already has a `GEMINI_API_KEY=` line, use Edit to replace that exact line in place rather than duplicating it.
+   Confirm the key was stored, then retry the image generation. Never paste the key back into a user-visible message; refer to it as "the key you provided".
+
+After either path succeeds, continue with the rest of Step 4 as if the call had worked the first time. If the user declines both options, skip the image step and continue the blog workflow without a banner image — note in the final summary that the banner is missing and how to add one later.
+
 **Image Prompt Guidelines:**
 - Be specific and descriptive
 - Include style direction: "professional blog header", "modern tech illustration"

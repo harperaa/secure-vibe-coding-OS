@@ -1,5 +1,5 @@
 import { config } from "dotenv";
-import { writeFileSync } from "fs";
+import { writeFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -14,10 +14,34 @@ config({ path: join(projectRoot, ".env.local") });
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 if (!GEMINI_API_KEY) {
-  console.error("Error: GEMINI_API_KEY not found.");
-  console.error("  Doppler mode: run via `doppler run -- node scripts/generate-image.js ...`");
-  console.error("                or `doppler secrets set GEMINI_API_KEY=... --config dev` first.");
-  console.error("  Legacy mode:  add GEMINI_API_KEY=... to .env.local.");
+  const dopplerMode = existsSync(join(projectRoot, ".doppler.yaml"));
+  console.error("");
+  console.error("ERROR: GEMINI_API_KEY is not set.");
+  console.error("");
+  console.error("HOW TO OBTAIN A KEY:");
+  console.error("  1. Open Google AI Studio:  https://aistudio.google.com/app/apikey");
+  console.error("  2. Sign in with a Google account.");
+  console.error("  3. Click \"Create API key\" (free tier is sufficient for image generation).");
+  console.error("  4. Copy the key — it starts with \"AIza\" and is ~39 characters.");
+  console.error("");
+  if (dopplerMode) {
+    console.error("HOW TO ADD IT (Doppler mode — this repo has .doppler.yaml):");
+    console.error("  doppler secrets set GEMINI_API_KEY=<paste-key> --config dev");
+    console.error("");
+    console.error("  Then re-run the original command. The Doppler-aware caller will");
+    console.error("  inject it via `doppler run --` automatically.");
+    console.error("");
+    console.error("ALTERNATIVE (one-off, won't persist):");
+    console.error("  GEMINI_API_KEY=<paste-key> node scripts/generate-image.js ...");
+  } else {
+    console.error("HOW TO ADD IT (legacy mode — .env.local):");
+    console.error("  Open .env.local in this project root and add this line:");
+    console.error("");
+    console.error("    GEMINI_API_KEY=<paste-key>");
+    console.error("");
+    console.error("  Save the file, then re-run the original command.");
+  }
+  console.error("");
   process.exit(1);
 }
 

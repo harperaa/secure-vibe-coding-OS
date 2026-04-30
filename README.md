@@ -47,6 +47,45 @@ npm run dev               # Next.js dev
 
 **Doppler CLI install:** on **macOS** the helper tries `brew install dopplerhq/cli/doppler` first; if brew is missing or fails (e.g. outdated Xcode Command Line Tools), it automatically falls back to Doppler's official `curl | sudo sh` installer. On **Linux** it uses the curl installer directly. On **Windows** it tries `winget install Doppler.doppler` first (currently fails — Doppler isn't in the winget repo yet) and then `scoop install doppler` if scoop is already installed. If neither works, you'll see a clear error with three paths: install [scoop](https://scoop.sh) and re-run, run `/install` from a WSL shell, or download a release binary from https://github.com/DopplerHQ/cli/releases. We don't auto-install scoop because that requires changing PowerShell's execution policy — that's a decision you should make consciously.
 
+### Migrate an existing repo onto Doppler (`/migrate-to-doppler`)
+
+Already running in legacy `.env.local` mode and want to consolidate? `/migrate-to-doppler` walks an existing repo from scattered env-var management (`.env.local` + Vercel env + Convex env) into Doppler-mode (Doppler is the single source of truth; only `DOPPLER_TOKEN` is left in Vercel).
+
+```bash
+claude
+# Then type:
+/migrate-to-doppler
+```
+
+The flow is staged so nothing destructive happens without your confirmation:
+
+1. **Phase 0 — Preflight.** Bootstraps Doppler if `.doppler.yaml` is missing (creates the project, `dev`/`prd` configs, drives `doppler login`, pins the repo). Probes for the optional tools — `npx vercel`, `npx convex env`, `gh` — and tells you up-front which sources will be migrated based on what's available.
+2. **Phase 1 — Inventory (read-only).** Gathers every key found in `.env.local`, Convex env, and all three Vercel targets (production / preview / development). Displays a count-only table to keep secrets off the screen, plus an explicit **conflicts list** when the same key has different values across sources (with truncated previews) so you can see exactly what will land in Doppler. The full inventory is also written to `/tmp/doppler-migration-inventory.json` for offline review.
+3. **Phase 2 — Confirm.** `AskUserQuestion` gate before *any* Doppler write — push or cancel.
+4. **Phase 3 — Migrate (idempotent, non-destructive).** Pushes the union of `.env.local` + Convex + Vercel-Development + Vercel-Preview into Doppler `dev`, and Vercel-Production into Doppler `prd`. The merge rule is **most-local wins** (`.env.local` overrides Vercel-Development, etc.) so your local source of truth is honored. Re-running just overwrites the same keys.
+5. **Phase 4 — Cleanup (destructive, gated).** Only after the migration succeeds and you confirm a second `AskUserQuestion`, removes the now-redundant copies from Vercel and Convex env. Leaves `DOPPLER_TOKEN` (and a small allowlist of routing IDs like `CONVEX_DEPLOYMENT`) intact. Optionally pushes a fresh service token to GitHub Actions as `DOPPLER_TOKEN` via `gh`.
+
+The end state matches a clean `/install` in Doppler mode: only `DOPPLER_TOKEN` in Vercel, app values fetched at build time and runtime from Doppler, `.doppler.yaml` pinning the repo to the `dev` config, and CI authenticated via a service token.
+
+### Incident-response rotation (`/rotate`)
+
+`/rotate` is the Doppler-mode incident-response command. It's designed around the principle **containment first, remediation second**: revoke the Vercel-side `DOPPLER_TOKEN` *first* so any attacker stops being able to read Doppler, *then* walk you through rotating the underlying credentials at their sources. Doppler-mode only — legacy `.env.local` flows must be rotated manually.
+
+```bash
+claude
+# Then type:
+/rotate
+```
+
+The walkthrough:
+
+1. **Step 0 — Scope.** Asks three questions via `AskUserQuestion`: which environment is affected (`dev`, `prd`, or `Both`), what's suspected compromised (Vercel-side token / developer machine / a single leaked secret / unknown — assume worst case), and whether to rotate `SESSION_SECRET` (which logs every active user out — recommended for unknown / Vercel-side compromise).
+2. **Step 1 — Containment (seconds).** Revokes the existing `vercel-runtime-<config>` Doppler service token and issues a fresh one, then atomically replaces `DOPPLER_TOKEN` in Vercel for the affected target. Within seconds, the stolen token can no longer fetch from Doppler — even before any underlying secret is rotated.
+3. **Step 2 — Force a fresh runtime fetch.** Triggers a redeploy so warm Vercel function instances pick up the new token (otherwise some still hold cached values from the old one).
+4. **Step 3+ — Per-credential rotation.** Walks each underlying credential (Clerk Secret / Webhook Secret, Convex Deploy Key, payment provider keys, `SESSION_SECRET`, `CSRF_SECRET`, `REVALIDATE_TOKEN`, third-party API keys) — rotates it at the source, sets the new value in Doppler with `doppler secrets set ... --config <ENV>`, and confirms the rotation propagated. Each credential is its own gated step so you can pause if a step requires dashboard access or vendor support.
+
+The Doppler-mode runtime-fetch architecture is what makes this possible: rotating a secret in Doppler is enough to update production — no redeploy needed for server-side values, since the next cold start fetches fresh.
+
 ## Features
 
 - 🚀 **Next.js 15 with App Router** - Latest React framework with server components
@@ -127,6 +166,43 @@ This will:
 You'll receive a claim URL to create your Clerk account after setup completes.
 
 After installation, your app runs locally at the provided URL (typically `http://localhost:3000`). Develop and customize your app here — no deployment is needed until you're ready to share it with others.
+
+### Port an Existing Site (`/port-old-site`)
+
+If you have an existing application you want to move onto this Secure Vibe Coding OS baseline, run `/port-old-site` and pass the path to the old repo. Both **absolute** and **relative** paths work:
+
+```bash
+claude
+# Then type:
+/port-old-site /Users/me/code/old-site
+# or relative to your current directory:
+/port-old-site ../old-site
+```
+
+The command runs a multi-phase, security-first port that **never weakens this template's security posture**. It walks you through:
+
+**Phase 0 — Pre-flight & discovery (read-only).** Confirms this directory is a Secure Vibe Coding OS install (looks for `app/`, `convex/`, `.claude/skills/security/`, `docs/INSTALL.md`, env mode), resolves the old-site path you passed, and verifies it is **reachable** from the Claude Code session and contains real codebase markers (`package.json`, `next.config.*`, `requirements.txt`, `go.mod`, etc.). Then it does a brief read of the old site and asks you to confirm "is this the right site?" *before* the deep read. After your yes, it produces a full summary (purpose, pages, data model, auth, payments, integrations) and a per-phase work plan.
+
+**Living plan: `docs/PORT-PLAN.md`.** The full plan is written to `docs/PORT-PLAN.md` as a checkbox-driven living document. Tasks flip from `- [ ]` to `- [x] (date)` as work completes. The file survives across sessions — if you re-run `/port-old-site` later, it detects the existing plan and asks whether to continue or start over (start-over archives, never deletes). You always approve the plan before any work begins.
+
+**Phase execution: one phase per branch, with a user-test gate.**
+
+- **Phase 1 — Homepage.** Updates `app/layout.tsx` metadata (title, description, OG), rewrites every section under `app/(landing)/` to match the old site's product, and **regenerates every landing image** via `scripts/generate-image.js`. The hero banner is required to project what the *backend* of the application looks like (data tables, charts, dashboards, queues — relevant to the old site's domain).
+- **Phase 2 — Blog.** Removes the three placeholder posts under `content/blog/` and uses `/create-blog` to generate 10 articles tailored to the old site's product domain. You approve the topic list first.
+- **Phase 3 — Dashboard relevance.** Keeps the dashboard layout, auth gates, and admin/security features intact; changes only what is *shown* (`section-cards.tsx` labels & icons, `chart-area-interactive.tsx` axes, `data.json` rows, `data-table.tsx` columns) so the dashboard makes sense for your domain. The Security Monitoring dashboard and admin gating are explicitly off-limits in this phase.
+- **Phase 4+ — One backend page per phase.** Each authenticated/backend page from the old site becomes its own phase: dedicated branch, schema additions in `convex/schema.ts`, Convex queries/mutations with full validator coverage, Clerk-based auth, server-side validation, rate limiting, CSRF, error handling, security event logging, and at minimum one happy-path + one auth-failure test.
+
+**Per-phase gate.** At the end of every phase, the command runs `npx tsc --noEmit` (and Convex typecheck for backend changes), then **stops and asks you to test locally**. Only after you reply "Accepted" does it `/commit` and `/create-pull-request` and move to the next phase. You can also pause; the plan's resume notes are updated so a later session picks up exactly where you left off.
+
+**Security posture is preserved.** Throughout, the command:
+
+- Maps work to the right skill in `.claude/skills/security/` (input validation, rate limiting, CSRF, auth, payments, AI/chat, headers, dependencies, error handling, testing, logging) and consults it before touching an attack surface.
+- Refuses to copy the old site's server code, middleware, auth code, or env loading verbatim — re-implements equivalent functionality on this stack.
+- Refuses to port `dangerouslySetInnerHTML` on user content, raw SQL with string concatenation, password storage, or `NEXT_PUBLIC_*` secrets without first proposing the secure remap.
+- Never adds new external script/image domains, auth bypasses, or feature flags without explicit confirmation, and logs every accepted insecure-by-default deviation in the plan's **Deviations log**.
+- Honors all project conventions: no hardcoded secrets, no `@ts-ignore`, no direct pushes to `main` (every phase opens a PR), and respects whichever env mode you picked at install (Doppler or `.env.local`).
+
+If you cancel mid-port, the plan stays in place. Re-running `/port-old-site <path>` later finds it and offers to resume.
 
 ### Quick Deploy to Dev (`/deploy-to-dev`)
 
