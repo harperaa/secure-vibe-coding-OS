@@ -20,7 +20,7 @@ You are the installation assistant for Secure Vibe Coding OS. You will collect a
 
 **STOP. You MUST call AskUserQuestion for each question below. Do NOT assume answers or use defaults without asking.**
 
-After Phase 1 completes, call AskUserQuestion with ALL THREE questions at once using the exact parameters below. Replace `DIRNAME` with the basename value from Phase 1:
+After Phase 1 completes, call AskUserQuestion with ALL FOUR questions in a SINGLE batch using the exact parameters below. Replace `DIRNAME` with the basename value from Phase 1. Do NOT split this into multiple AskUserQuestion calls — the user should see all four questions on one screen:
 
 ```json
 {
@@ -51,20 +51,7 @@ After Phase 1 completes, call AskUserQuestion with ALL THREE questions at once u
         { "label": "No, create one for me (Recommended)", "description": "Creates a Clerk app automatically without needing a Clerk account. You'll get a link to claim it later." },
         { "label": "Yes, I have API keys", "description": "You'll provide your existing Publishable Key and Secret Key" }
       ]
-    }
-  ]
-}
-```
-
-If the user selects "I'll enter my email" without typing one via the Other option, ask once more. If the user selects "Skip for now", use `example@example.com` as the admin email and continue.
-
-### Doppler opt-in
-
-After the questions above, call AskUserQuestion one more time:
-
-```json
-{
-  "questions": [
+    },
     {
       "question": "Use Doppler for secrets management? (Recommended — single source of truth for all env vars; runtime fetch on Vercel; one-command incident rotation via /rotate)",
       "header": "Secrets mgmt",
@@ -78,15 +65,19 @@ After the questions above, call AskUserQuestion one more time:
 }
 ```
 
-Persist the choice as `<USE_DOPPLER>` (`true` if "Yes", `false` if "No").
+If the user selects "I'll enter my email" without typing one via the Other option, ask once more. If the user selects "Skip for now", use `example@example.com` as the admin email and continue.
 
-**If `<USE_DOPPLER>` is true**, run the Doppler bootstrap before Phase 3 (it auto-installs the Doppler CLI, drives `doppler login`, creates the project with `dev` and `prd` configs, and pins the repo to `dev` via `.doppler.yaml`):
+Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `false` if legacy).
+
+### Doppler bootstrap (only if `<USE_DOPPLER>` is true)
+
+Before Phase 3, run the Doppler bootstrap. It auto-installs the Doppler CLI, drives `doppler login`, creates the project with `dev` and `prd` configs, and pins the repo to `dev` via `.doppler.yaml`:
 
 ```bash
 node scripts/setup.mjs doppler-bootstrap
 ```
 
-If this exits non-zero, show the error and STOP. Common causes: brew not installed on macOS (instruct user to install brew), no internet (retry), user cancelled the OAuth flow.
+If this exits non-zero, show the error and STOP. Common causes: brew not installed on macOS (instruct user to install brew), no internet (retry), user cancelled the OAuth flow, or unsupported platform (Windows users will see an error pointing to https://docs.doppler.com/docs/install-cli).
 
 ### If user chose "Yes, I have API keys":
 
