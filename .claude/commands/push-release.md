@@ -393,19 +393,24 @@ cd secure-vibe-kit && ./scripts/sync-from-source.sh
 
 **Step 9B: Set the package version to match the release version**
 
-The secure-vibe-kit version MUST match the repo release version (e.g., v4.0.1 → "4.0.1").
-Use `npm pkg set` to write the exact version — do NOT use `npm version major/minor/patch`.
+BOTH the root `package.json` and `secure-vibe-kit/package.json` versions MUST match
+the repo release version (e.g., v4.0.1 → "4.0.1"). Use `npm pkg set` to write the
+exact version — do NOT use `npm version major/minor/patch`.
 
 ```bash
-cd secure-vibe-kit && npm pkg set version="X.Y.Z"
+npm pkg set version="X.Y.Z"
+cd secure-vibe-kit && npm pkg set version="X.Y.Z" && cd ..
 ```
 
-Where X.Y.Z is the version number from Step 4 (without the "v" prefix).
+Where X.Y.Z is the version number from Step 4 (without the "v" prefix). The first
+command updates the root `package.json` (the app); the second updates the kit (the
+distributable starter package). Keeping both in sync makes `npm view` and the GitHub
+release page tell the same story about what's deployed.
 
 **Step 9C: Commit and push the sync + version bump**
 
 ```bash
-git add secure-vibe-kit/
+git add package.json secure-vibe-kit/
 git commit -m "chore: sync secure-vibe-kit files and bump to X.Y.Z for release"
 git push origin main
 ```

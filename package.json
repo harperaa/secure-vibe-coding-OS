@@ -1,6 +1,6 @@
 {
-  "name": "sure-next-starter",
-  "version": "0.1.0",
+  "name": "secure-vibe-coding-os",
+  "version": "4.0.1",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
