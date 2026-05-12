@@ -192,7 +192,12 @@ Plan-doc skeleton (write this verbatim, filling in the placeholders):
 - [ ] Branch `feat/port-1-homepage` cut from latest main
 - [ ] Old-site asset inventory complete — every homepage image and copy block catalogued
 - [ ] Old-site images copied into `public/` and wired to landing components (feature illustrations, section graphics, logos, etc.)
-- [ ] `app/layout.tsx` metadata.title and metadata.description updated (reuse old site's title/description if strong; improve otherwise)
+- [ ] `NEXT_PUBLIC_SITE_NAME` updated to the old site's product name (Doppler `dev` config in Doppler mode, `.env.local` in legacy mode; also push to Vercel envs if already deployed)
+- [ ] `app/layout.tsx` `metadata.title` set to old site's title (reuse if strong; improve if vague/keyword-stuffed)
+- [ ] `app/layout.tsx` `metadata.description` set to old site's description (the template currently mis-uses SITE_NAME as the description — replace with a real description string)
+- [ ] OG tags (`openGraph.title`, `openGraph.description`, `openGraph.images`) updated to match
+- [ ] Boilerplate references purged: `app/(landing)/hero-section.tsx` no longer reads `Build Secure Applications with <SITE_NAME>` — replaced with the old site's hero copy
+- [ ] `app/feed.xml/route.ts`, `app/(landing)/footer.tsx`, `app/(landing)/header.tsx`, `app/dashboard/app-sidebar.tsx` verified to render the new product name via `NEXT_PUBLIC_SITE_NAME`
 - [ ] Hero copy: reused from old site if strong, improved otherwise
 - [ ] **Hero banner: freshly generated 16:9 image projecting the backend UI** (per Phase 0 plan — dashboard / data / workflow this product's authenticated users will actually see). The old hero is NOT reused here — backend projection is the whole point of this image.
 - [ ] Feature section images: reused from old site
@@ -303,8 +308,14 @@ Write the inventory into the plan (`docs/PORT-PLAN.md`) under Phase 1 so the use
 
 ### 1.3 Files in scope
 
-- `app/layout.tsx` — `metadata.title`, `metadata.description`, OG tags. Reuse the old site's title/description if strong; improve only if weak (vague, keyword-stuffed, generic).
+- **Site name (env var)** — `NEXT_PUBLIC_SITE_NAME`. Set during `/install`, read in 6+ places. Update first via the env layer:
+  - **Doppler mode**: `doppler secrets set NEXT_PUBLIC_SITE_NAME=<old-site-product-name> --config dev`. If the app is already deployed, also push to Vercel envs (the prebuild fetches at build time so the new name lands on next deploy).
+  - **Legacy mode**: edit the `NEXT_PUBLIC_SITE_NAME=` line in `.env.local`.
+  - Restart the dev server (user does this — you do not start it) so Next.js inlines the new value.
+- `app/layout.tsx` — set `metadata.title` and `metadata.description` to literals derived from the old site. The template currently has `description: process.env.NEXT_PUBLIC_SITE_NAME || "..."` — that's a bug (description ≠ name). Replace with the old site's actual description (or improved if weak). Also update `openGraph.title`, `openGraph.description`, and `openGraph.images` (point at `public/landing/hero.jpg` once generated).
 - `app/(landing)/page.tsx` and every component it imports from `app/(landing)/` (hero, features, testimonials, FAQs, CTA, footer text, etc.).
+- `app/(landing)/hero-section.tsx` — the boilerplate reads `Build Secure Applications with {NEXT_PUBLIC_SITE_NAME}`. Replace the entire headline with the old site's hero copy. The "Build Secure Applications with X" prefix must go for a ported product.
+- `app/(landing)/header.tsx`, `app/(landing)/footer.tsx`, `app/dashboard/app-sidebar.tsx`, `app/feed.xml/route.ts` — these read `NEXT_PUBLIC_SITE_NAME` and will pick up the new name automatically once the env var is updated and the app is rebuilt. Verify visually after restart — do not edit them unless something is hardcoded.
 - Old-site images: copy them into `public/` (e.g., `public/landing/<name>.jpg`) and rewire the imports in the landing components. Local files only — don't add new external image domains to `next.config` without explicit user approval (see security checks in 1.6).
 - Hero image only: freshly generated via `scripts/generate-image.js` (see 1.4). Save to `public/landing/hero.jpg` (or similar) and import from the hero component.
 
