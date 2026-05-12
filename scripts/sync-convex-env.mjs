@@ -160,6 +160,24 @@ async function main() {
     unsetConvexEnv(key, deployKey);
   }
 
+  // Re-list Convex env and confirm every desired key now matches. We have
+  // observed cases during /install where `convex env set` exited 0 without
+  // actually persisting (likely a transient CLI/backend hiccup), which left
+  // the install reporting success while Convex still had no values. A second
+  // list closes that gap: if anything is missing, throw and let the caller
+  // surface a real error.
+  const verified = listConvexEnv(deployKey);
+  const stillMissing = [];
+  for (const [key, value] of Object.entries(desired)) {
+    if (verified[key] !== value) stillMissing.push(key);
+  }
+  if (stillMissing.length > 0) {
+    throw new Error(
+      `Convex env did not persist after sync: ${stillMissing.join(', ')}. ` +
+      `Re-run \`node scripts/sync-convex-env.mjs --config=${config}\` or set them manually with \`npx convex env set <KEY> <VALUE>\`.`
+    );
+  }
+
   console.log(`Synced Convex env (${config}): ${toSet.length} set, ${toUnset.length} unset.`);
 }
 

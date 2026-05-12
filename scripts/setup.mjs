@@ -510,27 +510,40 @@ async function runConfigure(args) {
   // In Doppler mode: push the values to Doppler dev first, then run the sync
   // script so Doppler is the source of truth and Convex's env mirrors it.
   if (dopplerIsEnabled()) {
+    let dopplerPushed = false;
     try {
       dopplerSetSecrets(convexVarsToSet, 'dev');
       result.steps.push(`Mirrored Convex-bound secrets to Doppler dev config`);
+      dopplerPushed = true;
     } catch (err) {
-      result.steps.push(`Warning: Doppler mirror failed: ${err.message}`);
-    }
-    const sync = spawnSync('node', ['scripts/sync-convex-env.mjs', '--config=dev'], {
-      cwd: ROOT_DIR,
-      encoding: 'utf-8',
-      stdio: 'pipe',
-    });
-    if (sync.status === 0) {
-      const last = (sync.stdout || '').trim().split('\n').pop();
-      result.steps.push(`Synced Convex env via Doppler: ${last}`);
-      // Best-effort: report which keys actually got set (Convex sync output mentions them)
-      result.convexEnvVarsSet = Object.keys(convexVarsToSet);
-    } else {
-      result.steps.push(`Convex sync failed: ${(sync.stderr || sync.stdout || '').trim()}`);
+      // Surface this as a hard failure rather than a Warning. If Doppler did
+      // not receive the values, the downstream sync to Convex will silently
+      // see "nothing to do" and the install would otherwise complete looking
+      // healthy while Convex env stays empty.
+      result.steps.push(`Doppler mirror failed: ${err.message}`);
       result.manualSteps.push(
-        'Run `node scripts/sync-convex-env.mjs --config=dev` after fixing the error.'
+        `Push the Convex-bound secrets to Doppler dev manually, then run \`node scripts/sync-convex-env.mjs --config=dev\`. Keys: ${Object.keys(convexVarsToSet).join(', ')}`
       );
+    }
+    if (dopplerPushed) {
+      const sync = spawnSync('node', ['scripts/sync-convex-env.mjs', '--config=dev'], {
+        cwd: ROOT_DIR,
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+      if (sync.status === 0) {
+        const last = (sync.stdout || '').trim().split('\n').pop();
+        result.steps.push(`Synced Convex env via Doppler: ${last}`);
+        // sync-convex-env.mjs verifies its own work and exits non-zero on
+        // mismatch, so a 0 exit means every key in `desired` now lives in
+        // Convex with the right value.
+        result.convexEnvVarsSet = Object.keys(convexVarsToSet);
+      } else {
+        result.steps.push(`Convex sync failed: ${(sync.stderr || sync.stdout || '').trim()}`);
+        result.manualSteps.push(
+          'Run `node scripts/sync-convex-env.mjs --config=dev` after fixing the error.'
+        );
+      }
     }
   } else {
     for (const [key, value] of Object.entries(convexVarsToSet)) {
