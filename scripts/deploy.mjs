@@ -1395,65 +1395,66 @@ async function runVercelDeploy() {
       result.steps.push(`CLI output: ${lines.slice(-3).join(' | ')}`);
     }
 
-    // Derive the production alias from the deploy output or .vercel/project.json
-    // Note: Vercel CLI commands like `vercel alias ls` and `vercel inspect` hang
-    // when run non-interactively in piped/scripted contexts, so we avoid them.
+    // Resolve the production alias by asking Vercel directly via
+    // `vercel inspect <url> --format json`. The JSON `aliases` array lists
+    // every alias attached to the deployment, with the random-word public
+    // alias first (e.g. `news1-lime.vercel.app`) and team-scoped variants
+    // after (e.g. `news1-<team>.vercel.app`). The team-scoped variants are
+    // SSO-protected in Vercel teams, so picking the wrong one shows the user
+    // a login wall. Heuristics that build the URL from the deployment
+    // hostname pattern can't tell the difference — only inspect knows.
     if (result.url) {
-      // `vercel deploy --prod` output typically includes a "Production:" line
-      // with the clean alias URL (e.g., project-name.vercel.app)
-      const prodLine = lines.find(l => l.toLowerCase().includes('production:') && l.includes('https://'));
-      if (prodLine) {
-        const prodMatch = prodLine.match(/(https:\/\/[^\s"',]+)/);
-        if (prodMatch && prodMatch[1] !== result.url) {
-          result.productionUrl = prodMatch[1];
+      try {
+        const inspectOut = execSync(
+          `npx vercel inspect ${result.url} --format json`,
+          { cwd: ROOT_DIR, encoding: 'utf-8', stdio: 'pipe', timeout: 30000 }
+        );
+        // Vercel CLI prints a "Fetching deployment..." line on stderr, but
+        // with stdio: 'pipe' that's separated from stdout. stdout is pure JSON.
+        const meta = JSON.parse(inspectOut);
+        const aliases = Array.isArray(meta.aliases) ? meta.aliases : [];
+
+        // Identify team-scoped aliases by extracting the scope segment from
+        // the deployment hostname (`<project>-<9char-hash>-<scope>.vercel.app`).
+        // If the scope can be identified, drop any alias that ends in
+        // `-<scope>.vercel.app`. Otherwise fall back to "shortest alias".
+        let scope = '';
+        try {
+          const hostParts = new URL(result.url).hostname.replace('.vercel.app', '').split('-');
+          const hashIdx = hostParts.findIndex(p => /^[a-z0-9]{9}$/.test(p));
+          if (hashIdx > 0) {
+            scope = hostParts.slice(hashIdx + 1).join('-');
+          }
+        } catch {
+          // not critical
+        }
+
+        const publicAliases = scope
+          ? aliases.filter(a => !a.endsWith(`-${scope}.vercel.app`))
+          : aliases.slice();
+        const pick = (publicAliases[0] || aliases[0]);
+        if (pick) {
+          result.productionUrl = `https://${pick}`;
           result.steps.push(`Production URL: ${result.productionUrl}`);
         }
+      } catch (err) {
+        result.steps.push(`Warning: \`vercel inspect\` lookup failed: ${err.message || err}`);
       }
 
-      // Fallback: extract all .vercel.app URLs from the output, pick the shortest
-      // (the clean project alias, not the deployment-hash URL)
+      // Fallback: scan the deploy output for the shortest .vercel.app URL.
       if (!result.productionUrl) {
         const allUrls = lines.join(' ').match(/https:\/\/[a-z0-9][-a-z0-9]*\.vercel\.app/g);
         if (allUrls && allUrls.length > 1) {
           const sorted = [...new Set(allUrls)].sort((a, b) => a.length - b.length);
-          // Only use if it's shorter than the deployment URL (i.e., it's the alias)
           if (sorted[0].length < result.url.length) {
             result.productionUrl = sorted[0];
-            result.steps.push(`Production URL: ${result.productionUrl}`);
+            result.steps.push(`Production URL (fallback from deploy output): ${result.productionUrl}`);
           }
         }
       }
 
-      // Last resort: construct from project name in .vercel/project.json
-      // Vercel auto-assigns <project-name>.vercel.app for prod deployments
       if (!result.productionUrl) {
-        try {
-          const vercelProjectPath = path.join(ROOT_DIR, '.vercel', 'project.json');
-          if (fs.existsSync(vercelProjectPath)) {
-            const projectData = JSON.parse(fs.readFileSync(vercelProjectPath, 'utf-8'));
-            // project.json has orgId and projectId but not the name directly
-            // However, the project name is typically the directory name used during `vercel link`
-            // We can extract it from the deployment URL pattern: <project>-<hash>-<scope>.vercel.app
-            const urlHost = new URL(result.url).hostname; // e.g. test321-elu84vslp-harperaas-projects.vercel.app
-            const hostParts = urlHost.replace('.vercel.app', '').split('-');
-            // The project name is everything before the hash segment
-            // Hash is always 9 lowercase alphanumeric chars
-            const hashIndex = hostParts.findIndex(p => /^[a-z0-9]{9}$/.test(p));
-            if (hashIndex > 0) {
-              const projectName = hostParts.slice(0, hashIndex).join('-');
-              const scope = hostParts.slice(hashIndex + 1).join('-');
-              const alias = scope ? `${projectName}-${scope}.vercel.app` : `${projectName}.vercel.app`;
-              result.productionUrl = `https://${alias}`;
-              result.steps.push(`Production URL (derived): ${result.productionUrl}`);
-            }
-          }
-        } catch {
-          // Not critical
-        }
-      }
-
-      if (!result.productionUrl) {
-        result.steps.push('Warning: Could not determine production alias URL. You may need to run: npx vercel alias <deployment-url> <desired-alias>.vercel.app');
+        result.steps.push('Warning: Could not determine production alias URL. Run: npx vercel inspect <deployment-url> --format json to view aliases.');
       }
     }
   } catch (err) {
