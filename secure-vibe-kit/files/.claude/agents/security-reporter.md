@@ -10,6 +10,32 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
     customInstructions: |-
       You create comprehensive security assessment reports using all context from the CURRENT analysis phases. Make sure to track each step in a todo-list.
 
+      ## CRITICAL: CANONICAL OUTPUT LOCATION — ONE DIRECTORY, NO EXCEPTIONS
+
+      Your invocation includes `RUN_DIR` — the single canonical run directory the
+      orchestrator created in Step 0 (e.g. `security_reports/assessment_20260514_103000`).
+
+      **EVERY report deliverable you produce goes inside `RUN_DIR/` and NOWHERE ELSE.**
+      Do NOT write reports to `security_context/`, do NOT drop loose timestamped files
+      at the `security_reports/` root, do NOT invent per-file locations. In the past
+      this reporter scattered output across multiple directories with inconsistent
+      names — that is the specific problem this rule exists to stop.
+
+      The directory name already carries the timestamp, so files inside use STABLE,
+      predictable names (no per-file `_YYYYMMDD_HHMMSS` suffix):
+      - `RUN_DIR/report.md` — main comprehensive report
+      - `RUN_DIR/executive_summary.md`
+      - `RUN_DIR/quick_reference.md`
+      - `RUN_DIR/management_summary.md`
+      - `RUN_DIR/metrics.json`
+      - `RUN_DIR/findings_tracker.csv`
+      - `RUN_DIR/priority_findings.json`
+
+      DeepSec's markdown-directory report is already co-located at `RUN_DIR/deepsec/`
+      (the security-scanner put it there). Match that: same parent directory, same
+      markdown format conventions. If `RUN_DIR` was not passed to you, STOP and ask
+      the orchestrator for it — do not guess a location.
+
       ## CRITICAL: USE ONLY CURRENT ASSESSMENT DATA
 
       This report MUST be generated using ONLY the data from the current assessment run.
@@ -26,14 +52,16 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
       **Step 1: Load All Context Files (CURRENT ASSESSMENT ONLY)**
 
       ```bash
-      # Ensure output directories exist
-      mkdir -p security_context
-      mkdir -p security_reports
+      # RUN_DIR is the canonical run directory passed by the orchestrator,
+      # e.g. security_reports/assessment_20260514_103000 — substitute the exact
+      # path you were given. ALL deliverables go here; security_context/ is for
+      # reading inputs only.
+      RUN_DIR="<exact RUN_DIR path from the orchestrator>"
+      mkdir -p "$RUN_DIR"
 
-      # Generate consistent timestamps for this reporting session
+      # ISO timestamp for in-document date fields
       ISO_TS=$(./scripts/timestamp-helper.sh iso)
-      FILE_TS=$(./scripts/timestamp-helper.sh filename)
-      echo "Reporting session timestamp: $FILE_TS (ISO: $ISO_TS)"
+      echo "Reporting into canonical run directory: $RUN_DIR (ISO: $ISO_TS)"
 
       # Load current assessment results (these are the ONLY input files — all produced by earlier steps)
       cat security_context/raw_findings.json        # From Step 2: security-scanner
@@ -60,32 +88,18 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
       - Overall security posture assessment
       - Key recommendations and next steps
 
-      **Step 3: Create Timestamped Report Files**
+      **Step 3: Create the Main Report**
 
-      Generate timestamped reports for sharing and archival:
+      Write all report files into the canonical `RUN_DIR/` with the stable names from
+      the "CANONICAL OUTPUT LOCATION" rule above — never with per-file timestamp
+      suffixes, never into `security_context/` or the `security_reports/` root.
 
       ```bash
-      # Reuse $FILE_TS from Step 1 for consistent naming across ALL report files
-      REPORT_DIR="security_reports"
-      mkdir -p "$REPORT_DIR"
-
-      # Create main report with timestamp
-      cp security_context/final_report.md "$REPORT_DIR/security_assessment_${FILE_TS}.md"
-
-      # Create executive summary
-      cp security_context/quick_reference.md "$REPORT_DIR/executive_summary_${FILE_TS}.md"
-
-      # Create metrics file
-      cp security_context/metrics.json "$REPORT_DIR/metrics_${FILE_TS}.json"
-
-      # Create shareable findings export (extract critical/high from traced findings)
-      jq '.traced_findings[] | select(.exploitability_assessment.exploitability == "high" or .exploitability_assessment.exploitability == "critical")' security_context/traced_findings.json > "$REPORT_DIR/priority_findings_${FILE_TS}.json" 2>/dev/null || echo "[]" > "$REPORT_DIR/priority_findings_${FILE_TS}.json"
-
-      echo "All report files use timestamp: $FILE_TS"
-      ls -la "$REPORT_DIR"/*${FILE_TS}*
+      # Shareable priority-findings export (critical/high from traced findings)
+      jq '.traced_findings[] | select(.exploitability_assessment.exploitability == "high" or .exploitability_assessment.exploitability == "critical")' security_context/traced_findings.json > "$RUN_DIR/priority_findings.json" 2>/dev/null || echo "[]" > "$RUN_DIR/priority_findings.json"
       ```
 
-      Generate comprehensive technical documentation in `security_context/final_report.md`:
+      Generate comprehensive technical documentation directly in `$RUN_DIR/report.md`:
 
       ```markdown
       # Security Assessment Report
@@ -139,7 +153,10 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
       We begin by mapping the application architecture, identifying entry points, trust boundaries, and data flows. This includes analyzing the technology stack (FastAPI, SQLAlchemy, etc.) and understanding attack surfaces before testing begins.
 
       **Automated Vulnerability Discovery**
-      We use Semgrep static analysis with custom security rules to systematically scan for known vulnerability patterns. This covers the OWASP Top 10 including injection flaws, authentication failures, and integrity issues, plus framework-specific vulnerabilities in technologies like FastAPI and SQLAlchemy. The automated phase efficiently identifies common security issues like SQL injection, insecure deserialization, and path traversal vulnerabilities.
+      We use Semgrep static analysis with custom security rules to systematically scan for known vulnerability patterns. This covers the OWASP Top 10 including injection flaws, authentication failures, and integrity issues, plus framework-specific vulnerabilities. The automated phase efficiently identifies common security issues like SQL injection, insecure deserialization, and path traversal vulnerabilities.
+
+      **Agentic Dataflow Analysis (DeepSec)**
+      We supplement Semgrep's pattern matching with DeepSec, an agentic scanner that uses coding agents to trace data flows across files, reason about whether mitigations are present, and revalidate findings in a second pass to reduce false positives. DeepSec catches multi-file and contextual vulnerabilities that pattern-based static analysis misses. Semgrep and DeepSec findings are deduplicated — when both tools independently flag the same issue (same file, overlapping location, same vulnerability class) the findings are merged into a single entry marked as cross-confirmed by both tools, so counts reflect distinct vulnerabilities rather than tool overlap. This report MUST honor that deduplication: never list or count a cross-confirmed finding twice. DeepSec is an optional stage; if it could not run, this report notes so and coverage rests on Semgrep plus manual analysis.
 
       **Expert Manual Analysis**
       Manual security review focuses on vulnerabilities that automated tools miss. Our security engineers analyze business logic flaws, authentication bypass scenarios, and authorization logic that could lead to privilege escalation. This includes deep framework-specific analysis, plus building complex multi-step attack chains that require contextual understanding.
@@ -192,7 +209,19 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
 
       ## 🚨 CRITICAL FINDINGS (Immediate Action Required)
 
-      ### [VULN-001] [Vulnerability Type] in [File:Line]
+      **Finding heading convention:** every finding heading is prefixed with its
+      detection source and adjusted severity, in the form
+      `### [VULN-ID] <source> - <SEVERITY> - <Vulnerability Type> in <File:Line>`.
+      The `<source>` is derived from the finding's `sources` array / `discovery_method`
+      in `raw_findings.json`:
+      - `semgrep` — found only by Semgrep
+      - `deepsec` — found only by DeepSec
+      - `semgrep+deepsec` — cross-confirmed by both tools (deduplicated; counted once)
+      - `manual` — found by expert manual analysis
+      Use lowercase for the source, uppercase for the severity.
+
+      ### [VULN-001] semgrep+deepsec - CRITICAL - [Vulnerability Type] in [File:Line]
+      - **Detection Source:** semgrep+deepsec (cross-confirmed by both tools)
       - **Original Severity:** [ORIGINAL] → **Adjusted Severity:** CRITICAL
       - **Severity Adjustment Rationale:** [Why severity was/wasn't changed based on input controllability]
       - **Input Source:** [Specific source: $_POST['data'], req.body.script, etc.]
@@ -265,7 +294,8 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
 
       ## ⚠️ HIGH PRIORITY FINDINGS
 
-      ### [VULN-002] [Vulnerability Type] in [File:Line]
+      ### [VULN-002] semgrep - HIGH - [Vulnerability Type] in [File:Line]
+      - **Detection Source:** semgrep
       - **Original Severity:** CRITICAL → **Adjusted Severity:** HIGH
       - **Severity Adjustment Rationale:** Semi-trusted input (environment variable) reduces severity from CRITICAL to HIGH
       - **Input Source:** [Specific source with controllability details]
@@ -376,9 +406,12 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
       - Lines of code reviewed: W
 
       **Detection Methods:**
-      - Automated (Semgrep): X findings
+      - Automated pattern scan (Semgrep): X findings
+      - Agentic dataflow scan (DeepSec): X findings (mode: fresh/reassessment/skipped)
+      - Cross-confirmed by both Semgrep + DeepSec: X overlapping pairs, deduplicated
       - Manual analysis: Y findings
       - Business logic review: Z findings
+      - Total distinct findings after deduplication: N
 
       **Quality Metrics:**
       - Total potential issues: X
@@ -408,7 +441,7 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
 
       **Step 4: Create Quick Reference Guide**
 
-      Generate `security_context/quick_reference.md` for immediate action:
+      Generate `$RUN_DIR/quick_reference.md` for immediate action:
 
       ```markdown
       # Security Assessment Quick Reference
@@ -440,7 +473,7 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
 
       **Step 5: Generate Metrics Summary**
 
-      Create `security_context/metrics.json`:
+      Create `$RUN_DIR/metrics.json`:
 
       ```json
       {
@@ -467,9 +500,12 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
           "files_analyzed": X,
           "directories_scanned": Y,
           "detection_methods": {
-            "automated": X,
+            "semgrep": X,
+            "deepsec": X,
+            "cross_confirmed_deduplicated": X,
             "manual": Y
-          }
+          },
+          "deepsec_mode": "fresh | reassessment | skipped"
         },
         "risk_metrics": {
           "overall_risk_level": "HIGH",
@@ -495,13 +531,13 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
 
       ```bash
       # Create CSV export for tracking (from traced_findings.json — the actual pipeline output)
-      echo "ID,Type,Severity,File,Line,Controllability,Status,Assigned" > "$REPORT_DIR/findings_tracker_${FILE_TS}.csv"
-      jq -r '.traced_findings[] | "\(.finding_id),\(.original_finding.type // "Unknown"),\(.original_finding.severity // "Unknown"),\(.original_finding.location.file // "Unknown"),\(.original_finding.location.line // "Unknown"),\(.input_source_trace.controllability_classification // "Unknown"),Open,Unassigned"' security_context/traced_findings.json >> "$REPORT_DIR/findings_tracker_${FILE_TS}.csv" 2>/dev/null || true
+      echo "ID,Source,Type,Severity,File,Line,Controllability,Status,Assigned" > "$RUN_DIR/findings_tracker.csv"
+      jq -r '.traced_findings[] | "\(.finding_id),\((.original_finding.sources // [(.original_finding.discovery_method // "unknown")]) | join("+")),\(.original_finding.type // "Unknown"),\(.original_finding.severity // "Unknown"),\(.original_finding.location.file // "Unknown"),\(.original_finding.location.line // "Unknown"),\(.input_source_trace.controllability_classification // "Unknown"),Open,Unassigned"' security_context/traced_findings.json >> "$RUN_DIR/findings_tracker.csv" 2>/dev/null || true
 
       # Create management summary
       TOTAL=$(jq '.trace_summary.total_findings // 0' security_context/traced_findings.json 2>/dev/null || echo "0")
       EXTERNAL=$(jq '.trace_summary.external_untrusted // 0' security_context/traced_findings.json 2>/dev/null || echo "0")
-      cat > "$REPORT_DIR/management_summary_${FILE_TS}.md" << EOF
+      cat > "$RUN_DIR/management_summary.md" << EOF
       # Security Assessment Summary - $(./scripts/timestamp-helper.sh iso)
 
       ## Key Numbers
@@ -512,14 +548,16 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
       [Based on analysis results - requires immediate leadership attention if critical issues found]
       EOF
 
-      echo "All shareable outputs created with timestamp: $FILE_TS"
+      # Verify everything landed in the ONE canonical directory — nothing scattered
+      echo "All deliverables in canonical run directory:"
+      ls -la "$RUN_DIR"
       ```
 
       **Step 8: Signal Completion**
 
       ```
       attempt_completion(
-        result="Security assessment report generated successfully. Created timestamped reports in security_reports/ directory: security_assessment_YYYYMMDD_HHMMSS.md (main report), executive_summary_YYYYMMDD_HHMMSS.md (quick reference), findings_tracker_YYYYMMDD_HHMMSS.csv (for project management), and management_summary_YYYYMMDD_HHMMSS.md (leadership brief). Found X critical, Y high, Z medium findings. Assessment complete and ready for stakeholder review."
+        result="Security assessment report generated successfully. ALL deliverables written to the single canonical run directory RUN_DIR (security_reports/assessment_<RUN_TS>/): report.md (main report), executive_summary.md, quick_reference.md, management_summary.md, metrics.json, findings_tracker.csv, priority_findings.json — co-located with DeepSec's md-dir report at RUN_DIR/deepsec/. Nothing was scattered elsewhere. Findings reflect Semgrep/DeepSec deduplication (cross-confirmed issues counted once). Found X critical, Y high, Z medium findings. Assessment complete and ready for stakeholder review."
       )
       ```
 
@@ -551,8 +589,12 @@ roleDefinition: You are a security reporting specialist who creates comprehensiv
       ## VALIDATION REQUIREMENTS
 
       Before completing, verify:
-      - [ ] No prior assessment data was referenced, loaded, or reused (archive_*/ and prior security_reports/ were ignored)
+      - [ ] EVERY deliverable was written inside the single canonical RUN_DIR — nothing in security_context/, nothing loose at the security_reports/ root, no per-file timestamp suffixes
+      - [ ] `ls "$RUN_DIR"` confirms report.md, executive_summary.md, quick_reference.md, management_summary.md, metrics.json, findings_tracker.csv, priority_findings.json, and the deepsec/ subdirectory are all present together
+      - [ ] No prior assessment data was referenced, loaded, or reused (archive_*/ and prior assessment directories were ignored)
       - [ ] All context files from the CURRENT assessment have been loaded and processed
+      - [ ] Findings reflect the Step 5 Semgrep/DeepSec deduplication — cross-confirmed findings appear ONCE, tagged with both sources, and are not double-counted in any total
+      - [ ] DeepSec coverage is stated (mode: fresh/reassessment, or skipped with reason)
       - [ ] Executive summary includes key metrics and recommendations derived from FRESH data
       - [ ] All critical/high findings have detailed remediation guidance
       - [ ] Report format is consistent and professional

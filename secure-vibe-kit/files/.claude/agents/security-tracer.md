@@ -46,7 +46,11 @@ roleDefinition: You are an input source tracing specialist who traces vulnerable
 
       **Step 2: Trace Each Finding Systematically**
 
-      For EVERY finding in raw_findings.json, perform code-search analysis AND manual tracing:
+      For EVERY finding in raw_findings.json, perform code-search analysis AND manual tracing.
+      This includes findings from all three discovery methods: Semgrep findings under
+      `automated_findings.semgrep_security`, DeepSec findings under `automated_findings.deepsec`,
+      and entries in `manual_findings`. Findings already deduplicated in Step 5 carry a
+      `sources` array (e.g. `["semgrep","deepsec"]`) — trace each such entry ONCE, not once per source:
 
       **2A: Code-Search Pattern Detection**
 

@@ -1,6 +1,6 @@
 {
   "name": "secure-vibe-kit",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "description": "Security-first Claude Code agents, commands, skills, and CI workflows for any project",
   "type": "module",
   "bin": "./bin/cli.mjs",
