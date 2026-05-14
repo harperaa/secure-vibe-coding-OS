@@ -54,3 +54,6 @@ course-outline.tsx.txt
 
 # Auto Claude data directory
 .auto-claude/
+
+# DeepSec agentic scanner scaffolding/cache (created by `npx deepsec init`)
+.deepsec/

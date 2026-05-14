@@ -12,79 +12,6 @@ This Secure Vibe Coding OS is part of the [Secure Vibe Coding Masterclass](https
 
 See two sample course modules, in the docs folder.
 
-## 🔐 Secrets Management — Doppler (recommended) or Legacy `.env.local`
-
-This template supports two flows for environment variables. Pick one when running `/install`.
-
-### Doppler mode (recommended)
-
-[Doppler](https://docs.doppler.com/docs/start) is the single source of truth for all secrets across local dev, Vercel, Convex, and CI. The architecture is a **runtime fetch**: only `DOPPLER_TOKEN` lives in Vercel — actual app values are pulled from Doppler at build time and at function cold start. This means:
-
-- Rotate any secret in Doppler → next cold start uses the new value (zero redeploy for server secrets).
-- If Vercel is compromised, run `/rotate` — revokes the Vercel-side token in 5 seconds and walks per-credential rotation.
-- One CLI-driven setup; no dashboard clicks required.
-
-```bash
-# Local dev (two terminals):
-npm run convex:doppler   # Convex dev with Doppler env injected
-npm run dev:doppler      # Next.js dev with Doppler env injected
-
-# Sync Doppler dev secrets into Convex env:
-npm run sync:convex
-```
-
-### Legacy `.env.local` mode
-
-Values live in `.env.local` (gitignored), pushed to Vercel via `vercel env add` at deploy time. Use this if you don't want to use a secrets manager:
-
-```bash
-# Local dev (two terminals):
-npm run convex            # Convex dev
-npm run dev               # Next.js dev
-```
-
-`/install` asks which mode you want. The presence of `.doppler.yaml` in the repo signals Doppler mode for everything downstream (`/deploy-to-dev`, `/deploy-to-prod`, CI). For incident response in Doppler mode, run `/rotate`.
-
-**Doppler CLI install:** on **macOS** the helper tries `brew install dopplerhq/cli/doppler` first; if brew is missing or fails (e.g. outdated Xcode Command Line Tools), it automatically falls back to Doppler's official `curl | sudo sh` installer. On **Linux** it uses the curl installer directly. On **Windows** it tries `winget install Doppler.doppler` first (currently fails — Doppler isn't in the winget repo yet) and then `scoop install doppler` if scoop is already installed. If neither works, you'll see a clear error with three paths: install [scoop](https://scoop.sh) and re-run, run `/install` from a WSL shell, or download a release binary from https://github.com/DopplerHQ/cli/releases. We don't auto-install scoop because that requires changing PowerShell's execution policy — that's a decision you should make consciously.
-
-### Migrate an existing repo onto Doppler (`/migrate-to-doppler`)
-
-Already running in legacy `.env.local` mode and want to consolidate? `/migrate-to-doppler` walks an existing repo from scattered env-var management (`.env.local` + Vercel env + Convex env) into Doppler-mode (Doppler is the single source of truth; only `DOPPLER_TOKEN` is left in Vercel).
-
-```bash
-claude
-# Then type:
-/migrate-to-doppler
-```
-
-The flow is staged so nothing destructive happens without your confirmation:
-
-1. **Phase 0 — Preflight.** Bootstraps Doppler if `.doppler.yaml` is missing (creates the project, `dev`/`prd` configs, drives `doppler login`, pins the repo). Probes for the optional tools — `npx vercel`, `npx convex env`, `gh` — and tells you up-front which sources will be migrated based on what's available.
-2. **Phase 1 — Inventory (read-only).** Gathers every key found in `.env.local`, Convex env, and all three Vercel targets (production / preview / development). Displays a count-only table to keep secrets off the screen, plus an explicit **conflicts list** when the same key has different values across sources (with truncated previews) so you can see exactly what will land in Doppler. The full inventory is also written to `/tmp/doppler-migration-inventory.json` for offline review.
-3. **Phase 2 — Confirm.** `AskUserQuestion` gate before *any* Doppler write — push or cancel.
-4. **Phase 3 — Migrate (idempotent, non-destructive).** Pushes the union of `.env.local` + Convex + Vercel-Development + Vercel-Preview into Doppler `dev`, and Vercel-Production into Doppler `prd`. The merge rule is **most-local wins** (`.env.local` overrides Vercel-Development, etc.) so your local source of truth is honored. Re-running just overwrites the same keys.
-5. **Phase 4 — Cleanup (destructive, gated).** Only after the migration succeeds and you confirm a second `AskUserQuestion`, removes the now-redundant copies from Vercel and Convex env. Leaves `DOPPLER_TOKEN` (and a small allowlist of routing IDs like `CONVEX_DEPLOYMENT`) intact. Optionally pushes a fresh service token to GitHub Actions as `DOPPLER_TOKEN` via `gh`.
-
-The end state matches a clean `/install` in Doppler mode: only `DOPPLER_TOKEN` in Vercel, app values fetched at build time and runtime from Doppler, `.doppler.yaml` pinning the repo to the `dev` config, and CI authenticated via a service token.
-
-### Incident-response rotation (`/rotate`)
-
-`/rotate` is the Doppler-mode incident-response command. It's designed around the principle **containment first, remediation second**: revoke the Vercel-side `DOPPLER_TOKEN` *first* so any attacker stops being able to read Doppler, *then* walk you through rotating the underlying credentials at their sources. Doppler-mode only — legacy `.env.local` flows must be rotated manually.
-
-```bash
-claude
-# Then type:
-/rotate
-```
-
-The walkthrough:
-
-1. **Step 0 — Scope.** Asks three questions via `AskUserQuestion`: which environment is affected (`dev`, `prd`, or `Both`), what's suspected compromised (Vercel-side token / developer machine / a single leaked secret / unknown — assume worst case), and whether to rotate `SESSION_SECRET` (which logs every active user out — recommended for unknown / Vercel-side compromise).
-2. **Step 1 — Containment (seconds).** Revokes the existing `vercel-runtime-<config>` Doppler service token and issues a fresh one, then atomically replaces `DOPPLER_TOKEN` in Vercel for the affected target. Within seconds, the stolen token can no longer fetch from Doppler — even before any underlying secret is rotated.
-3. **Step 2 — Force a fresh runtime fetch.** Triggers a redeploy so warm Vercel function instances pick up the new token (otherwise some still hold cached values from the old one).
-4. **Step 3+ — Per-credential rotation.** Walks each underlying credential (Clerk Secret / Webhook Secret, Convex Deploy Key, payment provider keys, `SESSION_SECRET`, `CSRF_SECRET`, `REVALIDATE_TOKEN`, third-party API keys) — rotates it at the source, sets the new value in Doppler with `doppler secrets set ... --config <ENV>`, and confirms the rotation propagated. Each credential is its own gated step so you can pause if a step requires dashboard access or vendor support.
-
-The Doppler-mode runtime-fetch architecture is what makes this possible: rotating a secret in Doppler is enough to update production — no redeploy needed for server-side values, since the next cold start fetches fresh.
 
 ## Features
 
@@ -265,6 +192,80 @@ node scripts/setup.mjs init --site-name="My App" --admin-email="you@example.com"
 node scripts/setup.mjs convex-setup --project-name="My App"
 node scripts/setup.mjs configure --clerk-sk="sk_test_..." --admin-email="you@example.com"
 ```
+
+## 🔐 Secrets Management — Doppler (recommended) or Legacy `.env.local`
+
+This template supports two flows for environment variables. Pick one when running `/install`.
+
+### Doppler mode (recommended)
+
+[Doppler](https://docs.doppler.com/docs/start) is the single source of truth for all secrets across local dev, Vercel, Convex, and CI. The architecture is a **runtime fetch**: only `DOPPLER_TOKEN` lives in Vercel — actual app values are pulled from Doppler at build time and at function cold start. This means:
+
+- Rotate any secret in Doppler → next cold start uses the new value (zero redeploy for server secrets).
+- If Vercel is compromised, run `/rotate` — revokes the Vercel-side token in 5 seconds and walks per-credential rotation.
+- One CLI-driven setup; no dashboard clicks required.
+
+```bash
+# Local dev (two terminals):
+npm run convex:doppler   # Convex dev with Doppler env injected
+npm run dev:doppler      # Next.js dev with Doppler env injected
+
+# Sync Doppler dev secrets into Convex env:
+npm run sync:convex
+```
+
+### Legacy `.env.local` mode
+
+Values live in `.env.local` (gitignored), pushed to Vercel via `vercel env add` at deploy time. Use this if you don't want to use a secrets manager:
+
+```bash
+# Local dev (two terminals):
+npm run convex            # Convex dev
+npm run dev               # Next.js dev
+```
+
+`/install` asks which mode you want. The presence of `.doppler.yaml` in the repo signals Doppler mode for everything downstream (`/deploy-to-dev`, `/deploy-to-prod`, CI). For incident response in Doppler mode, run `/rotate`.
+
+**Doppler CLI install:** on **macOS** the helper tries `brew install dopplerhq/cli/doppler` first; if brew is missing or fails (e.g. outdated Xcode Command Line Tools), it automatically falls back to Doppler's official `curl | sudo sh` installer. On **Linux** it uses the curl installer directly. On **Windows** it tries `winget install Doppler.doppler` first (currently fails — Doppler isn't in the winget repo yet) and then `scoop install doppler` if scoop is already installed. If neither works, you'll see a clear error with three paths: install [scoop](https://scoop.sh) and re-run, run `/install` from a WSL shell, or download a release binary from https://github.com/DopplerHQ/cli/releases. We don't auto-install scoop because that requires changing PowerShell's execution policy — that's a decision you should make consciously.
+
+### Migrate an existing repo onto Doppler (`/migrate-to-doppler`)
+
+Already running in legacy `.env.local` mode and want to consolidate? `/migrate-to-doppler` walks an existing repo from scattered env-var management (`.env.local` + Vercel env + Convex env) into Doppler-mode (Doppler is the single source of truth; only `DOPPLER_TOKEN` is left in Vercel).
+
+```bash
+claude
+# Then type:
+/migrate-to-doppler
+```
+
+The flow is staged so nothing destructive happens without your confirmation:
+
+1. **Phase 0 — Preflight.** Bootstraps Doppler if `.doppler.yaml` is missing (creates the project, `dev`/`prd` configs, drives `doppler login`, pins the repo). Probes for the optional tools — `npx vercel`, `npx convex env`, `gh` — and tells you up-front which sources will be migrated based on what's available.
+2. **Phase 1 — Inventory (read-only).** Gathers every key found in `.env.local`, Convex env, and all three Vercel targets (production / preview / development). Displays a count-only table to keep secrets off the screen, plus an explicit **conflicts list** when the same key has different values across sources (with truncated previews) so you can see exactly what will land in Doppler. The full inventory is also written to `/tmp/doppler-migration-inventory.json` for offline review.
+3. **Phase 2 — Confirm.** `AskUserQuestion` gate before *any* Doppler write — push or cancel.
+4. **Phase 3 — Migrate (idempotent, non-destructive).** Pushes the union of `.env.local` + Convex + Vercel-Development + Vercel-Preview into Doppler `dev`, and Vercel-Production into Doppler `prd`. The merge rule is **most-local wins** (`.env.local` overrides Vercel-Development, etc.) so your local source of truth is honored. Re-running just overwrites the same keys.
+5. **Phase 4 — Cleanup (destructive, gated).** Only after the migration succeeds and you confirm a second `AskUserQuestion`, removes the now-redundant copies from Vercel and Convex env. Leaves `DOPPLER_TOKEN` (and a small allowlist of routing IDs like `CONVEX_DEPLOYMENT`) intact. Optionally pushes a fresh service token to GitHub Actions as `DOPPLER_TOKEN` via `gh`.
+
+The end state matches a clean `/install` in Doppler mode: only `DOPPLER_TOKEN` in Vercel, app values fetched at build time and runtime from Doppler, `.doppler.yaml` pinning the repo to the `dev` config, and CI authenticated via a service token.
+
+### Incident-response rotation (`/rotate`)
+
+`/rotate` is the Doppler-mode incident-response command. It's designed around the principle **containment first, remediation second**: revoke the Vercel-side `DOPPLER_TOKEN` *first* so any attacker stops being able to read Doppler, *then* walk you through rotating the underlying credentials at their sources. Doppler-mode only — legacy `.env.local` flows must be rotated manually.
+
+```bash
+claude
+# Then type:
+/rotate
+```
+
+The walkthrough:
+
+1. **Step 0 — Scope.** Asks three questions via `AskUserQuestion`: which environment is affected (`dev`, `prd`, or `Both`), what's suspected compromised (Vercel-side token / developer machine / a single leaked secret / unknown — assume worst case), and whether to rotate `SESSION_SECRET` (which logs every active user out — recommended for unknown / Vercel-side compromise).
+2. **Step 1 — Containment (seconds).** Revokes the existing `vercel-runtime-<config>` Doppler service token and issues a fresh one, then atomically replaces `DOPPLER_TOKEN` in Vercel for the affected target. Within seconds, the stolen token can no longer fetch from Doppler — even before any underlying secret is rotated.
+3. **Step 2 — Force a fresh runtime fetch.** Triggers a redeploy so warm Vercel function instances pick up the new token (otherwise some still hold cached values from the old one).
+4. **Step 3+ — Per-credential rotation.** Walks each underlying credential (Clerk Secret / Webhook Secret, Convex Deploy Key, payment provider keys, `SESSION_SECRET`, `CSRF_SECRET`, `REVALIDATE_TOKEN`, third-party API keys) — rotates it at the source, sets the new value in Doppler with `doppler secrets set ... --config <ENV>`, and confirms the rotation propagated. Each credential is its own gated step so you can pause if a step requires dashboard access or vendor support.
+
+The Doppler-mode runtime-fetch architecture is what makes this possible: rotating a secret in Doppler is enough to update production — no redeploy needed for server-side values, since the next cold start fetches fresh.
 
 ### Manual Installation
 
