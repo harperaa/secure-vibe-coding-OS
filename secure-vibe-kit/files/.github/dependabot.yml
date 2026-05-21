@@ -1,0 +1,45 @@
+version: 2
+
+updates:
+  # ── Application dependencies (npm) ──────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    # Supply-chain cooldown: hold VERSION-update PRs until a release has been
+    # public for N days, giving the ecosystem time to flag a malicious version
+    # before we adopt it. Security (advisory-driven) updates are exempt and
+    # still open immediately — so urgent CVE patches are never delayed.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 7
+    # Batch routine minor/patch bumps to cut PR noise; majors stay individual.
+    groups:
+      production-deps:
+        applies-to: version-updates
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      dev-deps:
+        applies-to: version-updates
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # ── GitHub Actions pinned in our workflows ──────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
