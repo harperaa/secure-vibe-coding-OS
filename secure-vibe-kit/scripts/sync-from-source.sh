@@ -13,7 +13,14 @@ echo "         to: $DEST"
 echo
 
 rsync -av --delete "$SOURCE/.claude/agents/"   "$DEST/.claude/agents/"
-rsync -av --delete "$SOURCE/.claude/commands/"  "$DEST/.claude/commands/"
+
+# Maintainer-only commands are NOT shipped to downstream projects — they manage
+# releasing/distributing THIS template (npm publish, git subtree push), not the
+# user's app. --delete also removes them from files/ if previously synced.
+rsync -av --delete \
+  --exclude='push-release.md' \
+  --exclude='push-security-skills.md' \
+  "$SOURCE/.claude/commands/"  "$DEST/.claude/commands/"
 rsync -av --delete "$SOURCE/.claude/skills/"    "$DEST/.claude/skills/"
 rsync -av --delete "$SOURCE/.github/workflows/" "$DEST/.github/workflows/"
 cp "$SOURCE/scripts/timestamp-helper.sh"        "$DEST/scripts/timestamp-helper.sh"
