@@ -73,9 +73,8 @@ This file is read automatically by Claude Code on every session.
 
 | Branch       | Purpose                          | How to sync with main        |
 |--------------|----------------------------------|------------------------------|
-| `main`       | Production — always deployable. Clean product template people clone; does NOT contain `secure-vibe-kit/` | Never rebase or merge into   |
+| `main`       | Production — always deployable   | Never rebase or merge into   |
 | `testing`    | Shared integration environment   | `/sync-testing-branch` (merge) |
-| `kit`        | Long-lived release branch holding `secure-vibe-kit/` (the published npm package). Rebuilt from `main` at release time | Overlay only — see below     |
 | `feat/name`  | Feature work                     | `/sync-feature-branch` (rebase) |
 | `fix/name`   | Bug fixes                        | `/sync-feature-branch` (rebase) |
 | `chore/name` | Maintenance                      | `/sync-feature-branch` (rebase) |
@@ -85,22 +84,6 @@ This file is read automatically by Claude Code on every session.
 - PRs go to `main` only — never merge `testing` into `main`
 - 1 reviewer minimum — you cannot approve your own PR
 - Never commit secrets or API keys
-
-### Release branch (`kit`) — how it works
-
-`secure-vibe-kit/` (the distributable npm starter, scaffolded into new projects via
-its CLI) is intentionally kept OFF `main` so people who clone the template don't
-inherit maintainer packaging. It lives only on the long-lived `kit` branch.
-
-- Develop normally on `main`. Skills, commands, agents, workflows, and `CLAUDE.md`
-  are authored on `main`.
-- At release, `/push-release` rebuilds the kit on the `kit` branch: it overlays the
-  released `main` and runs `secure-vibe-kit/scripts/sync-from-source.sh` so the
-  kit's `files/` mirror `main`'s `.claude/**`, workflows, and scripts.
-- **NEVER `git merge main` into `kit`.** `main` carries the commit that removed
-  `secure-vibe-kit/`, so a merge would delete the kit on `kit` too. Always refresh
-  with a pathspec overlay: `git checkout main -- .` (writes only paths that exist in
-  `main`; never deletes `kit`-only files). This rule is load-bearing.
 
 ---
 
