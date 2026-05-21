@@ -380,43 +380,28 @@ No tags or releases were created.
 
 ---
 
-## Step 9: Sync and bump secure-vibe-kit (before tagging)
+## Step 9: Bump the app version on `main`
 
-The kit's `files/` directory must be synced with the source repo and the version must match
-the git release BEFORE the tag is created, so the tagged commit includes these changes.
+> **Branch model (read this first).** `secure-vibe-kit/` does NOT live on `main`.
+> `main` is the clean product template that people clone — it must stay free of the
+> kit. The npm package lives on the long-lived **`kit`** branch and is rebuilt from
+> `main` at release time in Step 13. Here on `main` we only bump the **app** version
+> (root `package.json`); the kit's own `package.json` is bumped on the `kit` branch
+> in Step 13. Keep both equal to the release version so `npm view` and the GitHub
+> release page tell the same story.
 
-**Step 9A: Sync latest files into the package**
-
-```bash
-cd secure-vibe-kit && ./scripts/sync-from-source.sh
-```
-
-**Step 9B: Set the package version to match the release version**
-
-BOTH the root `package.json` and `secure-vibe-kit/package.json` versions MUST match
-the repo release version (e.g., v4.0.1 → "4.0.1"). Use `npm pkg set` to write the
-exact version — do NOT use `npm version major/minor/patch`.
+Bump the root `package.json` to the release version (X.Y.Z, no "v"). Use
+`npm pkg set` — do NOT use `npm version major/minor/patch`.
 
 ```bash
 npm pkg set version="X.Y.Z"
-cd secure-vibe-kit && npm pkg set version="X.Y.Z" && cd ..
-```
-
-Where X.Y.Z is the version number from Step 4 (without the "v" prefix). The first
-command updates the root `package.json` (the app); the second updates the kit (the
-distributable starter package). Keeping both in sync makes `npm view` and the GitHub
-release page tell the same story about what's deployed.
-
-**Step 9C: Commit and push the sync + version bump**
-
-```bash
-git add package.json secure-vibe-kit/
-git commit -m "chore: sync secure-vibe-kit files and bump to X.Y.Z for release"
+git add package.json
+git commit -m "chore: bump to X.Y.Z for release"
 git push origin main
 ```
 
-This ensures the tag we create in the next step points to a commit that contains the
-synced files and matching version.
+This is the commit the tag will point to in Step 10. (There is nothing kit-related
+to commit on `main` — that happens on the `kit` branch in Step 13.)
 
 ---
 
@@ -479,37 +464,51 @@ gh release create v2.1.0 \
 
 ---
 
-## Step 13: Publish secure-vibe-kit to npm
+## Step 13: Build and publish secure-vibe-kit from the `kit` branch
 
-The kit was already synced and versioned in Step 9, so at this point `secure-vibe-kit/` is
-ready to publish. Both `npm login` and `npm publish` require browser-based authentication
-which cannot complete non-interactively — the user must run these commands themselves.
+`secure-vibe-kit/` lives ONLY on the long-lived `kit` branch (see the Step 9 branch
+model). Build it fresh from the `main` you just released, then publish.
 
-First, check if the user is logged in by running `npm whoami`. If it fails with 401,
-tell the user to log in first.
+> **CRITICAL — never `git merge main` into `kit`.** `main` carries the commit that
+> removed `secure-vibe-kit/`; a merge would delete it on `kit` too. Always refresh
+> with a **pathspec overlay** (`git checkout main -- .`), which writes only the paths
+> that exist in `main` and never deletes `kit`-only files like `secure-vibe-kit/`.
 
-Display this to the user:
+**Step 13A: Build the kit from the released `main`** (you run these):
+
+```bash
+git checkout kit
+git checkout main -- .                          # overlay main's tree — NOT a merge
+./secure-vibe-kit/scripts/sync-from-source.sh   # files/ <- main's .claude/**, workflows, scripts
+# If main's CLAUDE.md changed, manually update secure-vibe-kit/files/CLAUDE.md
+#   (do NOT copy project-specific lines — see the sync script's closing note)
+( cd secure-vibe-kit && npm pkg set version="X.Y.Z" )
+git add -A
+git commit -m "chore(kit): build vX.Y.Z from main"
+git push origin kit
+```
+
+**Step 13B: Publish to npm** (interactive — the USER runs these; do NOT run them
+yourself, both require a browser/OTP):
 
 ```
-📦 secure-vibe-kit is ready to publish at version X.Y.Z.
+📦 secure-vibe-kit is built on the `kit` branch at version X.Y.Z.
 
-Step 1 — Log in to npm (skip if already logged in):
-
-  ! npm login
-
-Step 2 — Publish (will open a browser for OTP approval):
-
+  ! npm whoami                         # if 401: ! npm login
   ! npm publish ./secure-vibe-kit
-
-Step 3 — Verify:
-
   ! npm view secure-vibe-kit versions --json
 ```
 
-**Wait for the user to confirm the publish succeeded, then continue.**
+**Wait for the user to confirm the publish succeeded.**
 
-Do NOT attempt to run `npm login` or `npm publish` yourself — both require the user's interactive terminal.
-Do NOT let an npm publish failure block the overall release — the git tag and GitHub release are the primary deliverables.
+**Step 13C: Return to `main`** so the working tree is back on the product branch:
+
+```bash
+git checkout main
+```
+
+Do NOT let an npm publish failure block the release — the `main` tag and GitHub
+release (Steps 10–12) are the primary deliverables.
 
 ---
 
@@ -525,8 +524,9 @@ Display final summary:
 Version: v2.1.0
 Type: Minor Release
 Commits: 3 commits included
-Tag: Created and pushed
-Release: Published on GitHub
+Tag: Created and pushed (on main)
+Release: Published on GitHub (from main)
+Kit: rebuilt from main on the `kit` branch
 npm: secure-vibe-kit@[version] published
 
 📦 Release URL:

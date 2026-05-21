@@ -57,3 +57,8 @@ course-outline.tsx.txt
 
 # DeepSec agentic scanner scaffolding/cache (created by `npx deepsec init`)
 .deepsec/
+
+# secure-vibe-kit is tracked source (the published npm package), but never
+# commit build/publish artifacts generated inside it
+secure-vibe-kit/node_modules/
+secure-vibe-kit/*.tgz
