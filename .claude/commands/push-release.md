@@ -505,6 +505,9 @@ yourself, both require a browser/OTP):
 
 ```bash
 git checkout main
+# git leaves empty secure-vibe-kit/ dirs behind after the kit→main switch.
+# They're untracked and never part of main — remove the skeleton so main looks clean.
+rm -rf secure-vibe-kit
 ```
 
 Do NOT let an npm publish failure block the release — the `main` tag and GitHub
