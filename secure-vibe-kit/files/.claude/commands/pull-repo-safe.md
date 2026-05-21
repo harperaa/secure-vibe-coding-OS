@@ -7,6 +7,21 @@ description: Safely pull latest template updates and merge with your customizati
 
 You are the template merge assistant for Secure Vibe Coding OS. You safely pull updates from the upstream template repository and intelligently merge them while preserving all user customizations.
 
+## Modes
+
+This command accepts an optional argument: `$ARGUMENTS`
+
+- **Default (no argument):** full safe-merge flow (Phases 1–5).
+- **`--dry-run`:** read-only preview. Reports exactly which incoming files the
+  merge WOULD overwrite, merge, preserve, or add — applying the same A/B/C/D
+  categorization as a real run — then STOPS. Makes NO commits, NO push, NO merge,
+  NO `npm install`. Follow the "Dry-Run Flow" section below and do NOT execute
+  Phases 1, 4, or 5.
+
+A raw `git diff` lists every changed file and is category-blind, so it overstates
+the impact — it shows your landing pages, dashboard, blog, and README even though
+those are PRESERVED. The dry run exists to show the true, categorized impact.
+
 ## File Categorization Rules
 
 Every changed file falls into one of four categories. Use these glob patterns to classify:
@@ -55,7 +70,64 @@ Only add genuinely new content if clearly additive.
 ### Category D: "New files" — Accept entirely
 Files in the template that do NOT exist in the user's repo. Always accept.
 
+## Dry-Run Flow (ONLY when invoked with `--dry-run`)
+
+Run ONLY these read-only steps. Do NOT commit, push, add files, run `npm install`,
+or merge. Skip Phases 1–5 entirely.
+
+1. **Ensure upstream is available (non-destructive):**
+   - Run `git remote get-url upstream`. If it is missing:
+     - If `origin` contains `harperaa/secure-vibe-coding-OS` → STOP with the same
+       guidance as Phase 2 (origin still points at the template).
+     - Otherwise run `git remote add upstream https://github.com/harperaa/secure-vibe-coding-OS.git`
+       (adding a remote changes nothing in your tree).
+   - Run `git fetch upstream`.
+
+2. **List incoming changes:**
+   - `git log HEAD..upstream/main --oneline` — if empty, print "Already up to date
+     with template! Nothing would be pulled." and STOP.
+   - `git diff HEAD...upstream/main --name-status`.
+
+3. **Categorize every changed file** with the A/B/C/D rules above, and map each to
+   the action a real run WOULD take:
+
+   | Category | Dry-run verdict |
+   |----------|-----------------|
+   | A (template infrastructure) | OVERWRITTEN — template version replaces yours |
+   | B (shared infrastructure)   | MERGED — your changes + template changes combined |
+   | C (user customizations)     | PRESERVED — your version kept, template change ignored |
+   | D (new file, absent locally)| ADDED — new file, no conflict |
+   | Deleted in upstream (`D`)    | WOULD ASK — you'd be prompted whether to delete |
+
+4. **Print the preview** — the summary table first, then a per-file list grouped by
+   verdict so the user sees precisely what changes vs. what is left untouched:
+
+   ```
+   ## Dry-Run Preview — N commits incoming from template
+
+   ### 🔴 OVERWRITTEN — template version replaces yours (N)
+   - <files>
+
+   ### 🟡 MERGED — your changes + template combined (N)
+   - <files>
+
+   ### 🟢 PRESERVED — your version kept, template change ignored (N)
+   - <files>
+
+   ### ➕ ADDED — new files (N)
+   - <files>
+
+   ### ❓ WOULD ASK — deletions / ambiguous (N)
+   - <files>
+   ```
+
+5. **STOP.** Print: "Dry run only — no changes were made. Run `/pull-repo-safe`
+   (no argument) to perform the merge." Do NOT continue to Phase 1.
+
 ## Phase 1: Save User's Work
+
+> **Skip this entire phase (and Phases 2–5) when `--dry-run` was passed** — use the
+> Dry-Run Flow above instead.
 
 1. Run `git status` to check for uncommitted changes.
 2. If there are uncommitted changes:
