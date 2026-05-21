@@ -488,18 +488,40 @@ git commit -m "chore(kit): build vX.Y.Z from main"
 git push origin kit
 ```
 
-**Step 13B: Publish to npm** (interactive — the USER runs these; do NOT run them
-yourself, both require a browser/OTP):
+**Step 13B: Publish to npm — run each step yourself (the assistant), one at a time.**
 
-```
-📦 secure-vibe-kit is built on the `kit` branch at version X.Y.Z.
+Execute these via the Bash tool sequentially, reporting the result of each before
+moving to the next. Only the two genuinely interactive cases (browser login, OTP)
+fall back to the user — and those run in THIS session via the `!` prefix, never a
+separate terminal.
 
-  ! npm whoami                         # if 401: ! npm login
-  ! npm publish ./secure-vibe-kit
-  ! npm view secure-vibe-kit versions --json
-```
+1. **Check auth** — run:
+   ```bash
+   npm whoami
+   ```
+   - Prints a username → already authenticated, go to step 2.
+   - Fails with **E401** → the assistant cannot drive npm's browser login. Ask the
+     user to authenticate once, in this session: `! npm login`. Wait for them to
+     confirm, then re-run `npm whoami` yourself and continue.
 
-**Wait for the user to confirm the publish succeeded.**
+2. **Publish** — run:
+   ```bash
+   npm publish ./secure-vibe-kit
+   ```
+   - Success → go to step 3.
+   - Fails requesting a **one-time password** (2FA "auth and publish") → the
+     assistant can't read the user's authenticator. Ask the user to run it in this
+     session with their code: `! npm publish ./secure-vibe-kit --otp=<code>`.
+   - Any other failure → report it and continue (do not block the release).
+
+3. **Verify** — run:
+   ```bash
+   npm view secure-vibe-kit versions --json
+   ```
+   Confirm the new X.Y.Z version is listed.
+
+Run these while the working tree is still on the `kit` branch (Step 13A left it
+there) so `./secure-vibe-kit` exists.
 
 **Step 13C: Return to `main`** so the working tree is back on the product branch:
 
