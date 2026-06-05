@@ -27,6 +27,21 @@ const DOPPLER_MARKER = path.join(ROOT_DIR, '.doppler.yaml');
 let _projectName = null;
 export function getProjectName() {
   if (_projectName) return _projectName;
+
+  // Prefer the project name persisted in .doppler.yaml — that's the user's
+  // chosen name, written by `doppler setup` during /install's doppler-bootstrap.
+  // Without this, every downstream consumer (sync-convex-env, deploy.mjs,
+  // rotate, etc.) would read package.json's template name and look at the
+  // wrong Doppler project.
+  if (fs.existsSync(DOPPLER_MARKER)) {
+    const yaml = fs.readFileSync(DOPPLER_MARKER, 'utf-8');
+    const match = yaml.match(/^\s*project:\s*(.+?)\s*$/m);
+    if (match && match[1]) {
+      _projectName = match[1];
+      return _projectName;
+    }
+  }
+
   const pkgPath = path.join(ROOT_DIR, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
   _projectName = pkg.name;

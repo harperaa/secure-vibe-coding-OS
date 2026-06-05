@@ -204,11 +204,80 @@ async function runCheckTools() {
 }
 
 // ---------------------------------------------------------------------------
+// gh-context Subcommand
+// Returns the authenticated GitHub username, token scopes (incl. whether the
+// "workflow" scope is granted), and the orgs the user belongs to. Consumed by
+// /deploy-to-dev to confirm the right account/org BEFORE creating any repo.
+// ---------------------------------------------------------------------------
+
+async function runGhContext() {
+  const result = {
+    success: false,
+    ghInstalled: false,
+    ghAuthenticated: false,
+    username: null,
+    scopes: [],
+    hasWorkflowScope: false,
+    orgs: [],
+  };
+
+  if (!tryExec('gh --version')) {
+    result.error = 'gh_not_installed';
+    result.hint = os.platform() === 'darwin'
+      ? 'brew install gh'
+      : 'See https://cli.github.com/manual/installation';
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  result.ghInstalled = true;
+
+  // gh auth status writes to stderr; capture both via tryExecResult
+  const status = tryExecResult('gh auth status');
+  if (!status.success) {
+    result.error = 'gh_not_authenticated';
+    result.hint = 'Run: gh auth login';
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  result.ghAuthenticated = true;
+
+  // Parse scopes from `gh auth status` output. Format example:
+  //   "Token scopes: 'gist', 'read:org', 'repo', 'workflow'"
+  const statusText = `${status.stdout || ''}\n${status.stderr || ''}`;
+  const scopeLine = statusText.match(/Token scopes?:\s*(.+)/i);
+  if (scopeLine) {
+    result.scopes = scopeLine[1]
+      .split(',')
+      .map(s => s.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(Boolean);
+  }
+  result.hasWorkflowScope = result.scopes.includes('workflow');
+
+  // Authenticated username
+  const username = tryExec('gh api user --jq .login');
+  if (username) result.username = username.trim();
+
+  // Orgs the user is a member of
+  const orgsOut = tryExec("gh api user/orgs --jq '.[].login'");
+  if (orgsOut) {
+    result.orgs = orgsOut.split('\n').map(s => s.trim()).filter(Boolean);
+  }
+
+  result.success = !!(result.username);
+  console.log(JSON.stringify(result, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // github-setup Subcommand
 // ---------------------------------------------------------------------------
 
 async function runGithubSetup(args) {
   const repoName = args['repo-name'];
+  // Optional: target owner (user or org). When provided, the repo is created as
+  // OWNER/REPO so it lands under that org instead of the authenticated user's
+  // personal account. Without OWNER/, `gh repo create REPO` always uses the
+  // user's account, which has caused org-targeted deploys to land personally.
+  const owner = args['owner'];
 
   if (!repoName) {
     console.error(JSON.stringify({
@@ -223,6 +292,8 @@ async function runGithubSetup(args) {
     steps: [],
     repoUrl: null,
     remoteUrl: null,
+    requestedOwner: owner || null,
+    actualOwner: null,
     upstreamPreserved: false,
   };
 
@@ -280,9 +351,12 @@ async function runGithubSetup(args) {
     }
   }
 
-  // Create private repo via gh CLI
+  // Create private repo via gh CLI. When OWNER is given, pass OWNER/REPO so the
+  // repo is created under that user or org. Without OWNER/, gh always defaults
+  // to the authenticated user's personal account.
+  const repoArg = owner ? `${owner}/${repoName}` : repoName;
   const createResult = tryExecResult(
-    `gh repo create "${repoName}" --private --source=. --remote=origin --push`,
+    `gh repo create "${repoArg}" --private --source=. --remote=origin --push`,
     { timeout: 60000 }
   );
 
@@ -295,6 +369,7 @@ async function runGithubSetup(args) {
     console.log(JSON.stringify({
       success: false,
       error,
+      requestedOwner: owner || null,
       detail: errorOutput.substring(0, 500),
     }));
     return;
@@ -311,6 +386,27 @@ async function runGithubSetup(args) {
     result.repoUrl = newOrigin
       .replace(/\.git$/, '')
       .replace(/^git@github\.com:/, 'https://github.com/');
+
+    // Extract the actual owner from the new remote URL and verify it matches.
+    // GitHub usernames/orgs are case-preserved but URL matches are
+    // case-insensitive, so compare with toLowerCase.
+    const ownerMatch = newOrigin.match(/github\.com[:/]([^/]+)\//);
+    result.actualOwner = ownerMatch ? ownerMatch[1] : null;
+
+    if (owner && result.actualOwner &&
+        result.actualOwner.toLowerCase() !== owner.toLowerCase()) {
+      // The repo was created somewhere other than what /deploy-to-dev intended
+      // (the historical bug — personal account instead of the selected org).
+      console.log(JSON.stringify({
+        success: false,
+        error: 'owner_mismatch',
+        requestedOwner: owner,
+        actualOwner: result.actualOwner,
+        remoteUrl: newOrigin,
+        hint: `Repo landed under '${result.actualOwner}' instead of '${owner}'. Delete it (gh repo delete ${result.actualOwner}/${repoName} --yes) or transfer it (gh repo transfer ${result.actualOwner}/${repoName} ${owner}), then re-run /deploy-to-dev.`,
+      }, null, 2));
+      return;
+    }
   }
 
   result.steps.push(`New origin: ${newOrigin}`);
@@ -1484,6 +1580,10 @@ async function runWriteSummary(args) {
   const siteName = args['site-name'] || '(not set)';
   const adminEmail = args['admin-email'] || '(not set)';
   const googleOAuth = args['google-oauth'] || 'skipped';
+  // Stripe status: "configured" | "skipped" | "deferred". Defaults to "skipped"
+  // so /deploy-to-prod's default-skip Stripe path produces the right doc
+  // without forcing every caller to pass the flag explicitly.
+  const stripeStatus = args['stripe-status'] || 'skipped';
   const webhookUrl = args['webhook-url'] || '(not configured)';
   const dashboardUrl = args['dashboard-url'] || '';
   const deployType = args['deploy-type'] || 'prod'; // 'dev' or 'prod'
@@ -1588,6 +1688,41 @@ async function runWriteSummary(args) {
     lines.push(``);
   }
 
+  // When this is a PROD deploy and Stripe was skipped/deferred (the default
+  // /deploy-to-prod path), inject a dedicated "Enable Stripe Billing Later"
+  // section. /deploy-to-prod provides NO live guidance about Stripe in this
+  // case — the doc is the single source of truth for how to add it post-deploy.
+  if (!isDev && (stripeStatus === 'skipped' || stripeStatus === 'deferred')) {
+    lines.push(`## Enable Stripe Billing Later`);
+    lines.push(``);
+    lines.push(`Stripe billing was skipped during this deployment. When you're ready to`);
+    lines.push(`accept payments, complete these steps — you do NOT need to re-run`);
+    lines.push(`/deploy-to-prod:`);
+    lines.push(``);
+    lines.push(`1. **Create a Stripe account** at https://dashboard.stripe.com/register`);
+    lines.push(`   - Complete identity verification (required to leave test mode)`);
+    lines.push(``);
+    lines.push(`2. **Connect Stripe to Clerk Billing**`);
+    lines.push(`   - Open Clerk Dashboard: https://dashboard.clerk.com`);
+    lines.push(`   - Switch to your **Production** instance (top toggle)`);
+    lines.push(`   - Go to **Billing** in the left sidebar`);
+    lines.push(`   - Click **Connect Stripe** and follow the onboarding`);
+    lines.push(`   - Stripe redirects back to Clerk when done`);
+    lines.push(``);
+    lines.push(`3. **Create your first subscription plan**`);
+    lines.push(`   - Clerk Dashboard → Billing → Plans → **Create Plan**`);
+    lines.push(`   - Set a name, monthly price, and the features included`);
+    lines.push(`   - Save the plan`);
+    lines.push(``);
+    lines.push(`4. **Go live**`);
+    lines.push(`   - Toggle Clerk Billing from **Test Mode** to **Live Mode**`);
+    lines.push(`   - Confirm your Stripe account is fully activated`);
+    lines.push(``);
+    lines.push(`No code changes are required — the app already uses Clerk Billing`);
+    lines.push(`primitives; flipping the switches above enables real subscriptions.`);
+    lines.push(``);
+  }
+
   lines.push(`## Optional Next Steps`);
   lines.push(``);
   lines.push(`1. **Custom Domain**: Vercel Dashboard → Settings → Domains → Add your domain`);
@@ -1681,6 +1816,9 @@ const command = args._cmd;
 switch (command) {
   case 'check-tools':
     await runCheckTools();
+    break;
+  case 'gh-context':
+    await runGhContext();
     break;
   case 'github-setup':
     await runGithubSetup(args);

@@ -1,11 +1,11 @@
 ---
 allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Read, Edit, Write
-description: Full production deployment (Clerk prod + Convex prod + Vercel + Google OAuth + Stripe)
+description: Full production deployment (Clerk prod + Convex prod + Vercel + Google OAuth + optional Stripe)
 ---
 
 # /deploy-to-prod - Full Production Deployment
 
-You are the production deployment assistant for Secure Vibe Coding OS. You will guide the user through a full production deployment with Clerk production keys, Convex production deployment, Google OAuth, and Stripe billing.
+You are the production deployment assistant for Secure Vibe Coding OS. You will guide the user through a full production deployment with Clerk production keys, Convex production deployment, Google OAuth, and (optionally) Stripe billing. **Stripe is skipped by default** — the user is asked up front and the default is to defer it; instructions for enabling Stripe later are written into `docs/DEPLOYMENT-PROD.md` automatically.
 
 **Important context:** The user has already run `/install` and has a working local development setup. They may or may not have run `/deploy-to-dev` first.
 
@@ -13,7 +13,7 @@ You are the production deployment assistant for Secure Vibe Coding OS. You will 
 
 If `.doppler.yaml` exists in the repo root, this deployment runs in **Doppler mode**. Secrets are sourced from the Doppler `prd` config rather than from `.env.local` and `vercel env`. The architectural differences:
 
-- The operator must populate the Doppler `prd` config **before** the corresponding phase runs. As you collect each production credential (Clerk prod keys in Phase 3, Stripe in Phase 5, Convex deploy key in Phase 6, etc.), push it immediately to Doppler:
+- The operator must populate the Doppler `prd` config **before** the corresponding phase runs. As you collect each production credential (Clerk prod keys in Phase 3, Stripe in Phase 5 **only when `<SKIP_STRIPE>` is false**, Convex deploy key in Phase 6, etc.), push it immediately to Doppler:
   ```
   doppler secrets set CLERK_SECRET_KEY="$SK" --project $(node -p "require('./package.json').name") --config prd
   ```
@@ -26,7 +26,7 @@ The legacy mode (`.env.local` → `vercel env add` → secrets stored in Vercel)
 
 **Prerequisites the user must have BEFORE running this command:**
 - A custom domain they own (e.g., `myapp.com`) — Clerk production requires this, `*.vercel.app` is not accepted
-- A Stripe account (for Clerk Billing integration)
+- A Stripe account — **optional**, only if the user chooses "Set up Stripe now" in the upfront question. The default is to skip Stripe and enable it later (instructions are written into `docs/DEPLOYMENT-PROD.md`).
 - Google OAuth credentials (optional — for Google social login)
 
 ## Phase 1: Verify Prerequisites
@@ -44,16 +44,38 @@ The legacy mode (`.env.local` → `vercel env add` → secrets stored in Vercel)
    - `NEXT_PUBLIC_SITE_NAME`
    If any are missing: STOP. Display: "Run `/install` first to set up the app."
 
-**AskUserQuestion**: "Before we begin, please confirm you have these prerequisites ready:"
-- Options:
-  - "Yes, I have a custom domain and Stripe account" — I'm ready to proceed
-  - "I'm missing something" — I need guidance on what's required
-- Header: "Prerequisites"
-- multiSelect: false
+**AskUserQuestion** (ask BOTH questions in a single batch — the user should see them together):
 
-**If "I'm missing something":**
+```json
+{
+  "questions": [
+    {
+      "question": "Stripe billing — set it up now, or skip and enable later?",
+      "header": "Stripe billing",
+      "multiSelect": false,
+      "options": [
+        { "label": "Skip Stripe for now (Recommended)", "description": "Deploy to production without billing. Instructions for connecting Stripe + Clerk Billing later will be written into docs/DEPLOYMENT-PROD.md." },
+        { "label": "Set up Stripe now", "description": "I have a Stripe account ready and want to connect it to Clerk during this deploy." }
+      ]
+    },
+    {
+      "question": "Confirm you have the required prerequisites ready:",
+      "header": "Prerequisites",
+      "multiSelect": false,
+      "options": [
+        { "label": "Yes, I'm ready to proceed", "description": "I have a custom domain. (If I chose 'Set up Stripe now' above, I also have a Stripe account ready.)" },
+        { "label": "I'm missing something", "description": "Show me what I need." }
+      ]
+    }
+  ]
+}
+```
 
-Display:
+**Persist the Stripe answer as `<SKIP_STRIPE>` (`true` if "Skip Stripe for now", `false` if "Set up Stripe now"). Carry it through every phase below.** Default behavior throughout: `SKIP_STRIPE=true`.
+
+**If the prerequisites answer was "I'm missing something":**
+
+Display (omit item #2 entirely if `<SKIP_STRIPE>` is true):
 ```
 Production deployment requires these things prepared in advance:
 
@@ -62,17 +84,19 @@ Production deployment requires these things prepared in advance:
    - You'll enter this when creating the Clerk production instance
    - *.vercel.app domains are NOT accepted by Clerk
 
-2. **Stripe Account** (required for Clerk Billing)
+2. **Stripe Account** (required only if you chose "Set up Stripe now")
    - Sign up at https://dashboard.stripe.com/register
    - Complete identity verification
    - You'll connect it to Clerk during this process
+   - You can also skip this now and enable Stripe later — re-run /deploy-to-prod
+     is NOT required; instructions for adding Stripe will land in docs/DEPLOYMENT-PROD.md
 
 3. **Google OAuth Credentials** (optional — for Google social login)
    - Create at https://console.cloud.google.com/apis/credentials
    - You'll need a Client ID and Client Secret
    - Can be set up later if not ready now
 
-Come back and run /deploy-to-prod when you have at least #1 and #2 ready.
+Come back and run /deploy-to-prod when you have #1 ready.
 
 In the meantime, you can run /deploy-to-dev to get your app on Vercel with dev keys.
 ```
@@ -209,6 +233,21 @@ AskUserQuestion: "Have you completed the Google OAuth setup in both Google Cloud
 
 ## Phase 5: Stripe Billing via Clerk
 
+**If `<SKIP_STRIPE>` is true (the default):** SKIP this phase entirely. Display
+one line and move on:
+
+```
+⏭  Skipping Stripe billing setup per your earlier choice. Instructions for
+   connecting Stripe + Clerk Billing later will be written into
+   docs/DEPLOYMENT-PROD.md by Phase 12.
+```
+
+Do NOT show the Clerk Dashboard / Stripe walkthrough below. Do NOT ask the
+follow-up confirmation question. Do NOT push any Stripe credential to Doppler.
+Set `<STRIPE_STATUS>` = `"skipped"` and continue to Phase 6.
+
+**If `<SKIP_STRIPE>` is false:** run this phase as written.
+
 Display instructions:
 ```
 Now let's connect Stripe billing to your Clerk production instance.
@@ -233,6 +272,9 @@ AskUserQuestion: "Have you connected Stripe to Clerk and created at least one pl
   - "Yes, billing is configured" — Stripe is connected and I have a plan
   - "I'll set up billing later" — Skip for now, I can enable it later
 - Header: "Stripe done"
+
+Set `<STRIPE_STATUS>` = `"configured"` if "Yes, billing is configured", else
+`"deferred"` (treated like skipped for the final summary).
 
 ## Phase 6: Convex Deploy Key
 
@@ -394,9 +436,16 @@ Parse JSON output:
 
 ## Phase 12: Write Summary + Completion
 
-Build write-summary arguments from all collected data. Include google-oauth status and billing status.
+Build write-summary arguments from all collected data. Include google-oauth status, billing status, and Stripe status.
 
-Run: `node scripts/deploy.mjs write-summary --deploy-type="prod" --vercel-url="<URL>" --repo-url="<URL>" --convex-prod-url="<URL>" --convex-site-url="<URL>" --frontend-api-url="<URL>" --site-name="<NAME>" --admin-email="<EMAIL>" --google-oauth="<configured|skipped>" --webhook-url="<URL>" --completed-steps="<STEPS>" --skipped-steps="<STEPS>" --vercel-vars="<VARS>" --convex-vars="<VARS>"`
+**Stripe status mapping:**
+- If `<SKIP_STRIPE>` is true → pass `--stripe-status="skipped"`, add "Stripe billing (deferred)" to `--skipped-steps`, do NOT add a Stripe item to `--completed-steps`.
+- If `<SKIP_STRIPE>` is false and `<STRIPE_STATUS>` is `"configured"` → pass `--stripe-status="configured"`, add "Stripe billing connected" to `--completed-steps`.
+- If `<SKIP_STRIPE>` is false and `<STRIPE_STATUS>` is `"deferred"` → pass `--stripe-status="deferred"`, add "Stripe billing (deferred)" to `--skipped-steps`.
+
+Run: `node scripts/deploy.mjs write-summary --deploy-type="prod" --vercel-url="<URL>" --repo-url="<URL>" --convex-prod-url="<URL>" --convex-site-url="<URL>" --frontend-api-url="<URL>" --site-name="<NAME>" --admin-email="<EMAIL>" --google-oauth="<configured|skipped>" --stripe-status="<configured|skipped|deferred>" --webhook-url="<URL>" --completed-steps="<STEPS>" --skipped-steps="<STEPS>" --vercel-vars="<VARS>" --convex-vars="<VARS>"`
+
+When `<stripe-status>` is `"skipped"` or `"deferred"`, `write-summary` injects an "Enable Stripe billing later" section into `docs/DEPLOYMENT-PROD.md` with the exact steps to connect Stripe + Clerk Billing post-deploy. No additional guidance is needed in the live chat — the doc is the source of truth.
 
 Display:
 
@@ -410,7 +459,7 @@ Display:
 - [x] JWT template created on production Clerk
 - [x] Frontend API URL configured
 - [x] Google OAuth configured
-- [x] Stripe billing connected
+- [x] Stripe billing connected  ← include ONLY if `<STRIPE_STATUS>` is "configured"; replace with `- [ ] Stripe billing (deferred — see docs/DEPLOYMENT-PROD.md for how to enable later)` when `<SKIP_STRIPE>` is true or `<STRIPE_STATUS>` is "deferred"
 - [x] Convex deploy key generated
 - [x] Convex functions deployed to production
 - [x] Production webhook created via Svix

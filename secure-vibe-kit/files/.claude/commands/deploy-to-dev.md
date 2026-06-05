@@ -64,21 +64,127 @@ Parse the check-tools result:
 
 Show checkmarks for all passed checks.
 
+## Step 1.5: Confirm GitHub account, workflow scope, and target owner
+
+The repo created in Step 2 must land where you intend (your personal account or
+a specific org). Without an explicit owner, `gh repo create` defaults to the
+authenticated user's account — which has historically caused org-targeted
+deploys to land personally. This step locks in: the right account, the
+`workflow` scope (required to push `.github/workflows/*`), and the target owner.
+
+1. Run: `node scripts/deploy.mjs gh-context`
+
+2. Parse JSON: `{ ghInstalled, ghAuthenticated, username, scopes, hasWorkflowScope, orgs }`.
+
+3. **If `ghAuthenticated: false`:** **YOU (the assistant) run** the gh
+   device-flow login via the Bash tool — do NOT hand it off as
+   `! gh auth login ...` for the user to type. gh prints a one-time code and
+   URL, the command waits while the user approves in their browser, and exits
+   on its own once approval lands:
+
+   ```bash
+   gh auth login -h github.com -s workflow,repo,read:org
+   ```
+
+   After it exits successfully, re-run `node scripts/deploy.mjs gh-context`
+   and continue Step 1.5 from step 4. If it fails or the user denies, STOP and
+   explain.
+
+4. **Confirm the username.** Display: "GitHub account: `<username>`".
+   AskUserQuestion (Header: "GitHub account"):
+   - "Yes, use `<username>`"
+   - "Switch account"
+
+   If "Switch account" → STOP. Display: "Switch via `! gh auth switch`
+   (multi-account) or `! gh auth login` (add another), then re-run
+   `/deploy-to-dev`."
+
+5. **Confirm the `workflow` scope.**
+   - If `hasWorkflowScope: true`: show checkmark, continue.
+   - If `hasWorkflowScope: false`: AskUserQuestion (Header: "Add workflow scope?"):
+     - "Yes, add it now"
+     - "No, abort and I'll do it later"
+
+     If "Yes": **YOU (the assistant) run** the gh device-flow command via the
+     Bash tool — do NOT hand it off as `! gh auth refresh ...` for the user to
+     type. gh will print a one-time code and a URL; the command then waits
+     while the user approves in their browser, and exits on its own once
+     approval lands:
+
+     ```bash
+     gh auth refresh -h github.com -s workflow
+     ```
+
+     The user sees the device code + URL in the output, opens
+     https://github.com/login/device, enters the code, approves the added
+     scope, and control returns to the script automatically.
+
+     After the command exits successfully, re-run
+     `node scripts/deploy.mjs gh-context` and confirm `hasWorkflowScope` is now
+     true. If still false (e.g. user denied), STOP and explain.
+
+     If "No": STOP. Display: "The `workflow` scope is required to push
+     `.github/workflows/*`. Re-run `/deploy-to-dev` to add it."
+
+6. **Pick the target owner.**
+   - If `orgs` is empty: set `<OWNER>` = `<username>`. Show checkmark:
+     "Target owner: `<username>` (personal — no orgs found on this account)".
+   - If `orgs.length >= 1`: build AskUserQuestion options listing the **first
+     org as the default/recommended choice**, plus a personal-account option,
+     plus the next 1–2 orgs if present (max 4 options total):
+     - "Use org: `<orgs[0]>` (recommended)"  ← keep first; this is the default
+     - "Use personal account (`<username>`)"
+     - "Use org: `<orgs[1]>`" (only if `orgs.length >= 2`)
+     - "Use org: `<orgs[2]>`" (only if `orgs.length >= 3`)
+
+     (Header: "Target owner"). Set `<OWNER>` based on the choice.
+
+7. **Carry `<OWNER>` through.** Display:
+   "Target owner locked: `<OWNER>`. The repo will be created as
+   `<OWNER>/<repo-name>`."
+
 ## Step 2: GitHub Repository
 
 Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
 
 **If `isUpstreamTemplate: true` or no remote:**
 - Derive repo name from directory basename: `basename "$PWD"`
-- Run: `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>"`
+- Run: `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>" --owner="<OWNER>"`
+  (where `<OWNER>` is the value locked in Step 1.5 — always pass it, even for
+  personal accounts; it makes the intent explicit and triggers the post-create
+  verification inside the script.)
 - Parse result:
   - If success: show repo URL with checkmark
-  - If `error: "repo_exists"`: try with a suffix: `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>-app"`
+  - If `error: "repo_exists"`: try with a suffix:
+    `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>-app" --owner="<OWNER>"`
+  - If `error: "owner_mismatch"`: STOP. Display the `hint` field verbatim — it
+    includes the exact `gh repo delete` or `gh repo transfer` commands to fix
+    the misplaced repo. Do NOT proceed past this step until the remote points
+    at `<OWNER>`.
   - If still fails: STOP with error
 
 **If origin is already a non-template repo:**
 - Show checkmark: "GitHub repo already configured"
 - Ensure code is pushed: `git push origin main`
+
+## Step 2.5: Verify the repo landed under `<OWNER>`
+
+Defense in depth — re-confirm the remote AFTER `github-setup` (which already
+checks internally). Catches the case where origin was changed between steps,
+or where this step ran via the "origin already non-template" branch above.
+
+1. Run: `git remote get-url origin`
+2. Extract the owner segment from the URL (everything between `github.com[:/]`
+   and the next `/`). Lowercase for comparison.
+3. **If it matches `<OWNER>` (case-insensitive):** show checkmark:
+   "Verified: origin is under `<OWNER>`."
+4. **If it does NOT match:** STOP. Display:
+   "Origin is `<actual-owner>/<repo>`, but Step 1.5 selected `<OWNER>`. This is
+   the bug we're guarding against — do NOT proceed. Fix one of these ways,
+   then re-run `/deploy-to-dev`:
+   - Delete the misplaced repo: `gh repo delete <actual-owner>/<repo> --yes`
+   - Transfer it: `gh repo transfer <actual-owner>/<repo> <OWNER>`
+   - Or update the remote manually: `git remote set-url origin <correct-url>`"
 
 ## Step 3: Ensure vercel.json is correct for the active mode
 

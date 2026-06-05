@@ -70,10 +70,12 @@ Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `fa
 
 ### Doppler bootstrap (only if `<USE_DOPPLER>` is true)
 
-Before Phase 3, run the Doppler bootstrap. It auto-installs the Doppler CLI, drives `doppler login`, creates the project with `dev` and `prd` configs, and pins the repo to `dev` via `.doppler.yaml`:
+Before Phase 3, run the Doppler bootstrap. It auto-installs the Doppler CLI, drives `doppler login`, creates the project (named after the user's `<SITE_NAME>` from Phase 2, slugified) with `dev` and `prd` configs, and pins the repo to `dev` via `.doppler.yaml`.
+
+**Always pass `--project-name="<SITE_NAME>"`** — without it the script falls back to the template's package.json name (`secure-vibe-coding-os`), creating the Doppler project under the wrong name:
 
 ```bash
-node scripts/setup.mjs doppler-bootstrap
+node scripts/setup.mjs doppler-bootstrap --project-name="<SITE_NAME>"
 ```
 
 If this exits non-zero, show the error and STOP. The error message is structured to tell the user exactly what to do. Common causes:
