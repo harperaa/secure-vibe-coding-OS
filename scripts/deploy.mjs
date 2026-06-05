@@ -1580,6 +1580,10 @@ async function runWriteSummary(args) {
   const siteName = args['site-name'] || '(not set)';
   const adminEmail = args['admin-email'] || '(not set)';
   const googleOAuth = args['google-oauth'] || 'skipped';
+  // Stripe status: "configured" | "skipped" | "deferred". Defaults to "skipped"
+  // so /deploy-to-prod's default-skip Stripe path produces the right doc
+  // without forcing every caller to pass the flag explicitly.
+  const stripeStatus = args['stripe-status'] || 'skipped';
   const webhookUrl = args['webhook-url'] || '(not configured)';
   const dashboardUrl = args['dashboard-url'] || '';
   const deployType = args['deploy-type'] || 'prod'; // 'dev' or 'prod'
@@ -1681,6 +1685,41 @@ async function runWriteSummary(args) {
     lines.push(`- Swapping to production Clerk keys (pk_live_/sk_live_)`);
     lines.push(`- Setting up Google OAuth with your own credentials`);
     lines.push(`- Configuring Stripe billing via Clerk`);
+    lines.push(``);
+  }
+
+  // When this is a PROD deploy and Stripe was skipped/deferred (the default
+  // /deploy-to-prod path), inject a dedicated "Enable Stripe Billing Later"
+  // section. /deploy-to-prod provides NO live guidance about Stripe in this
+  // case — the doc is the single source of truth for how to add it post-deploy.
+  if (!isDev && (stripeStatus === 'skipped' || stripeStatus === 'deferred')) {
+    lines.push(`## Enable Stripe Billing Later`);
+    lines.push(``);
+    lines.push(`Stripe billing was skipped during this deployment. When you're ready to`);
+    lines.push(`accept payments, complete these steps — you do NOT need to re-run`);
+    lines.push(`/deploy-to-prod:`);
+    lines.push(``);
+    lines.push(`1. **Create a Stripe account** at https://dashboard.stripe.com/register`);
+    lines.push(`   - Complete identity verification (required to leave test mode)`);
+    lines.push(``);
+    lines.push(`2. **Connect Stripe to Clerk Billing**`);
+    lines.push(`   - Open Clerk Dashboard: https://dashboard.clerk.com`);
+    lines.push(`   - Switch to your **Production** instance (top toggle)`);
+    lines.push(`   - Go to **Billing** in the left sidebar`);
+    lines.push(`   - Click **Connect Stripe** and follow the onboarding`);
+    lines.push(`   - Stripe redirects back to Clerk when done`);
+    lines.push(``);
+    lines.push(`3. **Create your first subscription plan**`);
+    lines.push(`   - Clerk Dashboard → Billing → Plans → **Create Plan**`);
+    lines.push(`   - Set a name, monthly price, and the features included`);
+    lines.push(`   - Save the plan`);
+    lines.push(``);
+    lines.push(`4. **Go live**`);
+    lines.push(`   - Toggle Clerk Billing from **Test Mode** to **Live Mode**`);
+    lines.push(`   - Confirm your Stripe account is fully activated`);
+    lines.push(``);
+    lines.push(`No code changes are required — the app already uses Clerk Billing`);
+    lines.push(`primitives; flipping the switches above enables real subscriptions.`);
     lines.push(``);
   }
 
