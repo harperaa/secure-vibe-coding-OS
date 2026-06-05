@@ -903,7 +903,7 @@ async function runWriteInstallSummary(args) {
 // with `dev` and `prd` configs, and pins the repo to `dev` via .doppler.yaml.
 // Idempotent — safe to re-run.
 
-async function runDopplerBootstrap() {
+async function runDopplerBootstrap(args = {}) {
   const result = { success: true, steps: [], project: null };
 
   try {
@@ -922,7 +922,30 @@ async function runDopplerBootstrap() {
     process.exit(1);
   }
 
-  const projectName = dopplerGetProjectName();
+  // Project name: prefer --project-name from /install (the user's chosen site
+  // name), slugified to Doppler's required shape (lowercase, alphanumeric +
+  // dashes). Without this, every install creates a Doppler project named after
+  // the template (package.json `name`), which is wrong for the user's app.
+  let projectName;
+  if (args['project-name']) {
+    projectName = args['project-name']
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .substring(0, 40);
+    if (!projectName) {
+      console.error(JSON.stringify({
+        success: false,
+        step: 'project-name',
+        error: `--project-name="${args['project-name']}" slugified to an empty string. Provide a name with at least one alphanumeric character.`,
+      }));
+      process.exit(1);
+    }
+    result.projectNameSource = 'argument';
+  } else {
+    projectName = dopplerGetProjectName();
+    result.projectNameSource = 'package.json';
+  }
   result.project = projectName;
 
   try {
@@ -1425,7 +1448,7 @@ switch (command) {
     await runWriteInstallSummary(args);
     break;
   case 'doppler-bootstrap':
-    await runDopplerBootstrap();
+    await runDopplerBootstrap(args);
     break;
   case 'doppler-sync-env-local':
     await runDopplerSyncEnvLocal();
@@ -1443,7 +1466,7 @@ switch (command) {
   node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"
   node scripts/setup.mjs detect-port
   node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...]
-  node scripts/setup.mjs doppler-bootstrap                        (Doppler mode opt-in: install CLI, login, create project, pin repo to dev)
+  node scripts/setup.mjs doppler-bootstrap [--project-name="My App"]  (Doppler mode opt-in: install CLI, login, create project, pin repo to dev. Without --project-name the project is named after package.json (the template name) — /install always passes --project-name)
   node scripts/setup.mjs doppler-sync-env-local                   (push .env.local values to Doppler dev)
   node scripts/setup.mjs doppler-create-ci-token                  (create CI service token and push to GitHub via gh)
   node scripts/setup.mjs migrate-to-doppler --phase=inventory     (read .env.local + Convex + Vercel; writes inventory JSON)
