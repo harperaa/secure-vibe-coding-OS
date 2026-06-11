@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(node *setup.mjs*), Bash(node *modules.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Bash(git *), Bash(sed *), Read, Edit
+allowed-tools: Bash(node *setup.mjs*), Bash(node *modules.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Bash(git *), Bash(sed *), Bash(open *), Bash(xdg-open *), Read, Edit
 description: Automated installation and setup of Secure Vibe Coding OS
 ---
 
@@ -304,8 +304,21 @@ Run: `node scripts/setup.mjs write-install-summary --claim-url="<URL>" --account
 - (Doppler mode) CI service token created and pushed to GitHub as DOPPLER_TOKEN
 
 ### Claim Your Clerk App (if accountless)
+
+Your Clerk application was created WITHOUT a Clerk account (Clerk has no API to
+create apps inside your account, so the installer used Clerk's "accountless app"
+flow). The app is fully configured and already working — claiming simply
+transfers ownership of it into your Clerk account so you can manage it from the
+Clerk dashboard.
+
 Visit: <CLAIM_URL>
-Click the **Claim** button to create your Clerk account — then skip the remaining setup steps on that page, as the installer has already configured everything for you. Refresh the page after claiming to access your Clerk dashboard.
+
+⚠️  **ONLY click the "Claim" button** (sign in / create your Clerk account when
+prompted). The claim page then shows a setup checklist — API keys, env vars,
+middleware, JWT template, webhooks. **SKIP ALL OF THOSE STEPS — the installer
+already did every one of them.** Re-doing them can overwrite your working
+configuration. Just claim, then refresh the page to see your app in the
+dashboard.
 
 ### Installation Summary Saved
 A full record of this installation has been saved to: **docs/INSTALL.md**
@@ -340,3 +353,23 @@ Terminal 2: npm run dev
 
 The URL to access your app will be shown in Terminal 2 output.
 ```
+
+**Step 3 (only if an accountless app was created):** Walk the user through claiming, right now.
+
+Use AskUserQuestion:
+- Question: "Open the Clerk claim URL in your browser now? Remember: ONLY click the Claim button — every setup step listed on that page is already done."
+- Header: "Claim app"
+- Options:
+  - "Yes, open it now (Recommended)" — open the claim URL in the default browser: `open "<CLAIM_URL>"` on macOS, `xdg-open "<CLAIM_URL>"` on Linux, `start "" "<CLAIM_URL>"` on Windows.
+  - "I'll do it later" — remind them the URL is saved in `docs/INSTALL.md`, and that the app works fine unclaimed; claiming just attaches it to their Clerk account so they can manage it in the dashboard.
+
+If they chose to open it, after opening repeat the one-line warning:
+
+```
+In the browser: click **Claim** and sign in/create your Clerk account — that's it.
+SKIP the setup checklist shown on that page (API keys, env vars, middleware, JWT
+template, webhook): the installer already completed all of those, and re-doing
+them can overwrite your working configuration.
+```
+
+Then use AskUserQuestion to confirm: "Did you claim the app?" with options "Claimed it" / "I'll finish later". Either answer is fine — do not block on it. If "Claimed it", congratulate and point out the app now appears in their Clerk dashboard.
