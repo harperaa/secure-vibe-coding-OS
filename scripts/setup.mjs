@@ -437,16 +437,9 @@ async function runConfigure(args) {
   const clerk = createClerkClient({ secretKey: clerkSk });
   let webhookSecret = null;
 
-  try {
-    // Ensure Svix app exists for this Clerk instance
-    try {
-      await clerk.webhooks.createSvixApp();
-      result.steps.push('Created Svix app for Clerk webhooks');
-    } catch {
-      // Already exists is expected — continue
-      result.steps.push('Svix app already configured');
-    }
-
+  // The full Svix flow, restartable. Clerk's Svix one-time tokens are single-use,
+  // so every retry must begin again at generateSvixAuthURL() for a fresh token.
+  async function createWebhookViaSvix(steps) {
     // Get one-time token from Clerk's Svix auth URL
     const svixAuth = await clerk.webhooks.generateSvixAuthURL();
     const svixUrl = svixAuth.svix_url;
@@ -467,7 +460,7 @@ async function runConfigure(args) {
       throw new Error(`Svix token exchange failed: ${tokenResp.status} ${await tokenResp.text()}`);
     }
     const { token: svixToken } = await tokenResp.json();
-    result.steps.push('Exchanged Svix one-time token for API token');
+    steps.push('Exchanged Svix one-time token for API token');
 
     // Create Svix client with the real API token
     const { Svix } = await import('svix');
@@ -480,7 +473,7 @@ async function runConfigure(args) {
     let endpointId;
     if (existingEp) {
       endpointId = existingEp.id;
-      result.steps.push('Webhook endpoint already exists, reusing');
+      steps.push('Webhook endpoint already exists, reusing');
     } else {
       const endpoint = await svix.endpoint.create(appId, {
         url: webhookEndpointUrl,
@@ -493,15 +486,53 @@ async function runConfigure(args) {
         ],
       });
       endpointId = endpoint.id;
-      result.steps.push('Created webhook endpoint via Svix');
+      steps.push('Created webhook endpoint via Svix');
     }
 
     // Get the webhook signing secret
     const secret = await svix.endpoint.getSecret(appId, endpointId);
-    webhookSecret = secret.key;
+    return secret.key;
+  }
+
+  // When the Svix app was created a moment ago (fresh install), Clerk can
+  // reject generateSvixAuthURL() with 400 Bad Request until the app has
+  // propagated. Observed in the field; the identical call succeeds seconds
+  // later. Retry with increasing delays before falling back to manual steps.
+  const retryDelaysMs = [0, 2000, 5000, 10000];
+
+  try {
+    // Ensure Svix app exists for this Clerk instance
+    try {
+      await clerk.webhooks.createSvixApp();
+      result.steps.push('Created Svix app for Clerk webhooks');
+    } catch {
+      // Already exists is expected — continue
+      result.steps.push('Svix app already configured');
+    }
+
+    let lastErr = null;
+    for (let attempt = 0; attempt < retryDelaysMs.length; attempt++) {
+      if (retryDelaysMs[attempt] > 0) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelaysMs[attempt]));
+        result.steps.push(`Retrying webhook creation (attempt ${attempt + 1}/${retryDelaysMs.length})...`);
+      }
+      // Collect per-attempt progress separately so a failed attempt doesn't
+      // leave misleading half-done entries in the final step list.
+      const attemptSteps = [];
+      try {
+        webhookSecret = await createWebhookViaSvix(attemptSteps);
+        result.steps.push(...attemptSteps);
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (lastErr) throw lastErr;
+
     result.steps.push(`Retrieved webhook signing secret: ${webhookSecret.substring(0, 10)}...`);
   } catch (err) {
-    result.steps.push(`Webhook creation failed: ${err.message}`);
+    result.steps.push(`Webhook creation failed after ${retryDelaysMs.length} attempts: ${err.message}`);
     result.manualSteps.push(
       'Create webhook manually in Clerk Dashboard:',
       `  1. Go to Clerk Dashboard > Configure > Webhooks > Add Endpoint`,
