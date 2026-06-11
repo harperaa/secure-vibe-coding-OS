@@ -61,7 +61,33 @@ After Phase 1 completes, call AskUserQuestion with ALL FIVE questions in a SINGL
       ]
     },
     {
-      "question": "Which optional content modules should be installed? (All can be added later with /add-module — the secure backend is identical either way. Select none for a minimal site: login homepage + blank dashboard.)",
+      "question": "Start with an empty shell of an application? (No homepage content, blog, dashboard sample, or payments — just a login homepage and a blank backend page on top of the full secure backend. Everything can be added later with /add-module.)",
+      "header": "App shell",
+      "multiSelect": false,
+      "options": [
+        { "label": "Yes — empty shell (Recommended)", "description": "Minimal site: login homepage + blank dashboard. Add content modules anytime later with /add-module." },
+        { "label": "No — let me pick modules", "description": "Choose which content modules to install now (homepage content, blog, dashboard sample, pricing)." }
+      ]
+    }
+  ]
+}
+```
+
+Admin email is required. If the user selects "I'll enter my email" without typing one via the Other option, OR types something that isn't a valid email (must contain `@` and a `.`), re-ask the same AskUserQuestion until a valid address is supplied. Do NOT proceed to Phase 3 with a placeholder email.
+
+Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `false` if legacy).
+
+### Module selection (only if the user answered "No — let me pick modules")
+
+If the user chose the empty shell (the default), do NOT ask anything further: set `<MODULES>` = empty and `<SKIPPED_MODULES>` = `homepage-content,blog,dashboard-sample,pricing`, and skip this follow-up question entirely.
+
+Otherwise, call AskUserQuestion with the module picker:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Which content modules should be installed? (All can be added later with /add-module — the secure backend is identical either way.)",
       "header": "Modules",
       "multiSelect": true,
       "options": [
@@ -75,11 +101,7 @@ After Phase 1 completes, call AskUserQuestion with ALL FIVE questions in a SINGL
 }
 ```
 
-Admin email is required. If the user selects "I'll enter my email" without typing one via the Other option, OR types something that isn't a valid email (must contain `@` and a `.`), re-ask the same AskUserQuestion until a valid address is supplied. Do NOT proceed to Phase 3 with a placeholder email.
-
-Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `false` if legacy).
-
-Persist the modules choice as `<MODULES>` — the selected module names mapped to: `homepage-content`, `blog`, `dashboard-sample`, `pricing` (possibly empty). Also persist the unselected names as `<SKIPPED_MODULES>`. Carry both through every phase below.
+Persist the modules choice as `<MODULES>` — the selected module names mapped to: `homepage-content`, `blog`, `dashboard-sample`, `pricing` (possibly empty if the user deselects everything). Persist the unselected names as `<SKIPPED_MODULES>`. Carry both through every phase below.
 
 ### Install content modules (only if `<MODULES>` is non-empty)
 
