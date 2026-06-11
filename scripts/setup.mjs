@@ -17,7 +17,9 @@
  *   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com"
  *   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" --clerk-pk=pk_test_... --clerk-sk=sk_test_...
  *   node scripts/setup.mjs convex-setup --project-name="My App" [--team=team-slug]
- *   node scripts/setup.mjs configure --clerk-sk=sk_test_... --admin-email="me@example.com"
+ *   node scripts/setup.mjs configure --admin-email="me@example.com"
+ *     (Clerk secret key resolved from CLERK_SECRET_KEY env var, Doppler dev
+ *      config, or .env.local — pass --clerk-sk only as a last resort)
  *   node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...] [--modules-installed=...] [--modules-skipped=...]
  */
 
@@ -348,7 +350,7 @@ async function runInit(args) {
   if (dopplerIsEnabled()) {
     result.nextSteps.push('Run: node scripts/setup.mjs doppler-sync-env-local (push Convex outputs to Doppler)');
   }
-  result.nextSteps.push('Run: node scripts/setup.mjs configure --clerk-sk=<key> --admin-email=<email>');
+  result.nextSteps.push('Run: node scripts/setup.mjs configure --admin-email=<email> (Clerk secret key is picked up from Doppler/.env.local automatically)');
 
   console.log(JSON.stringify(result, null, 2));
 }
@@ -358,13 +360,30 @@ async function runInit(args) {
 // ---------------------------------------------------------------------------
 
 async function runConfigure(args) {
-  const clerkSk = args['clerk-sk'];
   const adminEmail = args['admin-email'];
+  const envContent = readEnvFile(ENV_FILE);
+
+  // Resolve the Clerk secret key without requiring it on the command line
+  // (passing secrets as CLI arguments leaks them into process args / shell
+  // history): --clerk-sk flag → CLERK_SECRET_KEY env var (e.g. `doppler run --`)
+  // → Doppler `dev` config → .env.local (legacy mode).
+  let clerkSk = args['clerk-sk'] || process.env.CLERK_SECRET_KEY;
+  let dopplerSecrets = null;
+  let dopplerReadError = null;
+  if (dopplerIsEnabled()) {
+    try {
+      dopplerSecrets = dopplerDownloadSecrets('dev');
+      if (!clerkSk) clerkSk = dopplerSecrets?.CLERK_SECRET_KEY;
+    } catch (err) {
+      dopplerReadError = err.message;
+    }
+  }
+  if (!clerkSk) clerkSk = getEnvValue(envContent, 'CLERK_SECRET_KEY');
 
   if (!clerkSk || !adminEmail) {
     console.error(JSON.stringify({
       success: false,
-      error: 'Missing required arguments: --clerk-sk and --admin-email',
+      error: 'Missing required arguments: --admin-email, and a Clerk secret key (from the CLERK_SECRET_KEY env var, Doppler dev config, .env.local, or --clerk-sk)',
     }));
     process.exit(1);
   }
@@ -386,7 +405,6 @@ async function runConfigure(args) {
 
   // Step 1: Read NEXT_PUBLIC_CONVEX_URL. Convex CLI always writes this to
   // .env.local, even in Doppler mode, so .env.local is authoritative for it.
-  const envContent = readEnvFile(ENV_FILE);
   const convexUrl = getEnvValue(envContent, 'NEXT_PUBLIC_CONVEX_URL');
 
   if (!convexUrl || convexUrl.includes('your-convex')) {
@@ -404,14 +422,12 @@ async function runConfigure(args) {
 
   // Step 3: Get Frontend API URL. In Doppler mode this lives in Doppler, not
   // .env.local (init pushed it straight to Doppler `dev`). Fall back to .env.local
-  // for legacy mode.
+  // for legacy mode. Reuses the secrets already downloaded during key resolution.
   let frontendApiUrl;
   if (dopplerIsEnabled()) {
-    try {
-      const dopplerSecrets = dopplerDownloadSecrets('dev');
-      frontendApiUrl = dopplerSecrets?.NEXT_PUBLIC_CLERK_FRONTEND_API_URL;
-    } catch (err) {
-      result.steps.push(`Warning: could not read NEXT_PUBLIC_CLERK_FRONTEND_API_URL from Doppler: ${err.message}`);
+    frontendApiUrl = dopplerSecrets?.NEXT_PUBLIC_CLERK_FRONTEND_API_URL;
+    if (dopplerReadError) {
+      result.steps.push(`Warning: could not read NEXT_PUBLIC_CLERK_FRONTEND_API_URL from Doppler: ${dopplerReadError}`);
     }
   } else {
     frontendApiUrl = getEnvValue(envContent, 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL');
@@ -1483,7 +1499,7 @@ switch (command) {
     console.error(`Usage:
   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
   node scripts/setup.mjs convex-setup --project-name="My App" [--team=SLUG]
-  node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"
+  node scripts/setup.mjs configure --admin-email="me@example.com"  (Clerk secret key resolved from CLERK_SECRET_KEY env var, Doppler dev, or .env.local; --clerk-sk overrides)
   node scripts/setup.mjs detect-port
   node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...] [--modules-installed=...] [--modules-skipped=...]
   node scripts/setup.mjs doppler-bootstrap [--project-name="My App"]  (Doppler mode opt-in: install CLI, login, create project, pin repo to dev. Without --project-name the project is named after package.json (the template name) — /install always passes --project-name)

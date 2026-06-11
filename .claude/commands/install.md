@@ -240,12 +240,10 @@ If manual: wait for user confirmation, then read `.env.local` to verify `NEXT_PU
 
 ## Phase 5: Run Configure Script
 
-Now that Convex is set up, run the configure step. You need the Clerk secret key from Phase 2/3.
-
-Read `.env.local` to get `CLERK_SECRET_KEY` if the user provided keys, or use the one from the init output.
+Now that Convex is set up, run the configure step. Do NOT pass the Clerk secret key on the command line and do NOT echo it — the script resolves it itself (from the `CLERK_SECRET_KEY` env var, the Doppler `dev` config, or `.env.local`, in that order).
 
 ```bash
-node scripts/setup.mjs configure --clerk-sk="<SECRET_KEY>" --admin-email="<ADMIN_EMAIL>"
+node scripts/setup.mjs configure --admin-email="<ADMIN_EMAIL>"
 ```
 
 Parse the JSON output:

@@ -128,7 +128,7 @@ npm install
 node scripts/setup.mjs init --site-name="My Site" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
 node scripts/modules.mjs install homepage-content blog pricing --apply-edits   # pick your features
 node scripts/setup.mjs convex-setup --project-name="My Site"
-node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"
+node scripts/setup.mjs configure --admin-email="me@example.com"   # Clerk secret key picked up from Doppler/.env.local
 node scripts/setup.mjs write-install-summary --modules-installed="homepage-content,blog,pricing" --modules-skipped="dashboard-sample"
 ```
 
@@ -232,7 +232,7 @@ Alternatively, run the setup script directly:
 npm install
 node scripts/setup.mjs init --site-name="My App" --admin-email="you@example.com"
 node scripts/setup.mjs convex-setup --project-name="My App"
-node scripts/setup.mjs configure --clerk-sk="sk_test_..." --admin-email="you@example.com"
+node scripts/setup.mjs configure --admin-email="you@example.com"
 ```
 
 ## 🔐 Secrets Management — Doppler (recommended) or Legacy `.env.local`
