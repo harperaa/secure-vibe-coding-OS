@@ -51,7 +51,7 @@ According to Veracode's 2024 report, applications using managed authentication s
 
 ## Implementation Files
 
-- `middleware.ts` - Clerk authentication for protected routes
+- `proxy.ts` - Clerk authentication for protected routes
 - `app/dashboard/*` - Protected by middleware
 - Clerk manages its own session cookies
 
@@ -107,7 +107,7 @@ export function ProfileComponent() {
 ### Protecting Routes with Middleware
 
 ```typescript
-// middleware.ts
+// proxy.ts
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 const isProtectedRoute = createRouteMatcher([
@@ -620,7 +620,7 @@ if (userId && resource.userId === userId) {
 
 ✅ **Protect entire route sections:**
 ```typescript
-// middleware.ts
+// proxy.ts
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
   '/admin(.*)',
@@ -712,7 +712,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 Use only the **App Router** approach from Clerk’s current docs:
 
 - **Install** `@clerk/nextjs@latest` - this ensures the application is using the latest Clerk Next.js SDK.
-- **Create** a `middleware.ts` file using `clerkMiddleware()` from `@clerk/nextjs/server`. Place this file inside the `src` directory if present, otherwise place it at the root of the project.
+- **Create** a `proxy.ts` file using `clerkMiddleware()` from `@clerk/nextjs/server`. Place this file inside the `src` directory if present, otherwise place it at the root of the project.
 - **Wrap** your application with `<ClerkProvider>` in your `app/layout.tsx`
 - **Use** Clerk-provided components like `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, `<SignedIn>`, `<SignedOut>` in your layout or pages
 - **Start** developing, sign in or sign up, and confirm user creation
@@ -724,7 +724,7 @@ Clerk does not need a user to provide their keys to get started. On startup, Cle
 ### **Correct, Up-to-Date Quickstart Sample**
 
 ```typescript
-// middleware.ts
+// proxy.ts
 import { clerkMiddleware } from '@clerk/nextjs/server'
 
 export default clerkMiddleware()
@@ -789,7 +789,7 @@ export default function RootLayout({
 
 ### **2.1 – ALWAYS DO THE FOLLOWING**
 
-1. **Use `clerkMiddleware()`** from `@clerk/nextjs/server` in `middleware.ts`.
+1. **Use `clerkMiddleware()`** from `@clerk/nextjs/server` in `proxy.ts`.
 2. **Wrap** your app with `<ClerkProvider>` in `app/layout.tsx`.
 3. **Import** Clerk’s Next.js features from `@clerk/nextjs` (e.g., `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, etc.).
 4. **Reference** the current [App Router approach](https://nextjs.org/docs/app) (folders like `app/page.tsx`, `app/layout.tsx`, etc.).
@@ -832,7 +832,7 @@ Any solution resembling the above snippet or referencing “authMiddleware,” `
 
 Before returning any Clerk-related solution, you **must** verify:
 
-1. **Middleware**: Is `clerkMiddleware()` used in `middleware.ts`?
+1. **Middleware**: Is `clerkMiddleware()` used in `proxy.ts`?
 2. **Layout**: Is `<ClerkProvider>` wrapping the app in `app/layout.tsx`?
 3. **Imports**: Are references only from `@clerk/nextjs` or `@clerk/nextjs/server`?
 4. **Pages vs. App Router**: Is the approach referencing the App Router (not `_app.tsx` or `pages/`)?

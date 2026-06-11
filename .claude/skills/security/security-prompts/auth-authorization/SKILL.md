@@ -318,7 +318,7 @@ await clerkClient.users.updateUserMetadata(userId, {
 
 **Middleware Protection**:
 ```typescript
-// In middleware.ts
+// In proxy.ts
 const role = auth().sessionClaims?.publicMetadata?.role;
 if (role !== "admin" && pathname.startsWith("/admin")) {
   return Response.redirect("/unauthorized");

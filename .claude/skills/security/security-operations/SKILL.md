@@ -179,7 +179,7 @@ export function validateConfig() {
   }
 }
 
-// In your app startup (e.g., middleware.ts or layout.tsx)
+// In your app startup (e.g., proxy.ts or layout.tsx)
 validateConfig();
 ```
 

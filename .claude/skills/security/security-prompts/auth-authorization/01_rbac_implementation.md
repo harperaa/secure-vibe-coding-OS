@@ -60,13 +60,13 @@ Webhook Integration:
 TECHNICAL SPECIFICATIONS:
 - Framework: Next.js 14 (existing Secure Vibe Coding OS setup)
 - Auth: Clerk (already configured)
-- Middleware: middleware.ts (extend existing protection)
+- Middleware: proxy.ts (extend existing protection)
 - Database: Convex (webhook handler in convex/http.ts)
 - TypeScript types for roles: lib/types.ts
 
 Files to modify:
 1. convex/http.ts - Add role assignment in webhook handler
-2. middleware.ts - Add role-based route protection
+2. proxy.ts - Add role-based route protection
 3. lib/types.ts - Add role type definitions
 4. lib/auth-utils.ts - Create role checking utilities
 5. app/admin - Create admin-only pages
@@ -88,7 +88,7 @@ After implementation, I should be able to:
 Please implement RBAC following Secure Vibe Coding OS architecture.
 
 Reference:
-@middleware.ts
+@proxy.ts
 @convex/http.ts
 @lib/clerk.ts
 ```

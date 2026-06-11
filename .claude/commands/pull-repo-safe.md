@@ -36,7 +36,7 @@ Template infrastructure the user should NOT customize.
 - `scripts/*.mjs`, `scripts/*.sh`, `scripts/*.js`
 - `templates/modules/**` (the module source trees — installed copies in `app/` etc. are Category C)
 - `lib/csrf.ts`, `lib/errorHandler.ts`, `lib/validateRequest.ts`, `lib/validation.ts`, `lib/prompt-validation.ts`, `lib/withCsrf.ts`, `lib/withRateLimit.ts`
-- `middleware.ts`
+- `proxy.ts`
 - `hooks/use-mobile.ts`
 - `components/ConvexClientProvider.tsx`, `components/theme-provider.tsx`
 - `components/ui/**`
