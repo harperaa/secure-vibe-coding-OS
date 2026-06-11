@@ -87,7 +87,7 @@ This file is read automatically by Claude Code on every session.
 
 ---
 
-## The 11 Commands
+## The 12 Commands
 
 ```
 /create-feature-branch [purpose]   Start new work from latest main
@@ -101,6 +101,7 @@ This file is read automatically by Claude Code on every session.
 /sync-testing-branch               Merge main into testing (safe for shared branch)
 /status                            Plain-English summary of current state
 /security-assessment               Run comprehensive security assessment via agents
+/add-module [name]                 Install optional content modules (blog, pricing, ...)
 ```
 
 ---
@@ -195,6 +196,16 @@ This project supports two flows for environment variables:
 **Legacy `.env.local` mode** — values live in `.env.local`, pushed to Vercel via `vercel env add`. Use when Doppler is unavailable or unwanted. Same scripts and skills support it without Doppler.
 
 `/install` asks which mode to use. Both can coexist on the same machine across different repos.
+
+---
+
+## Content Modules
+
+Optional page/content modules live in `templates/modules/<name>/` (homepage-content, blog, dashboard-sample, pricing). The default site is minimal — login homepage + blank dashboard. `/install` asks which modules to copy in; `/add-module` installs any of them later; `node scripts/modules.mjs install <name...> --apply-edits` does it headlessly. Modules only add pages and content — the security backend (convex/, lib/, middleware.ts, app/api/) is always installed and never gated.
+
+Conventions (do not break these):
+- `templates/modules/**/files/` mirrors the repo root and is type-checked/linted in place. Imports between two files of the SAME module must use **relative paths** (depth is identical before/after copy); `@/` imports are only allowed for always-installed targets.
+- Anchor comments mark deterministic insertion points for module edits — preserve them when editing the default files: `// modules:nav` (header menuItems + sidebar navMain), `// modules:imports` and `{/* modules:sections */}` (homepage), `{/* modules:footer */}` (blog layout).
 
 ---
 

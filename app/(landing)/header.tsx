@@ -15,11 +15,8 @@ import { useTheme } from "next-themes"
 
 
 
-const menuItems = [
-    { name: 'Features', href: '/#features' },
-    { name: 'Pricing', href: '/#pricing' },
-    { name: 'Blog', href: '/blog' },
-    { name: 'About', href: '/#about' },
+const menuItems: { name: string; href: string }[] = [
+    // modules:nav — content modules add their links here; add your own pages too
 ]
 
 export const HeroHeader = () => {

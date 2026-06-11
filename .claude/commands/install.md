@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(node *setup.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Bash(git *), Bash(sed *), Read, Edit
+allowed-tools: Bash(node *setup.mjs*), Bash(node *modules.mjs*), Bash(npx convex*), Bash(npm install*), Bash(ls *), Bash(node -v*), Bash(basename *), Bash(git *), Bash(sed *), Read, Edit
 description: Automated installation and setup of Secure Vibe Coding OS
 ---
 
@@ -20,7 +20,7 @@ You are the installation assistant for Secure Vibe Coding OS. You will collect a
 
 **STOP. You MUST call AskUserQuestion for each question below. Do NOT assume answers or use defaults without asking.**
 
-After Phase 1 completes, call AskUserQuestion with ALL FOUR questions in a SINGLE batch using the exact parameters below. Replace `DIRNAME` with the basename value from Phase 1. Do NOT split this into multiple AskUserQuestion calls — the user should see all four questions on one screen:
+After Phase 1 completes, call AskUserQuestion with ALL FIVE questions in a SINGLE batch using the exact parameters below. Replace `DIRNAME` with the basename value from Phase 1. Do NOT split this into multiple AskUserQuestion calls — the user should see all five questions on one screen:
 
 ```json
 {
@@ -59,6 +59,17 @@ After Phase 1 completes, call AskUserQuestion with ALL FOUR questions in a SINGL
         { "label": "Yes — use Doppler (Recommended)", "description": "All env vars live in Doppler. Local dev, Vercel, Convex, and CI all fetch from there. Only DOPPLER_TOKEN ends up in Vercel env." },
         { "label": "No — use legacy .env.local", "description": "Values live in .env.local locally and Vercel env vars in production. Skip Doppler bootstrap entirely." }
       ]
+    },
+    {
+      "question": "Which optional content modules should be installed? (All can be added later with /add-module — the secure backend is identical either way. Select none for a minimal site: login homepage + blank dashboard.)",
+      "header": "Modules",
+      "multiSelect": true,
+      "options": [
+        { "label": "Homepage content (Recommended)", "description": "Full marketing landing page: hero, security promo, features, testimonials, FAQs, CTA, footer" },
+        { "label": "Blog", "description": "MDX blog with categories, tags, search, RSS feed, and 3 sample posts" },
+        { "label": "Dashboard sample", "description": "Demo dashboard: KPI cards, interactive chart, data table" },
+        { "label": "Pricing", "description": "Clerk Billing pricing section + payment-gated dashboard page" }
+      ]
     }
   ]
 }
@@ -67,6 +78,19 @@ After Phase 1 completes, call AskUserQuestion with ALL FOUR questions in a SINGL
 Admin email is required. If the user selects "I'll enter my email" without typing one via the Other option, OR types something that isn't a valid email (must contain `@` and a `.`), re-ask the same AskUserQuestion until a valid address is supplied. Do NOT proceed to Phase 3 with a placeholder email.
 
 Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `false` if legacy).
+
+Persist the modules choice as `<MODULES>` — the selected module names mapped to: `homepage-content`, `blog`, `dashboard-sample`, `pricing` (possibly empty). Also persist the unselected names as `<SKIPPED_MODULES>`. Carry both through every phase below.
+
+### Install content modules (only if `<MODULES>` is non-empty)
+
+Before Phase 3, copy the selected modules into the repo. This is a fresh template, so the deterministic anchor edits are safe:
+
+```bash
+node scripts/modules.mjs install <MODULES as space-separated names> --apply-edits
+```
+
+- The script installs in the correct order automatically and reports every file copied and edit applied — show a one-line checkmark per module.
+- On a fresh clone there should be NO conflicts and NO "anchor not found" edit skips ("module X not installed" and "already applied" skips are normal). If conflicts or missing anchors appear, something is wrong with the working tree — show the output and STOP.
 
 ### Doppler bootstrap (only if `<USE_DOPPLER>` is true)
 
@@ -230,8 +254,10 @@ Build the `write-install-summary` arguments from data collected during the insta
   - **Doppler mode** (`<USE_DOPPLER>` is true): "Dependencies installed,Doppler CLI installed and authenticated,Doppler project created with dev/prd configs,Repo pinned to dev (.doppler.yaml written),CSRF and Session secrets pushed to Doppler dev,Clerk application created (accountless),JWT template for Convex created,Frontend API URL pushed to Doppler dev,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL),Convex deployment IDs synced to Doppler dev,CI service token created and pushed to GitHub Actions"
   - **Legacy mode**: "Dependencies installed,.env.local created and configured,CSRF and Session secrets generated,Clerk application created (accountless),JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)"
 - `--manual-steps` = comma-separated list of anything that failed and needs manual completion (from `manualSteps` arrays in configure output)
+- `--modules-installed` = comma-separated `<MODULES>` (empty string if none were selected)
+- `--modules-skipped` = comma-separated `<SKIPPED_MODULES>` (empty string if all were selected)
 
-Run: `node scripts/setup.mjs write-install-summary --claim-url="<URL>" --accountless="<BOOL>" --completed-steps="<STEPS>" --manual-steps="<STEPS>"`
+Run: `node scripts/setup.mjs write-install-summary --claim-url="<URL>" --accountless="<BOOL>" --completed-steps="<STEPS>" --manual-steps="<STEPS>" --modules-installed="<MODULES>" --modules-skipped="<SKIPPED_MODULES>"`
 
 **Step 2:** Display the final summary, adjusting based on the mode and what actually succeeded. The on-screen summary and the saved INSTALL.md should contain the same information.
 
@@ -261,6 +287,12 @@ Click the **Claim** button to create your Clerk account — then skip the remain
 
 ### Installation Summary Saved
 A full record of this installation has been saved to: **docs/INSTALL.md**
+
+### Content Modules
+- [x] <each installed module name>
+- [ ] <each skipped module name> — install anytime with `/add-module <name>`
+
+(If no modules were installed, note: "Minimal site installed — login homepage + blank dashboard. Add content anytime with /add-module.")
 
 ### Optional Steps (can be done later)
 These are only needed when you're ready to enable paid subscriptions:

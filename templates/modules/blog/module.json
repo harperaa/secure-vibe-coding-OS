@@ -1,0 +1,47 @@
+{
+  "name": "blog",
+  "title": "Blog",
+  "description": "MDX blog with categories, tags, search, RSS feed, SEO routes, and 3 sample posts",
+  "marker": "app/blog",
+  "overwrites": [],
+  "installAfter": [],
+  "edits": [
+    {
+      "file": "app/(landing)/header.tsx",
+      "anchor": "// modules:nav",
+      "position": "before",
+      "insert": "    { name: 'Blog', href: '/blog' },\n",
+      "skipIfContains": "href: '/blog'"
+    },
+    {
+      "file": "public/llms.txt",
+      "anchor": "## Documentation",
+      "position": "after",
+      "insert": "\n- [Blog](/blog): Articles on secure development, vibe coding, and best practices\n",
+      "skipIfContains": "[Blog](/blog)"
+    },
+    {
+      "file": "public/llms.txt",
+      "anchor": "## Technical Resources",
+      "position": "after",
+      "insert": "\n- [RSS Feed](/feed.xml): Subscribe to latest articles\n",
+      "skipIfContains": "feed.xml"
+    },
+    {
+      "file": "app/blog/layout.tsx",
+      "ifInstalled": "homepage-content",
+      "anchor": "import { HeroHeader } from '@/app/(landing)/header'",
+      "position": "after",
+      "insert": "import FooterSection from '@/app/(landing)/footer'\n",
+      "skipIfContains": "(landing)/footer"
+    },
+    {
+      "file": "app/blog/layout.tsx",
+      "ifInstalled": "homepage-content",
+      "anchor": "{/* modules:footer",
+      "position": "before",
+      "insert": "      <FooterSection />\n",
+      "skipIfContains": "<FooterSection />"
+    }
+  ]
+}
