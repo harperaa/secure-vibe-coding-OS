@@ -73,11 +73,18 @@ Run these checks in the current working directory (`pwd`):
 test -f package.json && test -f app/layout.tsx && test -d app/dashboard && test -d convex && test -d .claude/skills/security && echo OS_PRESENT || echo OS_MISSING
 test -f .doppler.yaml && echo DOPPLER || (test -f .env.local && echo LEGACY || echo NO_ENV)
 test -f docs/INSTALL.md && echo INSTALLED || echo NOT_INSTALLED
+node scripts/modules.mjs status
 ```
 
 - If `OS_MISSING`: STOP. Tell the user this directory does not look like a Secure Vibe Coding OS install and ask them to run `/install` first or `cd` to the right project.
 - If `NOT_INSTALLED` or `NO_ENV`: tell the user the OS files are present but `/install` has not run. Ask whether to abort and run `/install` first (recommended) or proceed knowing env wiring may be incomplete.
 - Capture the env mode (`DOPPLER` or `LEGACY`) — every later command that touches secrets or runs the app must respect it.
+- Capture the installed content modules. Later phases build on them:
+  - **Homepage phase** requires `homepage-content` — if missing, install it first (run the `/add-module` flow: `node scripts/modules.mjs install homepage-content` + its `templates/modules/homepage-content/INSTALL.md` steps) so there are hero/sections to rewrite.
+  - **Blog phase** requires `blog` — same pattern.
+  - **Dashboard phases**: offer `dashboard-sample` as a starting point, or build on the blank page.
+  - **If the product has paid plans** (from the elicitation answers): offer `pricing`.
+  Use AskUserQuestion before installing anything: "Module X isn't installed — install it now?"
 
 ### 0.2 Seed the product idea — PRD intake or from-scratch
 

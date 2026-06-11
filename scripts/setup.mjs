@@ -18,7 +18,7 @@
  *   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" --clerk-pk=pk_test_... --clerk-sk=sk_test_...
  *   node scripts/setup.mjs convex-setup --project-name="My App" [--team=team-slug]
  *   node scripts/setup.mjs configure --clerk-sk=sk_test_... --admin-email="me@example.com"
- *   node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...]
+ *   node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...] [--modules-installed=...] [--modules-skipped=...]
  */
 
 import { createClerkClient } from '@clerk/backend';
@@ -820,6 +820,8 @@ async function runWriteInstallSummary(args) {
 
   const completedSteps = (args['completed-steps'] || '').split(',').filter(Boolean);
   const manualSteps = (args['manual-steps'] || '').split(',').filter(Boolean);
+  const modulesInstalled = (args['modules-installed'] || '').split(',').filter(Boolean);
+  const modulesSkipped = (args['modules-skipped'] || '').split(',').filter(Boolean);
 
   const lines = [
     `# Installation Complete!`,
@@ -849,6 +851,24 @@ async function runWriteInstallSummary(args) {
     lines.push(``);
     for (const step of manualSteps) {
       lines.push(`- [ ] ${step}`);
+    }
+  }
+
+  if (modulesInstalled.length > 0 || modulesSkipped.length > 0) {
+    lines.push(``);
+    lines.push(`## Content Modules`);
+    lines.push(``);
+    for (const name of modulesInstalled) {
+      lines.push(`- [x] ${name}`);
+    }
+    for (const name of modulesSkipped) {
+      lines.push(`- [ ] ${name} — install anytime with \`/add-module ${name}\``);
+    }
+    if (modulesInstalled.length === 0) {
+      lines.push(``);
+      lines.push(`Minimal site installed — login homepage + blank dashboard. The secure`);
+      lines.push(`backend (auth, rate limiting, CSRF, security monitoring) is fully active`);
+      lines.push(`either way; modules only add pages and content.`);
     }
   }
 
@@ -1465,7 +1485,7 @@ switch (command) {
   node scripts/setup.mjs convex-setup --project-name="My App" [--team=SLUG]
   node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"
   node scripts/setup.mjs detect-port
-  node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...]
+  node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...] [--modules-installed=...] [--modules-skipped=...]
   node scripts/setup.mjs doppler-bootstrap [--project-name="My App"]  (Doppler mode opt-in: install CLI, login, create project, pin repo to dev. Without --project-name the project is named after package.json (the template name) — /install always passes --project-name)
   node scripts/setup.mjs doppler-sync-env-local                   (push .env.local values to Doppler dev)
   node scripts/setup.mjs doppler-create-ci-token                  (create CI service token and push to GitHub via gh)

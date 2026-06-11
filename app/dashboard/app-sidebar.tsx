@@ -18,7 +18,6 @@ import {
   IconSearch,
   IconSettings,
   IconUsers,
-  IconSparkles,
   IconBrandOpenai,
   IconShieldCheck,
 } from "@tabler/icons-react"
@@ -53,11 +52,7 @@ const data = {
       url: "/dashboard",
       icon: IconDashboard,
     },
-    {
-      title: "Payment gated",
-      url: "/dashboard/payment-gated",
-      icon: IconSparkles,
-    },
+    // modules:nav — content modules add their links here; add your own pages too
   ],
   // Admin-only navigation items
   navAdmin: [

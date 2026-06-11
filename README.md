@@ -89,10 +89,52 @@ This will:
 - Set up Convex project interactively
 - Create the webhook endpoint
 - Set Convex environment variables
+- Ask which optional content modules to install (see below)
 
 You'll receive a claim URL to create your Clerk account after setup completes.
 
 After installation, your app runs locally at the provided URL (typically `http://localhost:3000`). Develop and customize your app here — no deployment is needed until you're ready to share it with others.
+
+### Content Modules (optional pages — pick what you want)
+
+The default install is **minimal**: a login homepage and a blank dashboard page.
+The secure backend — Clerk auth, Convex, rate limiting, CSRF protection, input
+validation, and the admin security monitoring dashboard — is always installed in
+full; modules only add **pages and content** on top of it:
+
+| Module | What it adds |
+|--------|--------------|
+| `homepage-content` | Full marketing landing page: hero, security promo, features, testimonials, FAQs, CTA, footer |
+| `blog` | MDX blog with categories, tags, search, RSS feed, and 3 sample posts |
+| `dashboard-sample` | Demo dashboard: KPI cards, interactive chart, data table |
+| `pricing` | Clerk Billing pricing section + payment-gated dashboard page |
+
+`/install` asks which to include. Add any of them later — nothing is lost by
+starting minimal:
+
+```bash
+claude
+# Then type: /add-module          (interactive picker)
+# or:        /add-module blog     (install one directly)
+```
+
+### Headless / CLI Install (no Claude Code)
+
+Every step is also scriptable, so a driver script or CI job can install the
+framework and choose features purely from the command line:
+
+```bash
+npm install
+node scripts/setup.mjs init --site-name="My Site" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
+node scripts/modules.mjs install homepage-content blog pricing --apply-edits   # pick your features
+node scripts/setup.mjs convex-setup --project-name="My Site"
+node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"
+node scripts/setup.mjs write-install-summary --modules-installed="homepage-content,blog,pricing" --modules-skipped="dashboard-sample"
+```
+
+`node scripts/modules.mjs list` shows all modules and their install status;
+`--apply-edits` applies each module's nav/section wiring automatically (safe on a
+fresh clone — on customized repos use `/add-module`, which adapts the edits).
 
 ### Port an Existing Site (`/port-old-site`)
 
