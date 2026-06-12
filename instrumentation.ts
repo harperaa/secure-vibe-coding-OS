@@ -1,6 +1,6 @@
 /**
  * Next.js startup hook — runs once per server instance, before any route
- * handler or middleware. We use it to populate process.env from Doppler
+ * handler or the proxy (formerly middleware). We use it to populate process.env from Doppler
  * (when running on Vercel with DOPPLER_TOKEN set).
  *
  * Reference: https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation

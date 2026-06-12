@@ -1008,7 +1008,7 @@ export const config = {
 ```
 
 **Security Stack Applied:**
-1. ✅ **Security Headers** (middleware.ts) - CSP, X-Frame-Options, etc.
+1. ✅ **Security Headers** (proxy.ts) - CSP, X-Frame-Options, etc.
 2. ✅ **Rate Limiting** (withRateLimit) - 5 req/min per IP
 3. ✅ **CSRF Protection** (withCsrf) - Token validation
 4. ✅ **Prompt Validation** (validatePromptServer) - Injection blocking

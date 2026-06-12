@@ -28,7 +28,7 @@ Hundreds of e-commerce sites were compromised by injected payment-stealing JavaS
 
 ## Our Security Headers Architecture
 
-All headers are applied automatically via `middleware.ts` on every request. You don't need to manually set them—they're already protecting you.
+All headers are applied automatically via `proxy.ts` on every request. You don't need to manually set them—they're already protecting you.
 
 ### Headers We Apply
 
@@ -190,7 +190,7 @@ if (req.nextUrl.pathname.startsWith('/dashboard')) {
 
 ## Implementation in Middleware
 
-### middleware.ts Pattern
+### proxy.ts Pattern
 
 ```typescript
 import { clerkMiddleware } from '@clerk/nextjs/server';
@@ -295,7 +295,7 @@ When adding new third-party services:
 ### Example: Adding Google Analytics
 
 ```typescript
-// middleware.ts
+// proxy.ts
 
 // Add Google Analytics domain to CSP
 const csp = [
@@ -393,5 +393,5 @@ script-src 'self' 'nonce-${nonce}'
 
 - For XSS prevention: Use `input-validation` skill
 - For clickjacking tests: Use `security-testing` skill
-- Headers are automatic - check `middleware.ts:1` for implementation
-- For adding new integrations: Update CSP in middleware.ts
+- Headers are automatic - check `proxy.ts:1` for implementation
+- For adding new integrations: Update CSP in proxy.ts

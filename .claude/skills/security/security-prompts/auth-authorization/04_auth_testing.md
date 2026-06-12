@@ -77,7 +77,7 @@ Create a checklist I can work through before deployment.
 Reference:
 @lib/rbac.ts
 @lib/auth-utils.ts
-@middleware.ts
+@proxy.ts
 ```
 
 ## Test Script Template

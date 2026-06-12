@@ -78,7 +78,7 @@ Please implement a granular permission system following Secure Vibe Coding OS st
 
 Reference:
 @lib/rbac.ts - Existing role checking
-@middleware.ts - Current authorization middleware
+@proxy.ts - Current authorization middleware
 @docs/security/SECURITY_ARCHITECTURE.md - Security architecture
 ```
 

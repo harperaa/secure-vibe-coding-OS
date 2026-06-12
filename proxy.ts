@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { ensureSecretsLoaded } from './lib/secrets'
 
-// Vercel ships middleware as its own Function bundle separate from the app's server.
-// Next.js's instrumentation.ts only registers for the app instance, so the Doppler
-// runtime fetch never populates process.env for this Function. We close that gap by
-// awaiting ensureSecretsLoaded() before doing anything Clerk-related.
+// Vercel ships the proxy (formerly middleware) as its own Function bundle separate
+// from the app's server. Next.js's instrumentation.ts only registers for the app
+// instance, so the Doppler runtime fetch never populates process.env for this
+// Function. We close that gap by awaiting ensureSecretsLoaded() before doing
+// anything Clerk-related.
 //
 // Critical detail: Clerk's clerkMiddleware() reads CLERK_SECRET_KEY at *module-load*
 // time, not at request time. If we just imported it at the top, it would capture
@@ -58,16 +59,16 @@ async function getHandler() {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default async function middleware(req: NextRequest, event: any) {
+export default async function proxy(req: NextRequest, event: any) {
   const handler = await getHandler()
   return handler(req, event)
 }
 
 export const config = {
-  // No runtime override → Next.js middleware default (edge). lib/secrets.ts uses only
-  // fetch() and process.env, both edge-compatible. The lazy-import pattern above means
-  // Clerk reads CLERK_SECRET_KEY only after ensureSecretsLoaded() resolves, so the
-  // module-load order isn't a problem on edge either.
+  // Next 16: proxy.ts (formerly middleware.ts) always runs on the Node.js runtime —
+  // edge is not supported here. That suits this file: lib/secrets.ts and the lazy
+  // Clerk import below get full Node APIs, and Clerk reads CLERK_SECRET_KEY only
+  // after ensureSecretsLoaded() resolves.
   matcher: [
     // Skip Next.js internals and all static files, unless found in search params
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
