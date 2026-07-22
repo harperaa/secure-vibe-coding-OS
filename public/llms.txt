@@ -14,20 +14,9 @@ This starter kit provides battle-tested security patterns for modern web applica
 
 ## Documentation
 
-- [Blog](/blog): Articles on secure development, vibe coding, and best practices
-- [Security Overview](/blog/security-overview): Complete security architecture guide
-- [Getting Started](/blog/getting-started): Quick start tutorial for new developers
-
-## Blog Categories
-
-- [Security](/blog/category/security): Security best practices and implementation guides
-- [Development](/blog/category/development): Development tutorials and patterns
-- [AI & Vibe Coding](/blog/category/ai): AI-assisted development techniques
-
 ## Technical Resources
 
 - [GitHub Repository](https://github.com/your-repo): Source code and contributions
-- [RSS Feed](/feed.xml): Subscribe to latest articles
 
 ## Optional
 

@@ -34,14 +34,14 @@ Template infrastructure the user should NOT customize.
 - `.claude/skills/course-lesson-builder/**`, `.claude/skills/self-installer/**`
 - `.claude/agents/*.md`
 - `scripts/*.mjs`, `scripts/*.sh`, `scripts/*.js`
+- `templates/modules/**` (the module source trees — installed copies in `app/` etc. are Category C)
 - `lib/csrf.ts`, `lib/errorHandler.ts`, `lib/validateRequest.ts`, `lib/validation.ts`, `lib/prompt-validation.ts`, `lib/withCsrf.ts`, `lib/withRateLimit.ts`
 - `middleware.ts`
 - `hooks/use-mobile.ts`
 - `components/ConvexClientProvider.tsx`, `components/theme-provider.tsx`
 - `components/ui/**`
-- `components/kokonutui/**`, `components/magicui/**`, `components/motion-primitives/**`, `components/react-bits/**`
+- `components/react-bits/splash-cursor.tsx`
 - `app/api/**`
-- `app/blog/**`
 
 ### Category B: "Merge carefully" — Merge both changes intelligently
 Shared infrastructure the user may have extended. Keep user additions AND template updates.
@@ -58,17 +58,35 @@ Shared infrastructure the user may have extended. Keep user additions AND templa
 Only add genuinely new content if clearly additive.
 
 - `app/(landing)/**`
+- `app/blog/**`, `app/feed.xml/**` (installed blog module — user content)
 - `app/dashboard/page.tsx`
 - `app/dashboard/app-sidebar.tsx`, `app/dashboard/nav-*.tsx`
 - `app/dashboard/site-header.tsx`
+- `app/dashboard/payment-gated/**` (installed pricing module)
+- `app/dashboard/chart-area-interactive.tsx`, `app/dashboard/data-table.tsx`, `app/dashboard/section-cards.tsx`, `app/dashboard/data.json` (installed dashboard-sample module)
 - `components/logo.tsx`
+- `components/custom-clerk-pricing.tsx` (installed pricing module)
+- `components/kokonutui/**`, `components/magicui/**`, `components/motion-primitives/**`, `components/react-bits/**` (installed homepage-content module; except `splash-cursor.tsx`, which is Category A)
+- `lib/blog.ts`, `lib/mdx.ts` (installed blog module)
 - `content/blog/**`
+- `public/llms.txt`
 - `.claude/skills/lessons/**`
 - `README.md`
 - `public/**` (accept NEW files, keep existing ones)
 
 ### Category D: "New files" — Accept entirely
 Files in the template that do NOT exist in the user's repo. Always accept.
+
+### One-time migration note (template ≥ 5.5)
+
+The template moved the optional content (landing sections, blog, sample dashboard,
+pricing pages) into `templates/modules/` and made the default `app/` minimal. When
+merging across that change, the upstream diff will show DELETIONS of files you may
+still be using (e.g. `app/blog/**`, `app/(landing)/hero-section.tsx`). Those files
+are now your **installed module instances** — treat the deletions as Category C
+(keep your copies; do NOT delete) and accept the new `templates/modules/**` tree as
+Category A/D. Updated module versions arrive under `templates/modules/` and can be
+re-applied selectively with `/add-module` if desired.
 
 ## Dry-Run Flow (ONLY when invoked with `--dry-run`)
 

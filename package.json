@@ -1,6 +1,6 @@
 {
   "name": "secure-vibe-coding-os",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -13,6 +13,7 @@
     "generate:sitemap": "node scripts/generate-sitemap.mjs",
     "prebuild": "node scripts/generate-sitemap.mjs",
     "setup": "node scripts/setup.mjs",
+    "modules": "node scripts/modules.mjs",
     "sync:convex": "doppler run -- node scripts/sync-convex-env.mjs --config dev",
     "deploy:vercel-env": "node scripts/deploy.mjs vercel-env-doppler",
     "typecheck": "tsc --noEmit",
@@ -78,7 +79,8 @@
   "overrides": {
     "lodash": ">=4.17.22",
     "tar": ">=7.5.7",
-    "postcss": "^8.5.12"
+    "postcss": "^8.5.12",
+    "sharp": ">=0.35.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",

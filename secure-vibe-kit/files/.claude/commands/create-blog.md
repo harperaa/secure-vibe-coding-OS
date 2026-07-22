@@ -22,6 +22,21 @@ Generate a complete, production-ready blog article with SEO optimization, LLM di
 
 ---
 
+## Step 0: Confirm the Blog Module Is Installed
+
+The blog is an optional content module. Check before doing anything else:
+
+```bash
+test -d app/blog -a -d content/blog && echo BLOG_INSTALLED || echo BLOG_MISSING
+```
+
+If `BLOG_MISSING`: AskUserQuestion — "The blog module isn't installed. Install it now?"
+- On yes: run `node scripts/modules.mjs install blog` and perform the steps in
+  `templates/modules/blog/INSTALL.md` (the `/add-module blog` flow), then continue.
+- On no: STOP — there is nowhere to publish the article.
+
+---
+
 ## Step 1: Gather Blog Requirements
 
 **Ask the user for the blog topic if not provided:**

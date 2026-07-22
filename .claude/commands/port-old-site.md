@@ -86,11 +86,15 @@ Run these checks in the current working directory (`pwd`):
 test -f package.json && test -f app/layout.tsx && test -d app/dashboard && test -d convex && test -d .claude/skills/security && echo OS_PRESENT || echo OS_MISSING
 test -f .doppler.yaml && echo DOPPLER || (test -f .env.local && echo LEGACY || echo NO_ENV)
 test -f docs/INSTALL.md && echo INSTALLED || echo NOT_INSTALLED
+node scripts/modules.mjs status
 ```
 
 - If `OS_MISSING`: STOP. Tell the user this directory does not look like a Secure Vibe Coding OS install and ask them to run `/install` first or `cd` to the right project.
 - If `NOT_INSTALLED` or `NO_ENV`: tell the user the OS files are present but `/install` has not run. Ask whether to abort and run `/install` first (recommended) or proceed knowing env wiring may be incomplete.
 - Capture the env mode (`DOPPLER` or `LEGACY`) — every later command that touches secrets or runs the app must respect it.
+- Capture the installed content modules. Porting phases build on them:
+  - **Phase 1 (homepage)** requires `homepage-content`; **Phase 2 (blog)** requires `blog`; the dashboard remap can start from `dashboard-sample`; offer `pricing` if the old site sold subscriptions.
+  - Before the relevant phase, if its module is missing, AskUserQuestion: "Module X isn't installed — install it now?" On yes, run `node scripts/modules.mjs install <name>` and perform the steps in `templates/modules/<name>/INSTALL.md` (the `/add-module` flow).
 
 ### 0.2 Confirm the old-site path is reachable and reviewable
 

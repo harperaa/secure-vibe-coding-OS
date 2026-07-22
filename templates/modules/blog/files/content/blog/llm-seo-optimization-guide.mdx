@@ -1,0 +1,186 @@
+---
+title: "LLM SEO: Optimizing Your Content for AI Search"
+description: "Learn how to optimize your website for AI crawlers like ChatGPT, Claude, and Perplexity. Discover the emerging llms.txt standard and best practices for LLM visibility."
+date: "2026-01-08"
+author: "Secure Vibe Team"
+category: "AI"
+tags: ["seo", "ai", "llm", "chatgpt", "content-strategy"]
+image: "/blog/images/llm-seo.png"
+---
+
+## Summary
+
+Traditional SEO focuses on search engine rankings. LLM SEO (LLMO) ensures your content appears in AI-generated responses from ChatGPT, Claude, Perplexity, and other AI assistants. This guide covers the technical and content strategies for AI visibility.
+
+## The Rise of AI Crawlers
+
+AI companies now crawl the web at massive scale:
+
+- **GPTBot (OpenAI)**: 569 million monthly requests
+- **ClaudeBot (Anthropic)**: 370 million monthly requests
+- **PerplexityBot**: 24.4 million monthly requests
+
+Combined, these represent approximately 28% of Googlebot's traffic—and growing rapidly.
+
+## Critical Difference: No JavaScript Execution
+
+Unlike Googlebot, most AI crawlers **do not execute JavaScript**. They only see:
+
+- Server-rendered HTML
+- Static content
+- JSON in initial response
+
+They cannot see:
+
+- Client-side rendered content
+- Dynamically loaded data
+- Single-page app (SPA) content
+
+### What This Means for Your Site
+
+If your content is rendered via JavaScript on the client, AI crawlers won't see it. You must use:
+
+- **Server-Side Rendering (SSR)**
+- **Static Site Generation (SSG)**
+- **Incremental Static Regeneration (ISR)**
+
+This starter kit uses Next.js App Router with SSG for blog content, ensuring full visibility to AI crawlers.
+
+## The llms.txt Standard
+
+The `llms.txt` file is an emerging standard that helps AI systems understand your site. Think of it as a curated map for LLMs.
+
+### Format
+
+Located at `/llms.txt`, it uses Markdown:
+
+```markdown
+# Your Site Name
+
+> Brief description of your site and its purpose.
+
+## Documentation
+- [Getting Started](/docs/start): Quick start guide
+- [API Reference](/docs/api): Complete API documentation
+
+## Blog
+- [Latest Articles](/blog): All blog posts
+
+## Optional
+- [Internal Tools](/tools): Less important pages
+```
+
+### How It Differs from robots.txt
+
+| File | Purpose |
+|------|---------|
+| robots.txt | Tells crawlers where NOT to go |
+| sitemap.xml | Lists all available URLs |
+| llms.txt | Guides LLMs to important content |
+
+## Technical Optimizations
+
+### 1. Server-Side Rendering
+
+All important content should be in the initial HTML response:
+
+```typescript
+// Next.js App Router - Server Component (default)
+export default async function BlogPost({ params }) {
+  const post = await getPost(params.slug)
+  return <article>{post.content}</article>
+}
+```
+
+### 2. Structured Data (JSON-LD)
+
+Add schema markup to help LLMs understand context:
+
+```typescript
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: post.title,
+  description: post.description,
+  author: { '@type': 'Person', name: post.author },
+  datePublished: post.date,
+}
+```
+
+### 3. Clear Heading Hierarchy
+
+Use semantic HTML with proper heading structure:
+
+- One H1 per page (the title)
+- H2 for major sections
+- H3 for subsections
+- Clear, descriptive headings
+
+### 4. Summary Sections
+
+LLMs extract summaries first. Add a clear summary at the top of each article:
+
+```markdown
+## Summary
+
+[2-3 sentence clear summary of the article's key points]
+```
+
+## Content Strategies
+
+### Write for Understanding, Not Keywords
+
+LLMs interpret meaning, not keyword density. Focus on:
+
+- Clear, concise explanations
+- Consistent terminology
+- Logical structure
+- Practical examples
+
+### Build Topic Authority
+
+Create comprehensive content clusters:
+
+1. **Pillar content**: In-depth guides on core topics
+2. **Supporting articles**: Specific aspects of the topic
+3. **Internal linking**: Connect related content
+
+### Include Original Insights
+
+LLMs prioritize unique content:
+
+- Original research and data
+- Expert opinions and analysis
+- Case studies and examples
+- Code samples and implementations
+
+## Bing Indexing is Critical
+
+ChatGPT uses Bing's index for real-time information. If you're not indexed in Bing, you won't appear in ChatGPT responses.
+
+1. Submit your site to Bing Webmaster Tools
+2. Submit your sitemap
+3. Monitor indexing status
+
+## Key Takeaways
+
+1. **Server-render all important content** - AI crawlers don't execute JavaScript
+2. **Implement llms.txt** - Guide AI crawlers to your best content
+3. **Use structured data** - Help LLMs understand context
+4. **Write clear summaries** - LLMs extract these first
+5. **Get indexed in Bing** - Critical for ChatGPT visibility
+6. **Focus on depth over keywords** - LLMs interpret meaning
+
+## Implementation Checklist
+
+- [ ] All blog content uses SSG/SSR
+- [ ] Created `/public/llms.txt`
+- [ ] Added JSON-LD structured data
+- [ ] Clear heading hierarchy (H1 → H2 → H3)
+- [ ] Summary section in each article
+- [ ] Submitted to Bing Webmaster Tools
+- [ ] robots.txt allows AI crawlers
+
+---
+
+*This article is part of the Secure Vibe Coding series. Subscribe to our [RSS feed](/feed.xml) for updates.*

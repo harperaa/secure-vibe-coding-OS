@@ -17,8 +17,10 @@
  *   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com"
  *   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" --clerk-pk=pk_test_... --clerk-sk=sk_test_...
  *   node scripts/setup.mjs convex-setup --project-name="My App" [--team=team-slug]
- *   node scripts/setup.mjs configure --clerk-sk=sk_test_... --admin-email="me@example.com"
- *   node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...]
+ *   node scripts/setup.mjs configure --admin-email="me@example.com"
+ *     (Clerk secret key resolved from CLERK_SECRET_KEY env var, Doppler dev
+ *      config, or .env.local — pass --clerk-sk only as a last resort)
+ *   node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...] [--modules-installed=...] [--modules-skipped=...]
  */
 
 import { createClerkClient } from '@clerk/backend';
@@ -348,7 +350,7 @@ async function runInit(args) {
   if (dopplerIsEnabled()) {
     result.nextSteps.push('Run: node scripts/setup.mjs doppler-sync-env-local (push Convex outputs to Doppler)');
   }
-  result.nextSteps.push('Run: node scripts/setup.mjs configure --clerk-sk=<key> --admin-email=<email>');
+  result.nextSteps.push('Run: node scripts/setup.mjs configure --admin-email=<email> (Clerk secret key is picked up from Doppler/.env.local automatically)');
 
   console.log(JSON.stringify(result, null, 2));
 }
@@ -358,13 +360,30 @@ async function runInit(args) {
 // ---------------------------------------------------------------------------
 
 async function runConfigure(args) {
-  const clerkSk = args['clerk-sk'];
   const adminEmail = args['admin-email'];
+  const envContent = readEnvFile(ENV_FILE);
+
+  // Resolve the Clerk secret key without requiring it on the command line
+  // (passing secrets as CLI arguments leaks them into process args / shell
+  // history): --clerk-sk flag → CLERK_SECRET_KEY env var (e.g. `doppler run --`)
+  // → Doppler `dev` config → .env.local (legacy mode).
+  let clerkSk = args['clerk-sk'] || process.env.CLERK_SECRET_KEY;
+  let dopplerSecrets = null;
+  let dopplerReadError = null;
+  if (dopplerIsEnabled()) {
+    try {
+      dopplerSecrets = dopplerDownloadSecrets('dev');
+      if (!clerkSk) clerkSk = dopplerSecrets?.CLERK_SECRET_KEY;
+    } catch (err) {
+      dopplerReadError = err.message;
+    }
+  }
+  if (!clerkSk) clerkSk = getEnvValue(envContent, 'CLERK_SECRET_KEY');
 
   if (!clerkSk || !adminEmail) {
     console.error(JSON.stringify({
       success: false,
-      error: 'Missing required arguments: --clerk-sk and --admin-email',
+      error: 'Missing required arguments: --admin-email, and a Clerk secret key (from the CLERK_SECRET_KEY env var, Doppler dev config, .env.local, or --clerk-sk)',
     }));
     process.exit(1);
   }
@@ -386,7 +405,6 @@ async function runConfigure(args) {
 
   // Step 1: Read NEXT_PUBLIC_CONVEX_URL. Convex CLI always writes this to
   // .env.local, even in Doppler mode, so .env.local is authoritative for it.
-  const envContent = readEnvFile(ENV_FILE);
   const convexUrl = getEnvValue(envContent, 'NEXT_PUBLIC_CONVEX_URL');
 
   if (!convexUrl || convexUrl.includes('your-convex')) {
@@ -404,14 +422,12 @@ async function runConfigure(args) {
 
   // Step 3: Get Frontend API URL. In Doppler mode this lives in Doppler, not
   // .env.local (init pushed it straight to Doppler `dev`). Fall back to .env.local
-  // for legacy mode.
+  // for legacy mode. Reuses the secrets already downloaded during key resolution.
   let frontendApiUrl;
   if (dopplerIsEnabled()) {
-    try {
-      const dopplerSecrets = dopplerDownloadSecrets('dev');
-      frontendApiUrl = dopplerSecrets?.NEXT_PUBLIC_CLERK_FRONTEND_API_URL;
-    } catch (err) {
-      result.steps.push(`Warning: could not read NEXT_PUBLIC_CLERK_FRONTEND_API_URL from Doppler: ${err.message}`);
+    frontendApiUrl = dopplerSecrets?.NEXT_PUBLIC_CLERK_FRONTEND_API_URL;
+    if (dopplerReadError) {
+      result.steps.push(`Warning: could not read NEXT_PUBLIC_CLERK_FRONTEND_API_URL from Doppler: ${dopplerReadError}`);
     }
   } else {
     frontendApiUrl = getEnvValue(envContent, 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL');
@@ -421,16 +437,9 @@ async function runConfigure(args) {
   const clerk = createClerkClient({ secretKey: clerkSk });
   let webhookSecret = null;
 
-  try {
-    // Ensure Svix app exists for this Clerk instance
-    try {
-      await clerk.webhooks.createSvixApp();
-      result.steps.push('Created Svix app for Clerk webhooks');
-    } catch {
-      // Already exists is expected — continue
-      result.steps.push('Svix app already configured');
-    }
-
+  // The full Svix flow, restartable. Clerk's Svix one-time tokens are single-use,
+  // so every retry must begin again at generateSvixAuthURL() for a fresh token.
+  async function createWebhookViaSvix(steps) {
     // Get one-time token from Clerk's Svix auth URL
     const svixAuth = await clerk.webhooks.generateSvixAuthURL();
     const svixUrl = svixAuth.svix_url;
@@ -451,7 +460,7 @@ async function runConfigure(args) {
       throw new Error(`Svix token exchange failed: ${tokenResp.status} ${await tokenResp.text()}`);
     }
     const { token: svixToken } = await tokenResp.json();
-    result.steps.push('Exchanged Svix one-time token for API token');
+    steps.push('Exchanged Svix one-time token for API token');
 
     // Create Svix client with the real API token
     const { Svix } = await import('svix');
@@ -464,7 +473,7 @@ async function runConfigure(args) {
     let endpointId;
     if (existingEp) {
       endpointId = existingEp.id;
-      result.steps.push('Webhook endpoint already exists, reusing');
+      steps.push('Webhook endpoint already exists, reusing');
     } else {
       const endpoint = await svix.endpoint.create(appId, {
         url: webhookEndpointUrl,
@@ -477,15 +486,53 @@ async function runConfigure(args) {
         ],
       });
       endpointId = endpoint.id;
-      result.steps.push('Created webhook endpoint via Svix');
+      steps.push('Created webhook endpoint via Svix');
     }
 
     // Get the webhook signing secret
     const secret = await svix.endpoint.getSecret(appId, endpointId);
-    webhookSecret = secret.key;
+    return secret.key;
+  }
+
+  // When the Svix app was created a moment ago (fresh install), Clerk can
+  // reject generateSvixAuthURL() with 400 Bad Request until the app has
+  // propagated. Observed in the field; the identical call succeeds seconds
+  // later. Retry with increasing delays before falling back to manual steps.
+  const retryDelaysMs = [0, 2000, 5000, 10000];
+
+  try {
+    // Ensure Svix app exists for this Clerk instance
+    try {
+      await clerk.webhooks.createSvixApp();
+      result.steps.push('Created Svix app for Clerk webhooks');
+    } catch {
+      // Already exists is expected — continue
+      result.steps.push('Svix app already configured');
+    }
+
+    let lastErr = null;
+    for (let attempt = 0; attempt < retryDelaysMs.length; attempt++) {
+      if (retryDelaysMs[attempt] > 0) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelaysMs[attempt]));
+        result.steps.push(`Retrying webhook creation (attempt ${attempt + 1}/${retryDelaysMs.length})...`);
+      }
+      // Collect per-attempt progress separately so a failed attempt doesn't
+      // leave misleading half-done entries in the final step list.
+      const attemptSteps = [];
+      try {
+        webhookSecret = await createWebhookViaSvix(attemptSteps);
+        result.steps.push(...attemptSteps);
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (lastErr) throw lastErr;
+
     result.steps.push(`Retrieved webhook signing secret: ${webhookSecret.substring(0, 10)}...`);
   } catch (err) {
-    result.steps.push(`Webhook creation failed: ${err.message}`);
+    result.steps.push(`Webhook creation failed after ${retryDelaysMs.length} attempts: ${err.message}`);
     result.manualSteps.push(
       'Create webhook manually in Clerk Dashboard:',
       `  1. Go to Clerk Dashboard > Configure > Webhooks > Add Endpoint`,
@@ -820,6 +867,8 @@ async function runWriteInstallSummary(args) {
 
   const completedSteps = (args['completed-steps'] || '').split(',').filter(Boolean);
   const manualSteps = (args['manual-steps'] || '').split(',').filter(Boolean);
+  const modulesInstalled = (args['modules-installed'] || '').split(',').filter(Boolean);
+  const modulesSkipped = (args['modules-skipped'] || '').split(',').filter(Boolean);
 
   const lines = [
     `# Installation Complete!`,
@@ -849,6 +898,24 @@ async function runWriteInstallSummary(args) {
     lines.push(``);
     for (const step of manualSteps) {
       lines.push(`- [ ] ${step}`);
+    }
+  }
+
+  if (modulesInstalled.length > 0 || modulesSkipped.length > 0) {
+    lines.push(``);
+    lines.push(`## Content Modules`);
+    lines.push(``);
+    for (const name of modulesInstalled) {
+      lines.push(`- [x] ${name}`);
+    }
+    for (const name of modulesSkipped) {
+      lines.push(`- [ ] ${name} — install anytime with \`/add-module ${name}\``);
+    }
+    if (modulesInstalled.length === 0) {
+      lines.push(``);
+      lines.push(`Minimal site installed — login homepage + blank dashboard. The secure`);
+      lines.push(`backend (auth, rate limiting, CSRF, security monitoring) is fully active`);
+      lines.push(`either way; modules only add pages and content.`);
     }
   }
 
@@ -1463,9 +1530,9 @@ switch (command) {
     console.error(`Usage:
   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
   node scripts/setup.mjs convex-setup --project-name="My App" [--team=SLUG]
-  node scripts/setup.mjs configure --clerk-sk=... --admin-email="me@example.com"
+  node scripts/setup.mjs configure --admin-email="me@example.com"  (Clerk secret key resolved from CLERK_SECRET_KEY env var, Doppler dev, or .env.local; --clerk-sk overrides)
   node scripts/setup.mjs detect-port
-  node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...]
+  node scripts/setup.mjs write-install-summary [--claim-url=...] [--accountless=true] [--completed-steps=...] [--manual-steps=...] [--modules-installed=...] [--modules-skipped=...]
   node scripts/setup.mjs doppler-bootstrap [--project-name="My App"]  (Doppler mode opt-in: install CLI, login, create project, pin repo to dev. Without --project-name the project is named after package.json (the template name) — /install always passes --project-name)
   node scripts/setup.mjs doppler-sync-env-local                   (push .env.local values to Doppler dev)
   node scripts/setup.mjs doppler-create-ci-token                  (create CI service token and push to GitHub via gh)

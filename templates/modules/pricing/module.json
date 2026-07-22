@@ -1,0 +1,45 @@
+{
+  "name": "pricing",
+  "title": "Pricing",
+  "description": "Clerk Billing pricing section on the homepage plus a payment-gated dashboard page (degrades gracefully until billing is enabled in Clerk)",
+  "marker": "app/dashboard/payment-gated",
+  "overwrites": [],
+  "installAfter": ["homepage-content"],
+  "edits": [
+    {
+      "file": "app/(landing)/page.tsx",
+      "anchor": "// modules:imports",
+      "position": "after",
+      "insert": "import CustomClerkPricing from \"@/components/custom-clerk-pricing\";\n",
+      "skipIfContains": "custom-clerk-pricing"
+    },
+    {
+      "file": "app/(landing)/page.tsx",
+      "anchor": "{/* modules:sections */}",
+      "position": "before",
+      "insert": "      <section id=\"pricing\" className=\"bg-muted/50 py-12 md:py-16\">\n        <div className=\"mx-auto max-w-7xl px-6\">\n          <div className=\"mb-8 mx-auto max-w-2xl space-y-4 text-center\">\n            <h1 className=\"text-center text-4xl font-semibold lg:text-5xl\">Pricing that Scales with You (EXAMPLE ONLY)</h1>\n            <p>Choose the plan that fits your needs. From startups to enterprise applications. THIS IS JUST AN EXAMPLE PRICING SECTION... the Secure Vibe Coding OS is free...</p>\n          </div>\n          <CustomClerkPricing />\n        </div>\n      </section>\n",
+      "skipIfContains": "<CustomClerkPricing />"
+    },
+    {
+      "file": "app/(landing)/header.tsx",
+      "anchor": "// modules:nav",
+      "position": "before",
+      "insert": "    { name: 'Pricing', href: '/#pricing' },\n",
+      "skipIfContains": "href: '/#pricing'"
+    },
+    {
+      "file": "app/dashboard/app-sidebar.tsx",
+      "anchor": "} from \"@tabler/icons-react\"",
+      "position": "before",
+      "insert": "  IconSparkles,\n",
+      "skipIfContains": "IconSparkles"
+    },
+    {
+      "file": "app/dashboard/app-sidebar.tsx",
+      "anchor": "// modules:nav",
+      "position": "before",
+      "insert": "    {\n      title: \"Payment gated\",\n      url: \"/dashboard/payment-gated\",\n      icon: IconSparkles,\n    },\n",
+      "skipIfContains": "/dashboard/payment-gated\","
+    }
+  ]
+}

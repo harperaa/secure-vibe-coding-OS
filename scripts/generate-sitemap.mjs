@@ -84,8 +84,12 @@ function main() {
   // Static pages
   const staticPages = [
     { path: '', changefreq: 'weekly', priority: 1.0 },
-    { path: '/blog', changefreq: 'daily', priority: 0.9 },
   ]
+
+  // Blog index — only when the blog module is installed
+  if (fs.existsSync(path.join(ROOT_DIR, 'app', 'blog'))) {
+    staticPages.push({ path: '/blog', changefreq: 'daily', priority: 0.9 })
+  }
 
   for (const page of staticPages) {
     entries.push({

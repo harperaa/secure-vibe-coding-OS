@@ -1,0 +1,9 @@
+{
+  "name": "dashboard-sample",
+  "title": "Dashboard sample",
+  "description": "Demo dashboard page: KPI section cards, interactive area chart, and sortable data table with sample data",
+  "marker": "app/dashboard/section-cards.tsx",
+  "overwrites": ["app/dashboard/page.tsx"],
+  "installAfter": [],
+  "edits": []
+}

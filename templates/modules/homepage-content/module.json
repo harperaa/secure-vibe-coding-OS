@@ -1,0 +1,56 @@
+{
+  "name": "homepage-content",
+  "title": "Homepage content",
+  "description": "Full marketing landing page: hero, security monitoring promo, features, testimonials, FAQs, call-to-action, footer, and animation components",
+  "marker": "app/(landing)/hero-section.tsx",
+  "overwrites": ["app/(landing)/page.tsx"],
+  "installAfter": [],
+  "edits": [
+    {
+      "file": "app/(landing)/header.tsx",
+      "anchor": "// modules:nav",
+      "position": "before",
+      "insert": "    { name: 'Features', href: '/#features' },\n",
+      "skipIfContains": "href: '/#features'"
+    },
+    {
+      "file": "app/(landing)/header.tsx",
+      "anchor": "// modules:nav",
+      "position": "before",
+      "insert": "    { name: 'About', href: '/#about' },\n",
+      "skipIfContains": "href: '/#about'"
+    },
+    {
+      "file": "app/blog/layout.tsx",
+      "ifInstalled": "blog",
+      "anchor": "import { HeroHeader } from '@/app/(landing)/header'",
+      "position": "after",
+      "insert": "import FooterSection from '@/app/(landing)/footer'\n",
+      "skipIfContains": "(landing)/footer"
+    },
+    {
+      "file": "app/blog/layout.tsx",
+      "ifInstalled": "blog",
+      "anchor": "{/* modules:footer",
+      "position": "before",
+      "insert": "      <FooterSection />\n",
+      "skipIfContains": "<FooterSection />"
+    },
+    {
+      "file": "app/(landing)/page.tsx",
+      "ifInstalled": "pricing",
+      "anchor": "// modules:imports",
+      "position": "after",
+      "insert": "import CustomClerkPricing from \"@/components/custom-clerk-pricing\";\n",
+      "skipIfContains": "custom-clerk-pricing"
+    },
+    {
+      "file": "app/(landing)/page.tsx",
+      "ifInstalled": "pricing",
+      "anchor": "{/* modules:sections */}",
+      "position": "before",
+      "insert": "      <section id=\"pricing\" className=\"bg-muted/50 py-12 md:py-16\">\n        <div className=\"mx-auto max-w-7xl px-6\">\n          <div className=\"mb-8 mx-auto max-w-2xl space-y-4 text-center\">\n            <h1 className=\"text-center text-4xl font-semibold lg:text-5xl\">Pricing that Scales with You (EXAMPLE ONLY)</h1>\n            <p>Choose the plan that fits your needs. From startups to enterprise applications. THIS IS JUST AN EXAMPLE PRICING SECTION... the Secure Vibe Coding OS is free...</p>\n          </div>\n          <CustomClerkPricing />\n        </div>\n      </section>\n",
+      "skipIfContains": "<CustomClerkPricing />"
+    }
+  ]
+}
