@@ -14,11 +14,8 @@ This starter kit provides battle-tested security patterns for modern web applica
 
 ## Documentation
 
-- [Blog](/blog): Articles on secure development, vibe coding, and best practices
-
 ## Technical Resources
 
-- [RSS Feed](/feed.xml): Subscribe to latest articles
 - [GitHub Repository](https://github.com/your-repo): Source code and contributions
 
 ## Optional

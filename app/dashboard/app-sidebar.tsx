@@ -20,7 +20,6 @@ import {
   IconUsers,
   IconBrandOpenai,
   IconShieldCheck,
-  IconSparkles,
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/app/dashboard/nav-documents"
@@ -54,11 +53,6 @@ const data = {
       icon: IconDashboard,
     },
     // modules:nav — content modules add their links here; add your own pages too
-    {
-      title: "Payment gated",
-      url: "/dashboard/payment-gated",
-      icon: IconSparkles,
-    },
   ],
   // Admin-only navigation items
   navAdmin: [
