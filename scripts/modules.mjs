@@ -17,6 +17,7 @@
  *   list                    - All modules with installed status
  *   status                  - { installed: [...], available: [...] }
  *   install <name...>       - Copy one or more modules into the repo
+ *     --all                 - Install every available module (in place of <name...>)
  *     --apply-edits         - Also apply the manifest's anchor-based edits
  *                             (nav links, homepage sections). Safe on a fresh
  *                             template; on customized repos missing anchors are
@@ -304,9 +305,11 @@ switch (command) {
     runStatus(flags);
     break;
   case 'install': {
-    const names = positional.slice(1);
+    const names = flags.all
+      ? loadManifests().map((m) => m.name)
+      : positional.slice(1);
     if (names.length === 0) {
-      console.error('Usage: node scripts/modules.mjs install <name...> [--apply-edits] [--force] [--json]');
+      console.error('Usage: node scripts/modules.mjs install <name...>|--all [--apply-edits] [--force] [--json]');
       process.exit(1);
     }
     runInstall(names, flags);
