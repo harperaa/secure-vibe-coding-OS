@@ -61,12 +61,13 @@ After Phase 1 completes, call AskUserQuestion with ALL FIVE questions in a SINGL
       ]
     },
     {
-      "question": "Start with an empty shell of an application? (No homepage content, blog, dashboard sample, or payments — just a login homepage and a blank backend page on top of the full secure backend. Everything can be added later with /add-module.)",
+      "question": "How much of the application do you want installed now? (The full secure backend is always installed either way. Content modules — homepage content, blog, dashboard sample, pricing — can be added or removed anytime with /add-module.)",
       "header": "App shell",
       "multiSelect": false,
       "options": [
-        { "label": "Yes — empty shell (Recommended)", "description": "Minimal site: login homepage + blank dashboard. Add content modules anytime later with /add-module." },
-        { "label": "No — let me pick modules", "description": "Choose which content modules to install now (homepage content, blog, dashboard sample, pricing)." }
+        { "label": "Minimal shell (Recommended)", "description": "Login homepage + blank dashboard, no content modules. Add any of them later with /add-module." },
+        { "label": "All modules", "description": "Install every content module now: homepage content, blog, dashboard sample, and pricing." },
+        { "label": "Let me pick modules", "description": "Choose which content modules to install now (homepage content, blog, dashboard sample, pricing)." }
       ]
     }
   ]
@@ -77,11 +78,15 @@ Admin email is required. If the user selects "I'll enter my email" without typin
 
 Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `false` if legacy).
 
-### Module selection (only if the user answered "No — let me pick modules")
+### Module selection (depends on the "App shell" answer)
 
-If the user chose the empty shell (the default), do NOT ask anything further: set `<MODULES>` = empty and `<SKIPPED_MODULES>` = `homepage-content,blog,dashboard-sample,pricing`, and skip this follow-up question entirely.
+Branch on the answer to the "App shell" question above:
 
-Otherwise, call AskUserQuestion with the module picker:
+- **"Minimal shell" (the default)** — do NOT ask anything further: set `<MODULES>` = empty and `<SKIPPED_MODULES>` = `homepage-content,blog,dashboard-sample,pricing`, and skip the follow-up question entirely.
+- **"All modules"** — do NOT ask anything further: set `<MODULES>` = `homepage-content,blog,dashboard-sample,pricing` and `<SKIPPED_MODULES>` = empty, and skip the follow-up question entirely.
+- **"Let me pick modules"** — call AskUserQuestion with the module picker below.
+
+Module picker (only for "Let me pick modules"):
 
 ```json
 {

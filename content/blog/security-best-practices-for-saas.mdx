@@ -1,0 +1,243 @@
+---
+title: "Security Best Practices for Modern SaaS Applications"
+description: "A comprehensive guide to implementing security controls in SaaS applications. Covers authentication, authorization, input validation, CSRF protection, and more."
+date: "2026-01-07"
+author: "Secure Vibe Team"
+category: "Security"
+tags: ["security", "saas", "authentication", "csrf", "owasp"]
+image: "/blog/images/security-saas.png"
+---
+
+## Summary
+
+Building a secure SaaS application requires defense in depth—multiple layers of security controls working together. This guide covers the essential security practices every SaaS developer should implement.
+
+## The OWASP Top 10 for SaaS
+
+The OWASP Top 10 represents the most critical security risks for web applications. Here's how they apply to SaaS:
+
+### 1. Broken Access Control
+
+**The Risk**: Users accessing resources they shouldn't.
+
+**The Solution**:
+- Implement role-based access control (RBAC)
+- Verify ownership on every request
+- Use Clerk's built-in authorization
+- Never trust client-side checks alone
+
+```typescript
+// Always verify server-side
+const user = await currentUser()
+const resource = await getResource(id)
+
+if (resource.userId !== user.id) {
+  throw new Error('Unauthorized')
+}
+```
+
+### 2. Injection Attacks
+
+**The Risk**: Malicious input executed as code (SQL, command, XSS).
+
+**The Solution**:
+- Use parameterized queries (Convex handles this)
+- Validate and sanitize all input
+- Use Content Security Policy headers
+- Escape output in templates
+
+### 3. Insecure Authentication
+
+**The Risk**: Weak passwords, session hijacking, credential stuffing.
+
+**The Solution**:
+- Use Clerk for managed authentication
+- Implement rate limiting on auth endpoints
+- Enable multi-factor authentication
+- Secure session management
+
+## Implementing Defense in Depth
+
+### Layer 1: Input Validation
+
+Validate all input at the edge:
+
+```typescript
+import { z } from 'zod'
+
+const ContactSchema = z.object({
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  message: z.string().min(10).max(1000),
+})
+
+// Validate before processing
+const result = ContactSchema.safeParse(input)
+if (!result.success) {
+  return { error: 'Invalid input' }
+}
+```
+
+### Layer 2: Authentication
+
+Verify identity on protected routes:
+
+```typescript
+import { auth } from '@clerk/nextjs/server'
+
+export async function GET() {
+  const { userId } = await auth()
+
+  if (!userId) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  // Process authenticated request
+}
+```
+
+### Layer 3: Authorization
+
+Verify permissions for each action:
+
+```typescript
+async function updateResource(resourceId: string, data: UpdateData) {
+  const user = await currentUser()
+  const resource = await getResource(resourceId)
+
+  // Check ownership
+  if (resource.ownerId !== user.id) {
+    throw new ForbiddenError()
+  }
+
+  // Check role permissions
+  if (!user.roles.includes('editor')) {
+    throw new ForbiddenError()
+  }
+
+  return await update(resourceId, data)
+}
+```
+
+### Layer 4: CSRF Protection
+
+Prevent cross-site request forgery:
+
+```typescript
+import { validateCsrfToken } from '@/lib/csrf'
+
+export async function POST(request: Request) {
+  const token = request.headers.get('x-csrf-token')
+
+  if (!validateCsrfToken(token)) {
+    return new Response('Invalid CSRF token', { status: 403 })
+  }
+
+  // Process request
+}
+```
+
+### Layer 5: Rate Limiting
+
+Prevent abuse and brute force attacks:
+
+```typescript
+import { rateLimit } from '@/lib/rateLimit'
+
+const limiter = rateLimit({
+  interval: 60 * 1000, // 1 minute
+  uniqueTokenPerInterval: 500,
+})
+
+export async function POST(request: Request) {
+  const ip = request.headers.get('x-forwarded-for')
+
+  try {
+    await limiter.check(10, ip) // 10 requests per minute
+  } catch {
+    return new Response('Too many requests', { status: 429 })
+  }
+
+  // Process request
+}
+```
+
+## Security Headers
+
+Configure security headers for all responses:
+
+```typescript
+// next.config.js
+const securityHeaders = [
+  {
+    key: 'X-Frame-Options',
+    value: 'DENY',
+  },
+  {
+    key: 'X-Content-Type-Options',
+    value: 'nosniff',
+  },
+  {
+    key: 'Referrer-Policy',
+    value: 'strict-origin-when-cross-origin',
+  },
+  {
+    key: 'Content-Security-Policy',
+    value: "default-src 'self'; script-src 'self' 'unsafe-inline'",
+  },
+]
+```
+
+## Secure Error Handling
+
+Never expose internal errors to users:
+
+```typescript
+try {
+  await riskyOperation()
+} catch (error) {
+  // Log detailed error internally
+  console.error('Operation failed:', error)
+
+  // Return generic message to user
+  return { error: 'An error occurred. Please try again.' }
+}
+```
+
+## Security Checklist
+
+### Authentication & Authorization
+- [ ] Using managed auth provider (Clerk)
+- [ ] MFA enabled for sensitive accounts
+- [ ] Session timeout configured
+- [ ] Password requirements enforced
+- [ ] RBAC implemented
+
+### Input Handling
+- [ ] All input validated with schemas
+- [ ] SQL injection prevention (parameterized queries)
+- [ ] XSS prevention (output encoding)
+- [ ] File upload validation
+
+### Request Protection
+- [ ] CSRF tokens on state-changing requests
+- [ ] Rate limiting on all endpoints
+- [ ] API authentication required
+
+### Infrastructure
+- [ ] HTTPS enforced
+- [ ] Security headers configured
+- [ ] Secrets in environment variables
+- [ ] Dependencies regularly updated
+
+## Key Takeaways
+
+1. **Defense in depth**: Multiple layers of protection
+2. **Validate everything**: Never trust user input
+3. **Use managed services**: Clerk for auth, Convex for database
+4. **Log securely**: Detailed logs internally, generic errors externally
+5. **Stay updated**: Patch dependencies regularly
+
+---
+
+*This article is part of the Secure Vibe Coding series. Subscribe to our [RSS feed](/feed.xml) for updates.*

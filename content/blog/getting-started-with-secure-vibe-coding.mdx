@@ -1,0 +1,98 @@
+---
+title: "Getting Started with Secure Vibe Coding"
+description: "Learn how to build secure applications using AI-assisted development. This comprehensive guide covers security fundamentals, best practices, and how to leverage AI tools safely."
+date: "2026-01-08"
+author: "Secure Vibe Team"
+category: "Development"
+tags: ["security", "ai", "getting-started", "nextjs", "vibe-coding"]
+image: "/blog/images/getting-started.png"
+---
+
+## Summary
+
+Vibe coding with AI assistants like Claude and ChatGPT can accelerate development, but it requires understanding security fundamentals to avoid introducing vulnerabilities. This guide teaches you how to build securely from day one.
+
+## What is Vibe Coding?
+
+Vibe coding is the practice of using AI assistants to help write code through natural language conversations. Instead of writing every line manually, you describe what you want and iterate with the AI to produce working code.
+
+### Benefits of Vibe Coding
+
+- **Faster development**: Reduce time from idea to implementation
+- **Learning accelerator**: Understand new technologies through explanation
+- **Code review partner**: Get instant feedback on your approaches
+- **Documentation helper**: Generate docs and comments automatically
+
+### The Security Challenge
+
+AI assistants are trained on vast amounts of code, including insecure patterns. Without proper guidance, they may generate code with:
+
+- SQL injection vulnerabilities
+- Cross-site scripting (XSS) flaws
+- Insecure authentication patterns
+- Hardcoded secrets
+- Missing input validation
+
+## Security-First Vibe Coding Principles
+
+### 1. Always Validate AI-Generated Code
+
+Never blindly copy-paste code from an AI. Always:
+
+- Review for security implications
+- Check for hardcoded values
+- Verify authentication and authorization logic
+- Test edge cases
+
+### 2. Provide Security Context
+
+When prompting AI assistants, include security requirements:
+
+```
+Create a login endpoint that:
+- Uses parameterized queries (no SQL injection)
+- Implements rate limiting
+- Returns generic error messages
+- Logs failed attempts securely
+```
+
+### 3. Use Security-Focused Frameworks
+
+This starter kit provides pre-built security controls:
+
+- **CSRF Protection**: Automatic token validation
+- **Rate Limiting**: Request throttling per user/IP
+- **Input Validation**: Schema-based validation with Zod
+- **Authentication**: Clerk-managed sessions
+
+## Getting Started with This Starter Kit
+
+### Step 1: Clone and Configure
+
+Clone the repository and set up your environment variables. Never commit secrets to git.
+
+### Step 2: Understand the Security Architecture
+
+Review the security skills in `.claude/skills/security/` to understand the built-in protections.
+
+### Step 3: Build with Security Prompts
+
+Use the security prompt templates when building new features. They guide AI assistants toward secure implementations.
+
+## Key Takeaways
+
+1. AI accelerates development but doesn't replace security knowledge
+2. Always review and validate AI-generated code
+3. Use security-focused prompts and frameworks
+4. Leverage built-in security controls instead of building from scratch
+5. Test security controls as part of your development workflow
+
+## Next Steps
+
+- Read the [Security Overview](/blog/security-overview) for architecture details
+- Explore [CSRF Protection](/blog/csrf-protection-guide) implementation
+- Learn about [Rate Limiting](/blog/rate-limiting-best-practices) patterns
+
+---
+
+*This article is part of the Secure Vibe Coding series. Subscribe to our [RSS feed](/feed.xml) for updates.*
