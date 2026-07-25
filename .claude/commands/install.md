@@ -15,12 +15,18 @@ You are the installation assistant for Secure Vibe Coding OS. You will collect a
 2. Check if `node_modules` exists: `ls node_modules/.package-lock.json 2>/dev/null`
    - If not: run `npm install`
 3. Get the directory basename for a default site name: `basename "$PWD"`
+4. Work out a suggested admin email, `<SUGGESTED_EMAIL>`, in this order:
+   - the email in your own session context (the `userEmail` the harness provides for the signed-in user), if present
+   - otherwise `git config user.email`
+   - otherwise leave it empty
+
+   This value is resolved at runtime on the user's own machine — never write a literal email address into this file or any other file in the repo.
 
 ## Phase 2: Collect Input (MANDATORY — DO NOT SKIP)
 
 **STOP. You MUST call AskUserQuestion for each question below. Do NOT assume answers or use defaults without asking.**
 
-After Phase 1 completes, call AskUserQuestion with ALL FIVE questions in a SINGLE batch using the exact parameters below. Replace `DIRNAME` with the basename value from Phase 1. Do NOT split this into multiple AskUserQuestion calls — the user should see all five questions on one screen:
+After Phase 1 completes, call AskUserQuestion with ALL FOUR questions in a SINGLE batch using the exact parameters below. Replace `DIRNAME` with the basename value from Phase 1 and `SUGGESTED_EMAIL` with the value from Phase 1 step 4. Do NOT split this into multiple AskUserQuestion calls — the user should see all four questions on one screen (four is the tool's maximum):
 
 ```json
 {
@@ -35,20 +41,12 @@ After Phase 1 completes, call AskUserQuestion with ALL FIVE questions in a SINGL
       ]
     },
     {
-      "question": "What email address will you use to sign in as the site admin? This controls access to the Security Monitoring dashboard and admin functions. (Select 'Other' below and type your email — this is required.)",
+      "question": "What email address will you use to sign in as the site admin? This controls access to the Security Monitoring dashboard and admin functions.",
       "header": "Admin email",
       "multiSelect": false,
       "options": [
-        { "label": "I'll enter my email", "description": "Select 'Other' below and type your admin email address" }
-      ]
-    },
-    {
-      "question": "Do you already have a Clerk application with API keys?",
-      "header": "Clerk setup",
-      "multiSelect": false,
-      "options": [
-        { "label": "No, create one for me (Recommended)", "description": "Creates a Clerk app automatically without needing a Clerk account. You'll get a link to claim it later." },
-        { "label": "Yes, I have API keys", "description": "You'll provide your existing Publishable Key and Secret Key" }
+        { "label": "SUGGESTED_EMAIL (Recommended)", "description": "Use this address — it's the one already configured on this machine. Pick 'Other' to type a different one." },
+        { "label": "Use a different email", "description": "Select 'Other' below and type the admin email address you want" }
       ]
     },
     {
@@ -74,7 +72,13 @@ After Phase 1 completes, call AskUserQuestion with ALL FIVE questions in a SINGL
 }
 ```
 
-Admin email is required. If the user selects "I'll enter my email" without typing one via the Other option, OR types something that isn't a valid email (must contain `@` and a `.`), re-ask the same AskUserQuestion until a valid address is supplied. Do NOT proceed to Phase 3 with a placeholder email.
+Admin email notes:
+
+- If `<SUGGESTED_EMAIL>` is empty (no session email and no git email), drop that first option entirely and use a single option: `{ "label": "I'll enter my email", "description": "Select 'Other' below and type your admin email address" }`.
+- The suggested address is only ever a suggestion — the user can override it with "Other" on the same screen.
+- Admin email is required. If the user ends up without an address, OR supplies something that isn't a valid email (must contain `@` and a `.`), re-ask the same AskUserQuestion until a valid address is supplied. Do NOT proceed to Phase 3 with a placeholder email.
+
+Clerk is always provisioned automatically — an "accountless" Clerk app is created for the user, so there is no question about existing Clerk keys. If the user has *already told you* they want to use their own existing Clerk application, ask for the Publishable Key and Secret Key using the block in "Bring your own Clerk keys" below and pass them to Phase 3; otherwise skip that section.
 
 Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `false` if legacy).
 
@@ -135,9 +139,9 @@ If this exits non-zero, show the error and STOP. The error message is structured
 - OAuth flow cancelled → re-run
 - Windows: the helper auto-tries `winget install Doppler.doppler` (currently fails because Doppler isn't in the winget repo yet) and then `scoop install doppler` (works if scoop is already installed). If neither succeeds, the error message gives the user three options: install scoop, use WSL, or download a release binary. Just pass the error through verbatim — it's already actionable.
 
-### If user chose "Yes, I have API keys":
+### Bring your own Clerk keys (only if the user volunteered that they have an existing Clerk app)
 
-Call AskUserQuestion again with these two questions:
+Not asked by default. Call AskUserQuestion with these two questions only in that case:
 
 ```json
 {
@@ -169,6 +173,8 @@ Build and run the init command with all collected values:
 ```bash
 node scripts/setup.mjs init --site-name="<SITE_NAME>" --admin-email="<ADMIN_EMAIL>" [--clerk-pk=<PK> --clerk-sk=<SK>]
 ```
+
+Omit `--clerk-pk`/`--clerk-sk` in the normal case — without them the script creates an accountless Clerk app. Pass them only if the user brought their own keys in the optional section above.
 
 Parse the JSON output and display results to the user:
 - Show each completed step with a checkmark
