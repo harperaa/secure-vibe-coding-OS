@@ -300,10 +300,13 @@ async function runInit(args) {
   }
 
   // Step 6: Create JWT template for Convex (idempotent).
-  // Lifetime 3600s (1h): the old 60s default forced constant refresh and could
-  // surface as intermittent "User is not authenticated" on Convex mutations
-  // when the client briefly lacked a valid template token.
-  const CONVEX_JWT_LIFETIME_SEC = 3600;
+  // Lifetime 300s (5m): long enough that a client is never left without a valid
+  // template token mid-request (the failure mode of Clerk's 60s default, which
+  // surfaced as intermittent "User is not authenticated" on Convex mutations),
+  // while keeping the window in which a stolen token stays usable short. Convex
+  // refreshes well before expiry, so raising this further buys nothing and only
+  // widens that window.
+  const CONVEX_JWT_LIFETIME_SEC = 300;
   try {
     const existingTemplates = await clerk.jwtTemplates.list();
     const convexTemplate = existingTemplates.data?.find(
@@ -311,8 +314,11 @@ async function runInit(args) {
     );
 
     if (convexTemplate) {
+      // Converge to the configured lifetime in BOTH directions. A `<` test here
+      // would only ever raise it, so lowering the constant would silently skip
+      // every template already provisioned at the older, longer value.
       const needsUpdate =
-        Number(convexTemplate.lifetime) < CONVEX_JWT_LIFETIME_SEC ||
+        Number(convexTemplate.lifetime) !== CONVEX_JWT_LIFETIME_SEC ||
         convexTemplate.claims?.aud !== 'convex';
       if (needsUpdate) {
         await clerk.jwtTemplates.update({

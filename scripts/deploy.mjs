@@ -695,10 +695,13 @@ async function runValidateKeys(args) {
       t => t.name?.toLowerCase() === 'convex'
     );
 
-    const CONVEX_JWT_LIFETIME_SEC = 3600;
+    // 300s (5m) — see the rationale in scripts/setup.mjs; dev and prod must match.
+    const CONVEX_JWT_LIFETIME_SEC = 300;
     if (convexTemplate) {
+      // Converge in BOTH directions: a `<` test would only ever raise the
+      // lifetime, silently skipping templates already set to a longer value.
       const needsUpdate =
-        Number(convexTemplate.lifetime) < CONVEX_JWT_LIFETIME_SEC ||
+        Number(convexTemplate.lifetime) !== CONVEX_JWT_LIFETIME_SEC ||
         convexTemplate.claims?.aud !== 'convex';
       if (needsUpdate) {
         await clerk.jwtTemplates.update({
