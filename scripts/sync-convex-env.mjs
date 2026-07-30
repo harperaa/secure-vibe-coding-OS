@@ -23,6 +23,8 @@ import { downloadSecrets } from './lib/doppler.mjs';
 const CONVEX_ALLOWLIST = [
   'CLERK_WEBHOOK_SECRET',
   'NEXT_PUBLIC_CLERK_FRONTEND_API_URL',
+  // Preferred issuer name (Convex/Clerk docs). Same value as Frontend API URL.
+  'CLERK_JWT_ISSUER_DOMAIN',
   'ADMIN_EMAIL',
 ];
 
@@ -121,6 +123,16 @@ async function main() {
     if (dopplerSecrets[key] !== undefined && dopplerSecrets[key] !== '') {
       desired[key] = dopplerSecrets[key];
     }
+  }
+
+  // Derive issuer domain from Frontend API URL when only the latter is in Doppler
+  // (common after older installs). Keeps auth.config.ts providers populated.
+  if (
+    desired.NEXT_PUBLIC_CLERK_FRONTEND_API_URL &&
+    !desired.CLERK_JWT_ISSUER_DOMAIN
+  ) {
+    desired.CLERK_JWT_ISSUER_DOMAIN =
+      desired.NEXT_PUBLIC_CLERK_FRONTEND_API_URL;
   }
 
   // For prd, surface CONVEX_DEPLOY_KEY to convex CLI

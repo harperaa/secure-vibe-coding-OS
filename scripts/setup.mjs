@@ -293,9 +293,17 @@ async function runInit(args) {
   if (frontendApiUrl) {
     persistEnvVar('NEXT_PUBLIC_CLERK_FRONTEND_API_URL', frontendApiUrl);
     result.envVarsSet.push('NEXT_PUBLIC_CLERK_FRONTEND_API_URL');
+    // Official Convex/Clerk issuer env name — same value as Frontend API URL.
+    // auth.config.ts prefers this, with FRONTEND_API_URL as fallback.
+    persistEnvVar('CLERK_JWT_ISSUER_DOMAIN', frontendApiUrl);
+    result.envVarsSet.push('CLERK_JWT_ISSUER_DOMAIN');
   }
 
-  // Step 6: Create JWT template for Convex (idempotent)
+  // Step 6: Create JWT template for Convex (idempotent).
+  // Lifetime 3600s (1h): the old 60s default forced constant refresh and could
+  // surface as intermittent "User is not authenticated" on Convex mutations
+  // when the client briefly lacked a valid template token.
+  const CONVEX_JWT_LIFETIME_SEC = 3600;
   try {
     const existingTemplates = await clerk.jwtTemplates.list();
     const convexTemplate = existingTemplates.data?.find(
@@ -303,14 +311,31 @@ async function runInit(args) {
     );
 
     if (convexTemplate) {
-      result.steps.push('JWT template "convex" already exists, skipping');
+      const needsUpdate =
+        Number(convexTemplate.lifetime) < CONVEX_JWT_LIFETIME_SEC ||
+        convexTemplate.claims?.aud !== 'convex';
+      if (needsUpdate) {
+        await clerk.jwtTemplates.update({
+          templateId: convexTemplate.id,
+          name: 'convex',
+          claims: { aud: 'convex' },
+          lifetime: CONVEX_JWT_LIFETIME_SEC,
+        });
+        result.steps.push(
+          `Updated JWT template "convex" (lifetime ${CONVEX_JWT_LIFETIME_SEC}s)`
+        );
+      } else {
+        result.steps.push('JWT template "convex" already exists, skipping');
+      }
     } else {
       await clerk.jwtTemplates.create({
         name: 'convex',
         claims: { aud: 'convex' },
-        lifetime: 60,
+        lifetime: CONVEX_JWT_LIFETIME_SEC,
       });
-      result.steps.push('Created JWT template "convex"');
+      result.steps.push(
+        `Created JWT template "convex" (lifetime ${CONVEX_JWT_LIFETIME_SEC}s)`
+      );
     }
   } catch (err) {
     result.steps.push(`Warning: JWT template creation failed: ${err.message}. You may need to create it manually in Clerk Dashboard > JWT Templates > convex`);
@@ -392,8 +417,8 @@ function convexFunctionsLive({ prod = false } = {}) {
 /**
  * Push functions + auth.config.ts to Convex, then PROVE it worked.
  *
- * Why this exists: convex/auth.config.ts reads
- * NEXT_PUBLIC_CLERK_FRONTEND_API_URL from Convex's env store, and Convex
+ * Why this exists: convex/auth.config.ts reads CLERK_JWT_ISSUER_DOMAIN (preferred)
+ * or NEXT_PUBLIC_CLERK_FRONTEND_API_URL from Convex's env store, and Convex
  * evaluates that file at PUSH time — not per request. Convex's docs are
  * explicit: "You must run `npx convex dev` or `npx convex deploy` after adding
  * a new provider to sync the configuration to your backend." So setting the
@@ -623,6 +648,9 @@ async function runConfigure(args) {
   }
   if (frontendApiUrl && !frontendApiUrl.includes('your-clerk')) {
     convexVarsToSet['NEXT_PUBLIC_CLERK_FRONTEND_API_URL'] = frontendApiUrl;
+    // Mirror under the official Convex/Clerk docs name as well so auth.config.ts
+    // has a reliable issuer even if only one of the names is read at push time.
+    convexVarsToSet['CLERK_JWT_ISSUER_DOMAIN'] = frontendApiUrl;
   }
   convexVarsToSet['ADMIN_EMAIL'] = adminEmail;
 
@@ -691,15 +719,17 @@ async function runConfigure(args) {
   // Re-push Convex AFTER the env vars above are set.
   //
   // Install order is: convex-setup (pushes functions) -> configure (sets
-  // NEXT_PUBLIC_CLERK_FRONTEND_API_URL on the deployment). auth.config.ts reads
-  // that var for the Clerk JWT issuer domain, and Convex evaluates auth.config
-  // at PUSH time, so the earlier push baked `domain: undefined` and registered
-  // zero providers. Setting the env var alone does not fix that.
+  // CLERK_JWT_ISSUER_DOMAIN / NEXT_PUBLIC_CLERK_FRONTEND_API_URL on the
+  // deployment). auth.config.ts reads those for the Clerk JWT issuer domain,
+  // and Convex evaluates auth.config at PUSH time, so the earlier push baked
+  // `domain: undefined` and registered zero providers. Setting the env var
+  // alone does not fix that.
   //
   // Without this re-push, a user who installs and deploys to Vercel without
-  // ever running local `convex dev` gets, on first login:
+  // ever running local `convex dev` gets, on first login / first authenticated
+  // mutation:
   //   "No auth provider found matching the given token (no providers configured)"
-  //   "Could not find public function for 'users:checkIsAdmin'"
+  //   or Convex identity null → "User is not authenticated"
   // and it only "fixes itself" once they start the local Convex dev server,
   // because that is what finally pushes.
   //
@@ -716,8 +746,9 @@ async function runConfigure(args) {
       result.steps.push(`Convex re-push after env set failed: ${push.detail}`);
       result.manualSteps.push(
         'Run `npx convex dev --once` (or `npm run convex:doppler`) so auth.config.ts ' +
-          'picks up NEXT_PUBLIC_CLERK_FRONTEND_API_URL. Until this succeeds, logging in ' +
-          'on the deployed site fails with "no auth provider found (no providers configured)".'
+          'picks up CLERK_JWT_ISSUER_DOMAIN / NEXT_PUBLIC_CLERK_FRONTEND_API_URL. ' +
+          'Until this succeeds, login and authenticated mutations fail ' +
+          '("no auth provider" or "User is not authenticated").'
       );
     }
   }
@@ -1306,6 +1337,7 @@ const KEEP_IN_CONVEX = new Set([
   'CONVEX_DEPLOY_KEY',                    // Convex-local
   'CLERK_WEBHOOK_SECRET',                 // Convex-mirrored (used by convex/http.ts)
   'NEXT_PUBLIC_CLERK_FRONTEND_API_URL',   // Convex-mirrored (used by convex/auth.config.ts)
+  'CLERK_JWT_ISSUER_DOMAIN',              // Convex-mirrored (preferred issuer name in auth.config.ts)
   'ADMIN_EMAIL',                          // Convex-mirrored (used by admin queries)
 ]);
 
