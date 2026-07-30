@@ -356,6 +356,78 @@ async function runInit(args) {
 }
 
 // ---------------------------------------------------------------------------
+// Convex push helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Is the Convex deployment actually serving our functions?
+ *
+ * `npx convex dev --once` can exit non-zero (or even zero) without the
+ * functions landing, so exit codes are not evidence. This asks the deployment
+ * what it is actually serving and looks for a module we know we ship.
+ *
+ * Returns true only on a positive answer — any error means "cannot confirm",
+ * which callers must treat as not-deployed.
+ */
+function convexFunctionsLive({ prod = false } = {}) {
+  try {
+    const out = execSync(`npx convex function-spec${prod ? ' --prod' : ''}`, {
+      cwd: ROOT_DIR,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+      timeout: 60000,
+    });
+    const spec = JSON.parse(out);
+    return (
+      Array.isArray(spec.functions) &&
+      spec.functions.some(
+        (f) => typeof f?.identifier === 'string' && f.identifier.startsWith('users.js:')
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Push functions + auth.config.ts to Convex, then PROVE it worked.
+ *
+ * Why this exists: convex/auth.config.ts reads
+ * NEXT_PUBLIC_CLERK_FRONTEND_API_URL from Convex's env store, and Convex
+ * evaluates that file at PUSH time — not per request. Convex's docs are
+ * explicit: "You must run `npx convex dev` or `npx convex deploy` after adding
+ * a new provider to sync the configuration to your backend." So setting the
+ * env var alone never activates Clerk; something has to push afterwards.
+ *
+ * Returns { ok, step, detail }. Callers decide how loudly to fail.
+ */
+function pushConvexAndVerify({ prod = false } = {}) {
+  const cmd = prod ? 'npx convex deploy' : 'npx convex dev --once';
+  let detail = '';
+  try {
+    execSync(cmd, {
+      cwd: ROOT_DIR,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+      timeout: 180000,
+    });
+  } catch (err) {
+    detail = ((err.stdout || '') + (err.stderr || '') + (err.message || ''))
+      .trim()
+      .substring(0, 800);
+  }
+  // Verify regardless of exit code — a non-zero exit with a successful push is
+  // common (typecheck warnings), and so is a zero exit with nothing deployed.
+  if (convexFunctionsLive({ prod })) {
+    return { ok: true, step: `Pushed Convex functions and auth.config.ts via \`${cmd}\` (verified live)` };
+  }
+  return {
+    ok: false,
+    detail: detail || `\`${cmd}\` reported success but no functions are being served.`,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // configure Subcommand
 // ---------------------------------------------------------------------------
 
@@ -616,6 +688,40 @@ async function runConfigure(args) {
     result.steps.push('All Convex environment variables set successfully');
   }
 
+  // Re-push Convex AFTER the env vars above are set.
+  //
+  // Install order is: convex-setup (pushes functions) -> configure (sets
+  // NEXT_PUBLIC_CLERK_FRONTEND_API_URL on the deployment). auth.config.ts reads
+  // that var for the Clerk JWT issuer domain, and Convex evaluates auth.config
+  // at PUSH time, so the earlier push baked `domain: undefined` and registered
+  // zero providers. Setting the env var alone does not fix that.
+  //
+  // Without this re-push, a user who installs and deploys to Vercel without
+  // ever running local `convex dev` gets, on first login:
+  //   "No auth provider found matching the given token (no providers configured)"
+  //   "Could not find public function for 'users:checkIsAdmin'"
+  // and it only "fixes itself" once they start the local Convex dev server,
+  // because that is what finally pushes.
+  //
+  // This also doubles as a retry: if convex-setup's initial push failed, this
+  // is the second chance, now with the env vars in place.
+  if (result.convexEnvVarsSet.length > 0) {
+    const push = pushConvexAndVerify();
+    if (push.ok) {
+      result.steps.push(push.step);
+    } else {
+      result.success = false;
+      result.error = 'convex_push_failed';
+      result.detail = push.detail;
+      result.steps.push(`Convex re-push after env set failed: ${push.detail}`);
+      result.manualSteps.push(
+        'Run `npx convex dev --once` (or `npm run convex:doppler`) so auth.config.ts ' +
+          'picks up NEXT_PUBLIC_CLERK_FRONTEND_API_URL. Until this succeeds, logging in ' +
+          'on the deployed site fails with "no auth provider found (no providers configured)".'
+      );
+    }
+  }
+
   console.log(JSON.stringify(result, null, 2));
 }
 
@@ -776,8 +882,29 @@ async function runConvexSetup(args) {
 
     if (fallbackDeployment && fallbackDeployment !== '' && !fallbackDeployment.includes('your_') &&
         fallbackUrl && fallbackUrl !== '' && !fallbackUrl.includes('your_')) {
-      // Project was actually created despite the non-zero exit code
-      result.steps.push('Convex CLI exited with warnings but project was created successfully');
+      // The project exists and .env.local was written — but that only proves the
+      // project was CREATED, not that functions were PUSHED. Those are separate
+      // things, and treating the first as proof of the second is how a install
+      // ends with a Vercel site talking to an empty Convex backend.
+      // Ask the deployment what it is actually serving.
+      if (convexFunctionsLive()) {
+        result.steps.push('Convex CLI exited with warnings but project was created and functions verified live');
+      } else {
+        result.steps.push('Convex project created, but no functions are being served — retrying push');
+        const retry = pushConvexAndVerify();
+        if (retry.ok) {
+          result.steps.push(retry.step);
+        } else {
+          console.log(JSON.stringify({
+            success: false,
+            error: 'convex_functions_not_deployed',
+            detail: (errOutput || retry.detail).substring(0, 1000),
+            hint: 'The Convex project exists but its functions were never pushed. Run: npx convex dev --once',
+            steps: result.steps,
+          }));
+          return;
+        }
+      }
     } else {
       console.log(JSON.stringify({
         success: false,
