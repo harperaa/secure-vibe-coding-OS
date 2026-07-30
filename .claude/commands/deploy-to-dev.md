@@ -224,18 +224,41 @@ If clean:
 
 Derive the Vercel project name from the GitHub repo name (NOT the directory name):
 1. Parse the repo name from the origin remote URL: `git remote get-url origin` → extract the repo basename (e.g., `harperaa/test2` → `test2`)
-2. Run: `npx vercel project add <REPO_NAME> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
-3. Run: `npx vercel link --yes --project=<REPO_NAME>`
+
+2. Resolve the Vercel scope (team) and hold it as `<SCOPE>`. This is REQUIRED: when the
+   account belongs to more than one team, Vercel never auto-selects one in a
+   non-interactive run and every subsequent command fails with
+   `Multiple teams found. Teams are never auto-selected when the CLI runs without an
+   interactive terminal.`
+   Run: `npx vercel teams ls`
+   - Exactly one team → use its id as `<SCOPE>`.
+   - More than one → ask the user which team to deploy into using AskUserQuestion,
+     then use the id of their choice as `<SCOPE>`.
+
+3. Run: `npx vercel project add <REPO_NAME> --scope=<SCOPE> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
+4. Run: `npx vercel link --yes --project=<REPO_NAME> --scope=<SCOPE>`
 
 If this fails (auth error):
 - STOP. Display: "Vercel CLI is not authenticated. Run `npx vercel login` in your terminal, then re-run `/deploy-to-dev`."
 
 Show checkmark: "Vercel project linked (<REPO_NAME>)"
 
-4. Connect the GitHub repo for automatic deployments on push:
-   Run: `npx vercel git connect --yes`
+5. Connect the GitHub repo for automatic deployments on push.
+   ALWAYS pass the origin URL explicitly:
+   Run: `npx vercel git connect "$(git remote get-url origin)" --yes --scope=<SCOPE>`
    - This enables Vercel to auto-rebuild and redeploy when you `git push origin main`
    - Without this step, only manual CLI deploys (`npx vercel deploy`) would work
+   - The explicit URL is REQUIRED, not cosmetic. Step 2 renames the template remote to
+     `upstream` and adds the user's new repo as `origin`, so the repo has TWO remotes.
+     A bare `vercel git connect --yes` can pick `upstream` and silently wire this
+     project to the template repository — every push to the user's own repo would then
+     deploy nothing, while the template's code deploys into their project.
+
+   After connecting, VERIFY it bound the right repo before continuing:
+   Run: `npx vercel project inspect <REPO_NAME> --scope=<SCOPE>`
+   - Confirm the connected repository matches the `origin` basename from step 1.
+   - If it shows the template repo, run
+     `npx vercel git disconnect --yes --scope=<SCOPE>` and redo the connect above.
 
 If this fails, show warning but continue (the initial CLI deploy in Step 7 will still work):
 "Warning: Could not auto-connect GitHub repo. You can connect it manually in Vercel Dashboard → Settings → Git."

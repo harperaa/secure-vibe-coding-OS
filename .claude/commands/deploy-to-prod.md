@@ -362,13 +362,30 @@ Run `git status` — if there are changes:
 **Step 3:** Vercel login + link + git connect.
 Derive the Vercel project name from the GitHub repo name (NOT the directory name):
 1. Parse the repo name from the origin remote URL: `git remote get-url origin` → extract the repo basename (e.g., `user/my-app` → `my-app`)
-2. Run: `npx vercel project add <REPO_NAME> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
-3. Run: `npx vercel link --yes --project=<REPO_NAME>`
+2. Resolve the Vercel scope (team) and hold it as `<SCOPE>`. REQUIRED: with more than one
+   team, Vercel never auto-selects in a non-interactive run and the commands below fail with
+   `Multiple teams found. Teams are never auto-selected when the CLI runs without an
+   interactive terminal.`
+   Run: `npx vercel teams ls`
+   - Exactly one team → use its id as `<SCOPE>`.
+   - More than one → ask the user which team with AskUserQuestion, then use that id.
+3. Run: `npx vercel project add <REPO_NAME> --scope=<SCOPE> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
+4. Run: `npx vercel link --yes --project=<REPO_NAME> --scope=<SCOPE>`
 If auth error: tell user to run `npx vercel login`, AskUserQuestion to confirm, retry.
-4. Connect the GitHub repo for automatic deployments on push:
-   Run: `npx vercel git connect --yes`
+5. Connect the GitHub repo for automatic deployments on push.
+   ALWAYS pass the origin URL explicitly:
+   Run: `npx vercel git connect "$(git remote get-url origin)" --yes --scope=<SCOPE>`
    This enables Vercel to auto-rebuild and redeploy when you `git push origin main`.
-   If this fails, show warning but continue — the CLI deploy will still work. User can connect manually in Vercel Dashboard → Settings → Git.
+   The explicit URL is REQUIRED: this repo may carry both an `origin` (the user's repo) and
+   an `upstream` (the template). A bare `vercel git connect --yes` can bind the PRODUCTION
+   project to the template repository — shipping template code to a live site.
+
+   Then VERIFY before continuing:
+   Run: `npx vercel project inspect <REPO_NAME> --scope=<SCOPE>` and confirm the connected
+   repo matches the `origin` basename. If it shows the template, run
+   `npx vercel git disconnect --yes --scope=<SCOPE>` and redo the connect.
+
+   If the connect itself fails, show a warning but continue — the CLI deploy will still work. User can connect manually in Vercel Dashboard → Settings → Git.
 
 **Step 4:** Set Vercel env vars.
 

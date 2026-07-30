@@ -241,6 +241,29 @@ function runInstall(names, flags) {
 
   const results = [];
   for (const manifest of selected) {
+    // Installing is idempotent: a module whose marker already exists is left
+    // alone. Without this, re-running install over an already-installed module
+    // reports false conflicts and exits 2 — because --apply-edits mutates files
+    // AFTER copying them (e.g. blog's layout.tsx gains a FooterSection import),
+    // so the on-disk file no longer matches the pristine module source.
+    //
+    // That is exactly what breaks a cloner's first Vercel deploy: /install
+    // copies the modules, /deploy-to-dev commits them, and then vercel.json's
+    // buildCommand re-runs `install --all` against a tree that already has
+    // them. Use --force to deliberately re-copy and repair a module.
+    if (isInstalled(manifest) && !flags.force) {
+      results.push({
+        module: manifest.name,
+        alreadyInstalled: true,
+        copied: [],
+        overwritten: [],
+        conflicts: [],
+        editsApplied: [],
+        editsSkipped: [],
+        postInstall: path.relative(ROOT_DIR, path.join(manifest._dir, 'INSTALL.md')),
+      });
+      continue;
+    }
     const copyResult = copyModuleFiles(manifest, { force: !!flags.force });
     const result = {
       module: manifest.name,
@@ -267,6 +290,10 @@ function runInstall(names, flags) {
   } else {
     for (const r of results) {
       console.log(`\n=== ${r.module} ===`);
+      if (r.alreadyInstalled) {
+        console.log('Already installed — skipped (use --force to re-copy).');
+        continue;
+      }
       console.log(`Copied: ${r.copied.length} file(s)`);
       if (r.overwritten.length > 0) console.log(`Overwritten: ${r.overwritten.join(', ')}`);
       if (r.conflicts.length > 0) {
