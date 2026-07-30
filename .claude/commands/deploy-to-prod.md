@@ -19,7 +19,7 @@ If `.doppler.yaml` exists in the repo root, this deployment runs in **Doppler mo
   ```
 - Phase 9 (Convex prod env): `sync-convex-env.mjs --config prd` is the source-of-truth path; the legacy `convex-prod-env` subcommand still works but the script supersedes it.
 - Phase 10 (Vercel env): `node scripts/deploy.mjs vercel-env` automatically delegates to `vercel-env-doppler`. Only `DOPPLER_TOKEN` and `REVALIDATE_TOKEN` end up in Vercel — production app values live exclusively in Doppler.
-- `vercel.json` must use the prebuild chain so Vercel's build machine fetches secrets from Doppler before `next build` inlines `NEXT_PUBLIC_*`. The repo's checked-in `vercel.json` already does this.
+- `vercel.json` must use the prebuild chain so Vercel's build machine fetches secrets from Doppler before `next build` inlines `NEXT_PUBLIC_*`. The repo's checked-in `vercel.json` does NOT satisfy this for production — it omits `convex deploy` and prepends the template-only `modules.mjs install --all`. Phase 10 Step 1 overwrites it; do not treat the checked-in file as already correct.
 - After deployment, run `/rotate` if any compromise is suspected — it revokes the Vercel-side `DOPPLER_TOKEN` in seconds.
 
 The legacy mode (`.env.local` → `vercel env add` → secrets stored in Vercel) is preserved as the default when `.doppler.yaml` is absent.
@@ -335,6 +335,20 @@ Parse JSON output and show each env var set.
 
 **Step 1:** Create `vercel.json` with Next.js framework preset and production build command.
 The `"framework": "nextjs"` is REQUIRED — without it, `vercel project add` via CLI defaults the framework to "Other", which causes Edge Function errors with Clerk middleware.
+
+**ALWAYS overwrite `vercel.json` with the block for the active mode below — even if the
+existing file looks correct.** This is not a conditional step. Do NOT skip it because the
+file already has `"framework": "nextjs"`, or because its `buildCommand` already mentions
+`vercel-prebuild.mjs` and therefore looks "Doppler-aware".
+
+Two things make skipping actively wrong here:
+- The template's checked-in `vercel.json` begins its `buildCommand` with
+  `node scripts/modules.mjs install --all --apply-edits`, which exists so the *template's*
+  demo site renders fully from a minimal `main`. A clone has its modules committed already,
+  so that command does not belong in its build.
+- The checked-in `buildCommand` has **no `convex deploy`**. Production requires it — without
+  it, Convex functions are never deployed for this release and the live site runs against
+  stale backend code.
 
 Write `vercel.json`:
 

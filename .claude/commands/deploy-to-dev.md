@@ -190,7 +190,17 @@ or where this step ran via the "origin already non-template" branch above.
 
 The `vercel.json` MUST include `"framework": "nextjs"` — without this, `vercel project add` via CLI defaults the framework to "Other", which causes Edge Function errors with Clerk middleware.
 
-Check if `vercel.json` exists by reading it.
+**ALWAYS overwrite `vercel.json` with the block for the active mode below — even if the
+existing file looks correct.** This is not a conditional step. Do NOT skip it because the
+file already has `"framework": "nextjs"`, or because its `buildCommand` already mentions
+`vercel-prebuild.mjs` and therefore looks "Doppler-aware".
+
+Why this trap exists: the template's own checked-in `vercel.json` deliberately carries
+`node scripts/modules.mjs install --all --apply-edits` at the front of its `buildCommand`,
+so the *template's* demo site renders the full site while its `main` stays a minimal shell.
+That command is wrong for a clone, which has its modules committed already — leaving it in
+place makes the build re-install modules over files that are already there. Overwriting is
+what removes it.
 
 **Doppler mode** (`.doppler.yaml` exists): write `vercel.json` with the prebuild chain so the build machine fetches secrets from Doppler before `next build` inlines `NEXT_PUBLIC_*`:
 ```json
@@ -208,7 +218,12 @@ Check if `vercel.json` exists by reading it.
 }
 ```
 
-If `vercel.json` already contains `convex deploy`, it's from a previous production deploy — overwrite with the appropriate version above.
+After writing, re-read `vercel.json` and confirm its `buildCommand` matches the block above
+exactly — in particular that it does NOT contain `modules.mjs install`. If it still does, the
+write did not take effect; fix it before continuing, or the Vercel build will fail.
+
+(A `vercel.json` containing `convex deploy` is left over from a previous production deploy;
+the overwrite above replaces it, which is correct for a dev deploy.)
 
 ## Step 4: Commit and Push
 
