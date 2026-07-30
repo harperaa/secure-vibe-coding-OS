@@ -77,6 +77,5 @@ async function exampleProtectedHandler(request: NextRequest) {
  */
 export const POST = withRateLimit(withCsrf(exampleProtectedHandler));
 
-export const config = {
-  runtime: 'nodejs',
-};
+// Must be its own named export — the App Router ignores `export const config`.
+export const runtime = 'nodejs';
