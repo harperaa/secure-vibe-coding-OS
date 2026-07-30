@@ -19,6 +19,5 @@ async function testHandler(request: NextRequest) {
 export const GET = withRateLimit(testHandler);
 export const POST = withRateLimit(testHandler);
 
-export const config = {
-  runtime: 'nodejs',
-};
+// Must be its own named export — the App Router ignores `export const config`.
+export const runtime = 'nodejs';

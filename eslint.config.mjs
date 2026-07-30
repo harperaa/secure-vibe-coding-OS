@@ -1,20 +1,13 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import nextTypeScript from "eslint-config-next/typescript";
 
-// eslint-config-next 15.x still ships legacy-style config objects (with `extends`).
-// Use FlatCompat to consume them inside this flat-config file. This is the
-// pattern Next.js 15's "Strict (recommended)" setup generates when you let
-// `next lint` initialize ESLint for you.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
+// eslint-config-next 16.x ships native flat-config arrays, so they are spread
+// directly. Do NOT reintroduce FlatCompat here: running the legacy eslintrc
+// validator over a flat config throws "Converting circular structure to JSON".
 
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...nextCoreWebVitals,
+  ...nextTypeScript,
   {
     ignores: [
       "node_modules/**",
@@ -22,13 +15,23 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
-      "convex/_generated/**",
+      "**/convex/_generated/**",
       "secure-vibe-kit/**",
     ],
   },
   {
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
+
+      // New errors introduced by eslint-config-next 16 (eslint-plugin-react-hooks v6).
+      // 24 pre-existing violations across app/, components/ and templates/modules/.
+      // Downgraded to "warn" so the Next.js 16 upgrade doesn't also become a
+      // component-refactor PR. Fixing these changes runtime behaviour (effect
+      // ordering, render purity), so it belongs in its own change.
+      // TODO: fix the violations and re-promote all three to "error".
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/static-components": "warn",
     },
   },
   {

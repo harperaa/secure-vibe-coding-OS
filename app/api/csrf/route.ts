@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export const config = {
-  runtime: 'nodejs', // Explicitly use Node.js runtime for crypto-js
-};
+// Explicitly use the Node.js runtime for crypto-js. This must be its own named
+// export — the App Router ignores `export const config`, which is Pages Router
+// syntax, so the previous form silently did nothing.
+export const runtime = 'nodejs';

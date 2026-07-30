@@ -87,54 +87,6 @@ This file is read automatically by Claude Code on every session.
 
 ---
 
-## The 12 Commands
-
-```
-/create-feature-branch [purpose]   Start new work from latest main
-/commit                            Stage all and commit with strong message
-/push                              Push branch to GitHub
-/merge-to-testing                  Add feature branch to testing environment
-/create-pull-request               Sync with main, open PR via GitHub CLI
-/stash-push                        Temporarily save uncommitted changes
-/stash-pop                         Restore most recently stashed changes
-/sync-feature-branch               Rebase feature branch on latest main
-/sync-testing-branch               Merge main into testing (safe for shared branch)
-/status                            Plain-English summary of current state
-/security-assessment               Run comprehensive security assessment via agents
-/add-module [name]                 Install optional content modules (blog, pricing, ...)
-```
-
----
-
-## Everyday Workflow
-
-```
-/create-feature-branch user-login     ← start
-  ... write code ...
-/commit                               ← save
-/push                                 ← sync to GitHub, get preview URL
-  ... test on preview URL ...
-/security-assessment                  ← assess before PR
-/create-pull-request                  ← open PR for review
-```
-
-## When You Need to Step Away Mid-Work
-
-```
-/stash-push    ← park your changes
-  ... do other things ...
-/stash-pop     ← restore and continue
-```
-
-## Keeping Branches Current
-
-```
-/sync-feature-branch    ← rebase YOUR branch on latest main (personal only)
-/sync-testing-branch    ← merge main into testing (shared branch, uses merge)
-```
-
----
-
 ## Conventional Commit Format
 
 All commit messages must follow this format:
@@ -149,15 +101,6 @@ Valid types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`, `perf`
 
 ---
 
-## CI Pipeline (runs automatically)
-
-1. lint — ESLint + TypeScript
-2. test — unit + integration tests
-3. security — npm audit
-4. build — production build check
-
----
-
 ## Environments
 
 | Environment | Branch    | URL                     |
@@ -165,21 +108,6 @@ Valid types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`, `perf`
 | Production  | `main`    | yourapp.com             |
 | Testing     | `testing` | testing.yourapp.com     |
 | Preview     | any branch| branch-name.vercel.app  |
-
----
-
-## Project Stack Defaults
-
-Adjust per-project in a local CLAUDE.md override:
-
-```
-Node version: 20
-Package manager: npm
-Test runner: Vitest
-Linter: ESLint + Biome
-CI: GitHub Actions
-Deploy: Vercel
-```
 
 ---
 
@@ -215,30 +143,6 @@ Run `/security-assessment` before opening any PR.
 The command invokes the security orchestrator agent in `.claude/agents/`
 which runs a comprehensive assessment across OWASP Top 10, authentication,
 injection risks, secrets exposure, and dependency vulnerabilities.
-
-Security architecture is implemented through specialized skills at .claude/skills/security/:
-
-Implementation Skills (how to build securely):
-- security-overview: High-level defense-in-depth architecture and skill directory
-- csrf-protection: CSRF protection implementation
-- rate-limiting: Rate limiting implementation
-- input-validation: Input validation and XSS prevention
-- ai-chat-protection: AI chatbot protection and prompt injection prevention
-- security-headers: Security headers configuration
-- error-handling: Secure error handling
-- auth-security: Clerk authentication and authorization
-- payment-security: Clerk Billing and Stripe payment security
-- dependency-security: Dependency and supply chain security
-- security-testing: Testing security features
-
-Awareness Skills (understanding AI code vulnerabilities):
-- security-awareness/awareness-overview: Vibe coding security risks overview
-- security-awareness/injection-vulnerabilities: SQL injection, command injection, XSS in AI code
-- security-awareness/auth-vulnerabilities: Insecure passwords, broken sessions, access control
-- security-awareness/information-leakage: Hardcoded secrets, verbose logging
-- security-awareness/supply-chain-risks: Vulnerable dependencies, typosquatting
-- security-awareness/business-logic-flaws: Race conditions, integer overflow
-- security-awareness/resource-exhaustion: Unbounded operations, DoS, cost explosion
 
 ---
 
