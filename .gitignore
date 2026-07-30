@@ -62,3 +62,6 @@ course-outline.tsx.txt
 # commit build/publish artifacts generated inside it
 secure-vibe-kit/node_modules/
 secure-vibe-kit/*.tgz
+
+# transient worktrees created by Claude Code — never commit these
+.claude/worktrees/
