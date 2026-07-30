@@ -695,17 +695,36 @@ async function runValidateKeys(args) {
       t => t.name?.toLowerCase() === 'convex'
     );
 
+    const CONVEX_JWT_LIFETIME_SEC = 3600;
     if (convexTemplate) {
-      result.steps.push('JWT template "convex" already exists on production');
-      result.jwtTemplateCreated = false;
+      const needsUpdate =
+        Number(convexTemplate.lifetime) < CONVEX_JWT_LIFETIME_SEC ||
+        convexTemplate.claims?.aud !== 'convex';
+      if (needsUpdate) {
+        await clerk.jwtTemplates.update({
+          templateId: convexTemplate.id,
+          name: 'convex',
+          claims: { aud: 'convex' },
+          lifetime: CONVEX_JWT_LIFETIME_SEC,
+        });
+        result.jwtTemplateCreated = false;
+        result.steps.push(
+          `Updated JWT template "convex" on production (lifetime ${CONVEX_JWT_LIFETIME_SEC}s)`
+        );
+      } else {
+        result.steps.push('JWT template "convex" already exists on production');
+        result.jwtTemplateCreated = false;
+      }
     } else {
       await clerk.jwtTemplates.create({
         name: 'convex',
         claims: { aud: 'convex' },
-        lifetime: 60,
+        lifetime: CONVEX_JWT_LIFETIME_SEC,
       });
       result.jwtTemplateCreated = true;
-      result.steps.push('Created JWT template "convex" on production');
+      result.steps.push(
+        `Created JWT template "convex" on production (lifetime ${CONVEX_JWT_LIFETIME_SEC}s)`
+      );
     }
   } catch (err) {
     result.steps.push(`Warning: JWT template creation failed: ${err.message}`);
@@ -909,7 +928,10 @@ async function runConvexProdEnv(args) {
 
   const envVars = {};
   if (webhookSecret) envVars['CLERK_WEBHOOK_SECRET'] = webhookSecret;
-  if (frontendApiUrl) envVars['NEXT_PUBLIC_CLERK_FRONTEND_API_URL'] = frontendApiUrl;
+  if (frontendApiUrl) {
+    envVars['NEXT_PUBLIC_CLERK_FRONTEND_API_URL'] = frontendApiUrl;
+    envVars['CLERK_JWT_ISSUER_DOMAIN'] = frontendApiUrl;
+  }
   if (adminEmail) envVars['ADMIN_EMAIL'] = adminEmail;
 
   for (const [key, value] of Object.entries(envVars)) {
