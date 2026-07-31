@@ -158,7 +158,7 @@ Examples:
 Defined in `.github/workflows/ci.yml`. Four jobs run on every push and PR:
 
 1. **lint** — ESLint + TypeScript typecheck
-2. **test** — Vitest / Jest unit + integration tests
+2. **test** — `npm test` (a placeholder until you add a test runner)
 3. **security** — `npm audit --audit-level=high`
 4. **build** — Production build verification
 
@@ -205,10 +205,10 @@ Run these from Claude Code with `/command-name`:
 Adjust per-project in a local CLAUDE.md override:
 
 ```
-Node version: 20
+Node version: >=20.9 (Next.js 16 minimum)
 Package manager: npm
-Test runner: Vitest
-Linter: ESLint + Biome
+Test runner: not configured (npm test is a placeholder)
+Linter: ESLint (flat config)
 CI: GitHub Actions
 Deploy: Vercel
 ```

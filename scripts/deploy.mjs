@@ -695,17 +695,39 @@ async function runValidateKeys(args) {
       t => t.name?.toLowerCase() === 'convex'
     );
 
+    // 300s (5m) — see the rationale in scripts/setup.mjs; dev and prod must match.
+    const CONVEX_JWT_LIFETIME_SEC = 300;
     if (convexTemplate) {
-      result.steps.push('JWT template "convex" already exists on production');
-      result.jwtTemplateCreated = false;
+      // Converge in BOTH directions: a `<` test would only ever raise the
+      // lifetime, silently skipping templates already set to a longer value.
+      const needsUpdate =
+        Number(convexTemplate.lifetime) !== CONVEX_JWT_LIFETIME_SEC ||
+        convexTemplate.claims?.aud !== 'convex';
+      if (needsUpdate) {
+        await clerk.jwtTemplates.update({
+          templateId: convexTemplate.id,
+          name: 'convex',
+          claims: { aud: 'convex' },
+          lifetime: CONVEX_JWT_LIFETIME_SEC,
+        });
+        result.jwtTemplateCreated = false;
+        result.steps.push(
+          `Updated JWT template "convex" on production (lifetime ${CONVEX_JWT_LIFETIME_SEC}s)`
+        );
+      } else {
+        result.steps.push('JWT template "convex" already exists on production');
+        result.jwtTemplateCreated = false;
+      }
     } else {
       await clerk.jwtTemplates.create({
         name: 'convex',
         claims: { aud: 'convex' },
-        lifetime: 60,
+        lifetime: CONVEX_JWT_LIFETIME_SEC,
       });
       result.jwtTemplateCreated = true;
-      result.steps.push('Created JWT template "convex" on production');
+      result.steps.push(
+        `Created JWT template "convex" on production (lifetime ${CONVEX_JWT_LIFETIME_SEC}s)`
+      );
     }
   } catch (err) {
     result.steps.push(`Warning: JWT template creation failed: ${err.message}`);
@@ -909,7 +931,10 @@ async function runConvexProdEnv(args) {
 
   const envVars = {};
   if (webhookSecret) envVars['CLERK_WEBHOOK_SECRET'] = webhookSecret;
-  if (frontendApiUrl) envVars['NEXT_PUBLIC_CLERK_FRONTEND_API_URL'] = frontendApiUrl;
+  if (frontendApiUrl) {
+    envVars['NEXT_PUBLIC_CLERK_FRONTEND_API_URL'] = frontendApiUrl;
+    envVars['CLERK_JWT_ISSUER_DOMAIN'] = frontendApiUrl;
+  }
   if (adminEmail) envVars['ADMIN_EMAIL'] = adminEmail;
 
   for (const [key, value] of Object.entries(envVars)) {
@@ -1300,6 +1325,57 @@ async function runVercelEnvDoppler(opts = {}) {
   } catch (err) {
     result.success = false;
     result.steps.push(`Convex sync error: ${err.message}`);
+  }
+
+  // 4b. Re-push Convex so auth.config.ts picks up the env vars just synced.
+  //
+  // Syncing env vars does NOT activate Clerk as an auth provider: Convex
+  // evaluates auth.config.ts at push time, so provider config only changes when
+  // functions are pushed. Convex's docs: "You must run `npx convex dev` or
+  // `npx convex deploy` after adding a new provider to sync the configuration
+  // to your backend."
+  //
+  // This is the safety net for install -> deploy-to-dev where the user never
+  // ran local `convex dev`: without it the Vercel site's first login fails with
+  // "no auth provider found (no providers configured)".
+  //
+  // NOTE: `convex deploy` takes no --yes flag; the CLI hard-errors on unknown
+  // options, which would make this silently never run.
+  if (result.success !== false) {
+    const isProd = config === 'prd';
+    const cmd = isProd ? 'npx convex deploy' : 'npx convex dev --once';
+    let detail = '';
+    try {
+      execSync(cmd, { cwd: ROOT_DIR, encoding: 'utf-8', stdio: 'pipe', timeout: 180000 });
+    } catch (err) {
+      detail = ((err.stdout || '') + (err.stderr || '') + (err.message || '')).trim().substring(0, 800);
+    }
+    // Exit code is not evidence — verify what the deployment actually serves.
+    let live = false;
+    try {
+      const spec = JSON.parse(
+        execSync(`npx convex function-spec${isProd ? ' --prod' : ''}`, {
+          cwd: ROOT_DIR, encoding: 'utf-8', stdio: 'pipe', timeout: 60000,
+        })
+      );
+      live = Array.isArray(spec.functions) &&
+        spec.functions.some((f) => typeof f?.identifier === 'string' && f.identifier.startsWith('users.js:'));
+    } catch {
+      live = false;
+    }
+    if (live) {
+      result.steps.push(`Re-pushed Convex (${config}) so auth.config.ts picks up the Clerk issuer (verified live)`);
+    } else {
+      result.success = false;
+      result.error = 'convex_push_failed';
+      result.steps.push(
+        `Convex re-push after env sync failed (${config}): ${detail || 'no functions are being served'}`
+      );
+      result.steps.push(
+        `Warning: run \`${cmd}\` so auth.config.ts activates the Clerk issuer domain. ` +
+          'Until then, logging in on the deployed site fails with "no providers configured".'
+      );
+    }
   }
 
   // 5. If this was a successful prd run, drop a marker so a future

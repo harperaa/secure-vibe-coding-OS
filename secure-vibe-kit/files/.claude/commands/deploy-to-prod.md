@@ -19,7 +19,7 @@ If `.doppler.yaml` exists in the repo root, this deployment runs in **Doppler mo
   ```
 - Phase 9 (Convex prod env): `sync-convex-env.mjs --config prd` is the source-of-truth path; the legacy `convex-prod-env` subcommand still works but the script supersedes it.
 - Phase 10 (Vercel env): `node scripts/deploy.mjs vercel-env` automatically delegates to `vercel-env-doppler`. Only `DOPPLER_TOKEN` and `REVALIDATE_TOKEN` end up in Vercel — production app values live exclusively in Doppler.
-- `vercel.json` must use the prebuild chain so Vercel's build machine fetches secrets from Doppler before `next build` inlines `NEXT_PUBLIC_*`. The repo's checked-in `vercel.json` already does this.
+- `vercel.json` must use the prebuild chain so Vercel's build machine fetches secrets from Doppler before `next build` inlines `NEXT_PUBLIC_*`. The repo's checked-in `vercel.json` does NOT satisfy this for production — it omits `convex deploy` and prepends the template-only `modules.mjs install --all`. Phase 10 Step 1 overwrites it; do not treat the checked-in file as already correct.
 - After deployment, run `/rotate` if any compromise is suspected — it revokes the Vercel-side `DOPPLER_TOKEN` in seconds.
 
 The legacy mode (`.env.local` → `vercel env add` → secrets stored in Vercel) is preserved as the default when `.doppler.yaml` is absent.
@@ -336,6 +336,20 @@ Parse JSON output and show each env var set.
 **Step 1:** Create `vercel.json` with Next.js framework preset and production build command.
 The `"framework": "nextjs"` is REQUIRED — without it, `vercel project add` via CLI defaults the framework to "Other", which causes Edge Function errors with Clerk middleware.
 
+**ALWAYS overwrite `vercel.json` with the block for the active mode below — even if the
+existing file looks correct.** This is not a conditional step. Do NOT skip it because the
+file already has `"framework": "nextjs"`, or because its `buildCommand` already mentions
+`vercel-prebuild.mjs` and therefore looks "Doppler-aware".
+
+Two things make skipping actively wrong here:
+- The template's checked-in `vercel.json` begins its `buildCommand` with
+  `node scripts/modules.mjs install --all --apply-edits`, which exists so the *template's*
+  demo site renders fully from a minimal `main`. A clone has its modules committed already,
+  so that command does not belong in its build.
+- The checked-in `buildCommand` has **no `convex deploy`**. Production requires it — without
+  it, Convex functions are never deployed for this release and the live site runs against
+  stale backend code.
+
 Write `vercel.json`:
 
 **Doppler mode** (`.doppler.yaml` exists): chain prebuild → Convex deploy → Next.js build. The prebuild script fetches secrets from Doppler so `next build` can inline `NEXT_PUBLIC_*`:
@@ -362,13 +376,30 @@ Run `git status` — if there are changes:
 **Step 3:** Vercel login + link + git connect.
 Derive the Vercel project name from the GitHub repo name (NOT the directory name):
 1. Parse the repo name from the origin remote URL: `git remote get-url origin` → extract the repo basename (e.g., `user/my-app` → `my-app`)
-2. Run: `npx vercel project add <REPO_NAME> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
-3. Run: `npx vercel link --yes --project=<REPO_NAME>`
+2. Resolve the Vercel scope (team) and hold it as `<SCOPE>`. REQUIRED: with more than one
+   team, Vercel never auto-selects in a non-interactive run and the commands below fail with
+   `Multiple teams found. Teams are never auto-selected when the CLI runs without an
+   interactive terminal.`
+   Run: `npx vercel teams ls`
+   - Exactly one team → use its id as `<SCOPE>`.
+   - More than one → ask the user which team with AskUserQuestion, then use that id.
+3. Run: `npx vercel project add <REPO_NAME> --scope=<SCOPE> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
+4. Run: `npx vercel link --yes --project=<REPO_NAME> --scope=<SCOPE>`
 If auth error: tell user to run `npx vercel login`, AskUserQuestion to confirm, retry.
-4. Connect the GitHub repo for automatic deployments on push:
-   Run: `npx vercel git connect --yes`
+5. Connect the GitHub repo for automatic deployments on push.
+   ALWAYS pass the origin URL explicitly:
+   Run: `npx vercel git connect "$(git remote get-url origin)" --yes --scope=<SCOPE>`
    This enables Vercel to auto-rebuild and redeploy when you `git push origin main`.
-   If this fails, show warning but continue — the CLI deploy will still work. User can connect manually in Vercel Dashboard → Settings → Git.
+   The explicit URL is REQUIRED: this repo may carry both an `origin` (the user's repo) and
+   an `upstream` (the template). A bare `vercel git connect --yes` can bind the PRODUCTION
+   project to the template repository — shipping template code to a live site.
+
+   Then VERIFY before continuing:
+   Run: `npx vercel project inspect <REPO_NAME> --scope=<SCOPE>` and confirm the connected
+   repo matches the `origin` basename. If it shows the template, run
+   `npx vercel git disconnect --yes --scope=<SCOPE>` and redo the connect.
+
+   If the connect itself fails, show a warning but continue — the CLI deploy will still work. User can connect manually in Vercel Dashboard → Settings → Git.
 
 **Step 4:** Set Vercel env vars.
 
