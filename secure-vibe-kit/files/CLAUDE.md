@@ -205,13 +205,18 @@ Run these from Claude Code with `/command-name`:
 Adjust per-project in a local CLAUDE.md override:
 
 ```
-Node version: >=20.9 (Next.js 16 minimum)
+Node version: >=24.15 <26 (npm >=11.10 is required for the install cooldown)
 Package manager: npm
 Test runner: not configured (npm test is a placeholder)
 Linter: ESLint (flat config)
 CI: GitHub Actions
 Deploy: Vercel
 ```
+
+Node 24 is a hard requirement, not a suggestion: `.npmrc` sets `engine-strict`,
+so `npm install` fails outright on Node 20 or 22. Those ship npm 10.x, which
+silently ignores the `min-release-age` install cooldown — the control would look
+present while doing nothing. See `docs/SUPPLY-CHAIN-CHANGES.md`.
 
 ---
 

@@ -1,9 +1,11 @@
 {
   "name": "secure-vibe-coding-os",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "private": true,
+  "//engines": "npm >=11.10.0 is the real requirement: it is the first version that honors `min-release-age` in .npmrc, and with engine-strict=true an older npm fails the install instead of silently dropping the cooldown. Node 24 is the floor because no earlier major can satisfy it — Node 20 ships npm 10.8.x and Node 22 ships npm 10.9.x — so a lower Node would make these two lines contradict each other. Floors are set from the DEPLOYMENT TARGETS, not a dev machine: Vercel's Node 24 image is v24.15.0/npm 11.12.1 and GitHub setup-node@24 resolves to v24.18.0/npm 11.16.0, so 24.15.0 is the lowest common denominator. Do NOT raise these to chase a newer local npm: `npm approve-scripts` (npm >=11.16) is a MAINTAINER tool for editing allowScripts, not an install-time requirement — the allowScripts field is inert data that older npm ignores and npm 12 enforces. The <26 ceiling is deliberate: Vercel resolves engines.node to the newest major that satisfies it, so an open range moves production onto a new Node major the day it ships.",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=24.15.0 <26",
+    "npm": ">=11.10.0"
   },
   "scripts": {
     "dev": "next dev",
@@ -79,6 +81,7 @@
     "vaul": "^1.1.2",
     "zod": "^3.25.76"
   },
+  "//overrides": "Transitive pins for packages with known-vulnerable or incompatible versions deep in the tree. Each was added for a reason; do not remove during a dependency bump without checking why. minimatch is pinned to ^10 because minimatch@3 calls brace-expansion as a function while the patched brace-expansion (>=5.0.8, GHSA-mh99-v99m-4gvg) exports an object — leaving minimatch@3 in the tree breaks `npm run lint`.",
   "overrides": {
     "lodash": ">=4.17.22",
     "tar": ">=7.5.21",
@@ -97,5 +100,11 @@
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.5",
     "typescript": "^5"
+  },
+  "//allowScripts": "Reviewed allowlist of dependency install scripts, maintained with `npm approve-scripts`. Entries are version-pinned on purpose: approval does NOT carry to a new version, so a compromised release of an already-approved package re-enters review. Advisory on npm 11, enforced by default on npm 12. What was reviewed: @clerk/shared prints a telemetry notice and writes a marker file (fs/os/path only, no network); esbuild resolves its platform binary and CAN download+exec via https/child_process; unrs-resolver delegates to napi-postinstall which CAN download native bindings. The latter two are why this list is not empty. Re-review with `npm approve-scripts --allow-scripts-pending` whenever a version changes; never approve blind with --all.",
+  "allowScripts": {
+    "@clerk/shared@3.47.8": true,
+    "esbuild@0.27.0": true,
+    "unrs-resolver@1.12.2": true
   }
 }

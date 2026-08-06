@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege by default. The default GITHUB_TOKEN is write-capable, which
+# is what the Shai-Hulud / keyv worm family uses to self-propagate: steal the
+# token from a build, then push workflows or republish packages with it. None of
+# the jobs below write to the repo, so read-only costs nothing here. Elevate
+# per-job only where a job genuinely needs more.
+permissions:
+  contents: read
+
 jobs:
   # ■■ Job 1: Lint and type check (runs immediately on every push) ■■
   lint:
@@ -14,7 +22,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 24 ships npm >= 11.10, which is what honors `min-release-age`
+          # in .npmrc and what package.json's engines require. Node 20/22 ship
+          # npm 10.x and would fail the engine-strict check.
+          node-version: '24'
           cache: 'npm'
       - run: npm ci
       - run: npm run lint
@@ -27,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
       - run: npm ci
       - run: npm run test
@@ -40,10 +51,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
       - run: npm ci
       - run: npm audit --audit-level=high
+      # Lockfile/tree consistency. A package present in node_modules without a
+      # matching lockfile entry is itself a signal, independent of any CVE feed.
+      - run: npm ls --all > /dev/null
 
   # ■■ Job 4: Build verify (only after tests pass) ■■■■■■■■■■■■■■■■■■
   build:
@@ -55,7 +69,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
       - run: npm ci
       # If a Doppler service token is configured (set during /install), inject
@@ -65,7 +79,10 @@ jobs:
       # references missing env vars; that's expected for legacy mode.
       - name: Install Doppler CLI
         if: env.DOPPLER_TOKEN != ''
-        uses: dopplerhq/cli-action@v3
+        # Pinned to a full commit SHA, not a tag. A tag is mutable: whoever
+        # controls the action repo can repoint v3 at new code, which is the same
+        # class of compromise as a poisoned npm package. Bump deliberately.
+        uses: dopplerhq/cli-action@014df23b1329b615816a38eb5f473bb9000700b1 # v3
       - name: Build (Doppler)
         if: env.DOPPLER_TOKEN != ''
         run: doppler run -- npm run build
