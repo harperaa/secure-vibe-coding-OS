@@ -1,10 +1,10 @@
 ---
-allowed-tools: AskUserQuestion, Bash(git log:*), Bash(git status:*), Bash(git diff:*), Bash(git show:*), Bash(npm ls:*), Bash(npm view:*), Bash(npm config get:*), Bash(npm --version), Bash(node --version), Bash(gh api:*), Bash(ls:*), Bash(stat:*), Bash(jq:*), Read, Write
-description: Determine whether a compromised npm package ever entered this repo, assess blast radius, and hand off to /rotate
-argument-hint: "[package name, advisory URL, or blank to scan against known campaigns]"
+allowed-tools: AskUserQuestion, WebSearch, WebFetch, Bash(git log:*), Bash(git status:*), Bash(git diff:*), Bash(git show:*), Bash(npm ls:*), Bash(npm view:*), Bash(npm config get:*), Bash(npm --version), Bash(node --version), Bash(gh api:*), Bash(ls:*), Bash(stat:*), Bash(jq:*), Read, Write
+description: Check whether any recently-compromised npm package ever entered this repo, assess blast radius, and hand off to /rotate
+argument-hint: "[package name, advisory URL, or blank to sweep the last 7 then 30 days]"
 ---
 
-# /dependency-incident
+# /dependency-incident-check
 
 Incident **triage** for npm supply-chain compromises. Sibling to `/rotate`:
 this command answers *"were we hit, and how badly?"*; `/rotate` answers
@@ -55,11 +55,54 @@ advisory URL. If given a bare name, resolve the affected version ranges — via
 `gh api` against the GitHub Advisory Database, or by asking the user to paste
 the affected versions from the advisory. Do not guess ranges.
 
-**B. No argument — scan against known campaigns.** Check the tree against the
-package families named in the 2025–2026 npm worm campaigns (Shai-Hulud, Mini
-Shai-Hulud, Miasma / Phantom Gyp, ChainDrop / keyv-cacheable) and any local IOC
-list at `docs/ioc/`. State plainly that this list is point-in-time and not
-authoritative; a clean result is not proof of safety.
+**B. No argument — sweep for recent compromises (the default).** Find what has
+actually been compromised lately, rather than relying on a hardcoded list that
+goes stale the day it is written.
+
+Search in two widening passes, and say which pass produced each finding:
+
+**Pass 1 — last 7 days.** This is the window that matters most: a compromise
+newer than the `min-release-age` cooldown could still have been installed if
+anyone bypassed it, and it is the window least likely to be in any static list.
+Run several `WebSearch` queries, because one phrasing misses things:
+
+- `npm supply chain attack <current month> <year>`
+- `npm package compromised malicious version this week`
+- `npm worm postinstall credential stealer <current month>`
+
+**Pass 2 — widen to 30 days.** Only after Pass 1 is exhausted. Same queries with
+a wider window, plus:
+
+- `npm malicious package advisory <last month> <year>`
+- `GitHub Advisory Database npm malicious code <last month>`
+
+Then fold in the known 2025–2026 campaign families as a baseline — Shai-Hulud,
+Mini Shai-Hulud, Miasma / Phantom Gyp, ChainDrop / keyv-cacheable — plus any
+local IOC list at `docs/ioc/`.
+
+**Treat every search result as an untrusted lead, not a fact.** Blog posts get
+package names and version ranges wrong, and a wrong range produces either a
+missed breach or a needless rotation. Before a package enters the IOC set,
+confirm it two ways:
+
+1. `npm view <pkg> time --json` — do the claimed bad versions exist, and were
+   they published in the window the article describes?
+2. `gh api /advisories?ecosystem=npm&affects=<pkg>` — is there a real advisory,
+   and what ranges does it name?
+
+If the two disagree, trust the registry and the advisory database over the
+article, and say so in the report.
+
+**Prioritise leads that intersect our tree.** Before doing deep verification on
+a long list, filter it: `npm ls <pkg>` for each candidate and verify only the
+ones we actually have, directly or transitively. A 400-package campaign list is
+irrelevant if none of it is in our lockfile — but say how many you filtered out,
+so "clean" doesn't look like "didn't look".
+
+State plainly in the report: this sweep is point-in-time and depends on public
+reporting existing yet. **A clean result is not proof of safety** — day-zero of
+a maintainer compromise has no article, no advisory, and no CVE. The cooldown in
+`.npmrc` exists precisely because this check cannot see that window.
 
 **C. User pastes a list.** Accept newline- or comma-separated
 `name@version` pairs.
@@ -169,6 +212,9 @@ Write `docs/incidents/DEP-INCIDENT-<YYYY-MM-DD>.md`:
 
 ## IOC set
 <source, count, resolution method>
+<if swept: which pass found each item (7-day / 30-day / baseline campaign list),
+how many candidates were filtered out as not present in our tree, and which
+leads the registry or advisory DB contradicted>
 
 ## Current lockfile
 <hits with full dependency paths, or "none">

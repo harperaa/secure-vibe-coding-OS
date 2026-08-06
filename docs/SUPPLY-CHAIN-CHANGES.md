@@ -138,7 +138,7 @@ you can see what a real hardening pass looks like.
 | `.npmrc` | `engine-strict=true` | Makes the line above a hard stop. Without it, an old npm prints a warning and installs anyway — you'd think you were protected when you weren't. |
 | `package.json` | `allowScripts` — 3 entries, pinned to exact versions | Records which packages may run code at install time. Pinned so a *new* version of an approved package has to be re-reviewed. |
 | `.npmrc` | `strict-allow-scripts=true` | Turns that list into a hard block rather than a warning. Verified: removing an entry fails the install with `ESTRICTALLOWSCRIPTS`. Needs npm ≥ 11.16; older npm ignores it safely, so it's enforced locally and in CI, advisory on Vercel until their builder updates. |
-| `.claude/commands/dependency-incident.md` | New `/dependency-incident` command | Triage for "was a compromised package ever in this repo?" — read-only, writes a report, hands off to `/rotate`. |
+| `.claude/commands/dependency-incident-check.md` | New `/dependency-incident-check` command | Triage for "was a compromised package ever in this repo?" — read-only, writes a report, hands off to `/rotate`. |
 | `.github/workflows/ci.yml` | Node 20 → 24 | Same reason as above: our build needs an npm that honors the waiting period. |
 | `.github/workflows/ci.yml` | `permissions: contents: read` | The build robot could write to the repo. It only ever needed to read. This attack spreads by stealing exactly that kind of access. |
 | `.github/workflows/*.yml` | Actions pinned to exact commit IDs | A version tag can be silently repointed at new code. A commit ID can't. |
@@ -169,14 +169,27 @@ Knowing where a control *stops* matters as much as having it.
 - **Blocking network access during builds** — a good idea that needs testing
   first. Done carelessly it breaks the build in ways that look like a bug.
 
-## If a package you use gets compromised: `/dependency-incident`
+## If a package you use gets compromised: `/dependency-incident-check`
 
 There's a command for this. Run it when you hear that a package has been hacked
 and you want to know whether it affected you.
 
 ```
-/dependency-incident keyv
+/dependency-incident-check keyv
 ```
+
+Or run it with no arguments and it goes looking for you:
+
+```
+/dependency-incident-check
+```
+
+With no package named, it searches the web for npm compromises reported in the
+**last 7 days**, then widens to **30 days** if that turns up nothing — then
+checks whatever it finds against your project. It treats articles as leads, not
+facts: every package is confirmed against the npm registry and the GitHub
+Advisory Database before it counts, because a wrong version range means either a
+missed breach or a pointless panic.
 
 It answers one question — **were we hit, and how badly?** — and it does that by
 gathering evidence, not guessing:
@@ -200,3 +213,8 @@ command that actually fixes things.
 
 That split is deliberate. Panicking and rotating everything is its own kind of
 outage. Find out what happened first.
+
+**A clean result is not proof of safety.** On day one of a new attack there is
+no article, no advisory, and no CVE to find — nothing to search for yet. That
+gap is exactly why the 7-day waiting period exists: it protects you during the
+window this check cannot see.
