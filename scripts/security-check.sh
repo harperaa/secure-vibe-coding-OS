@@ -23,10 +23,40 @@ echo "  Security Audit"
 echo "========================================"
 echo ""
 
-# Check for known vulnerabilities
-echo "Checking for known vulnerabilities..."
+# LIMITS OF THIS SCRIPT — know where each control stops.
+#
+#   npm audit             -> known CVEs only. Finds nothing on day zero of a
+#                            maintainer-account compromise.
+#   npm audit signatures  -> would NOT have caught the Aug 2026 keyv worm. The
+#                            attacker pushed to the repo's main branch and cut a
+#                            release, so the poisoned tarballs carried valid npm
+#                            provenance signed by GitHub Actions. Every
+#                            signature check passed. Deliberately not run here,
+#                            so it can't be mistaken for protection it doesn't
+#                            provide.
+#   npm ls --all          -> lockfile/tree consistency. A package in
+#                            node_modules with no matching lockfile entry is a
+#                            signal in its own right, independent of any feed.
+#
+# The controls that actually cover this threat live elsewhere: the install
+# cooldown (.npmrc min-release-age), lockfile pinning, and credential
+# blast-radius reduction (Doppler + /rotate).
+
+# Check for known vulnerabilities.
+# --production is deprecated; --omit=dev is the supported spelling.
+echo "Checking for known vulnerabilities (production deps)..."
 echo "--------------------------------------"
-npm audit --production 2>&1 | grep -v "npm warn config"
+npm audit --omit=dev
+
+echo ""
+echo "Checking lockfile / node_modules consistency..."
+echo "--------------------------------------"
+if npm ls --all > /dev/null 2>&1; then
+  echo "Dependency tree matches the lockfile."
+else
+  echo "MISMATCH: the installed tree does not match package-lock.json."
+  echo "Investigate before installing anything else — an unexpected package is a signal."
+fi
 
 echo ""
 echo "========================================"

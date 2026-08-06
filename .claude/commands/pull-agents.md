@@ -1,62 +1,71 @@
 ---
-allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git fetch:*), Bash(git checkout:*), Bash(git remote:*)
-description: Force pull latest agents (overwrites local changes)
+allowed-tools: AskUserQuestion, Bash(git status:*), Bash(git diff:*), Bash(git fetch:*), Bash(git checkout:*), Bash(git remote:*), Bash(git log:*), Read
+description: Review and pull latest agents from the template (diff-first, never blind)
 ---
-echo "🔍 Checking for local changes in .claude/agents/..."
-echo ""
 
-# Check if there are uncommitted changes in the agents folder
-if ! git diff --quiet -- .claude/agents/ || ! git diff --cached --quiet -- .claude/agents/; then
-  echo "⚠️  WARNING: You have uncommitted changes in .claude/agents/"
-  echo ""
-  git status -- .claude/agents/
-  echo ""
-  echo "📋 Review your changes:"
-  git diff -- .claude/agents/
-  echo ""
-  echo "Recommended steps:"
-  echo "  1. Commit your changes first:"
-  echo "     git add .claude/agents/"
-  echo "     git commit -m 'Save local agent customizations'"
-  echo ""
-  echo "  2. Then run this command again to pull updates"
-  echo ""
-  echo "⚠️  CONTINUING WILL OVERWRITE YOUR CHANGES!"
-  echo ""
-  echo "Press Ctrl+C to cancel, or Enter to continue and overwrite..."
-  read
-fi
+# /pull-agents — Review and pull template agent updates
 
-# Set up upstream remote if needed
+Updates `.claude/agents/` from the template repo. **Every incoming change is
+shown and confirmed before anything is written.**
+
+> **Why this is diff-first and not a force-pull.** Agent definitions are prompts
+> that run with tool access inside this repo. Pulling them from a moving branch
+> without review means whoever controls the upstream account controls what those
+> agents do. The August 2026 keyv/npm worm planted Claude Code and VS Code hooks
+> for persistence; a force-overwrite suppresses exactly the diff that would
+> reveal it. Never restore the old `git checkout upstream/main -- ...` behavior.
+
+## Step 1: Protect local work
+
+Run `git status --porcelain -- .claude/agents/`.
+
+If there are uncommitted changes, show them (`git diff -- .claude/agents/`) and
+**AskUserQuestion**: "You have uncommitted changes in `.claude/agents/`. Commit
+them before pulling?"
+- "Commit first (recommended)" — stop and let the user commit.
+- "Discard and pull" — proceed; the diff in Step 3 still gates the write.
+- "Cancel"
+
+## Step 2: Fetch (fetch only — do NOT write to the working tree)
+
+```bash
 UPSTREAM_URL="https://github.com/harperaa/secure-vibe-coding-OS.git"
-if ! git remote get-url upstream >/dev/null 2>&1; then
-  ORIGIN_URL=$(git remote get-url origin 2>/dev/null || echo "")
-  if echo "$ORIGIN_URL" | grep -q "harperaa/secure-vibe-coding-OS"; then
-    echo "❌ Your origin is still pointing at the template repo."
-    echo "   Run /deploy-to-dev first to set up your own GitHub repository,"
-    echo "   then re-run /pull-agents."
-    exit 1
-  fi
-  echo "📡 Adding upstream remote for template repo..."
-  git remote add upstream "$UPSTREAM_URL"
-fi
+git remote get-url upstream >/dev/null 2>&1 || git remote add upstream "$UPSTREAM_URL"
+git fetch upstream
+```
 
-echo "📥 Pulling latest agents from upstream/main..."
-echo ""
+If `origin` still points at `harperaa/secure-vibe-coding-OS`, STOP and tell the
+user to run `/deploy-to-dev` first to create their own repository.
 
-git fetch upstream && git checkout upstream/main -- .claude/agents/
+## Step 3: Show the INCOMING diff and require confirmation
 
-if [ $? -eq 0 ]; then
-  echo ""
-  echo "✅ Agents updated successfully from upstream/main!"
-  echo "Changes are staged - run 'git commit' to save them"
-  echo ""
-  echo "💡 Let Claude Code help you:"
-  echo "  Ask: 'Review the updated agents and commit them with a descriptive message'"
-else
-  echo ""
-  echo "❌ Failed to update agents. Check git status for details."
-  echo ""
-  echo "💡 Let Claude Code help you:"
-  echo "  Ask: 'Review the git status and help me understand what went wrong'"
-fi
+```bash
+git diff --stat HEAD..upstream/main -- .claude/agents/
+git diff HEAD..upstream/main -- .claude/agents/
+git log --oneline -10 HEAD..upstream/main -- .claude/agents/
+```
+
+Summarize which agents change and what each change does. **Call out any change to
+an agent's capability or reach**, specifically: edits to the `tools:` frontmatter
+(especially anything granting `Bash`, `Write`, or `*`), a `model:` change, and any
+instruction that adds a network call or writes outside the repo. An agent quietly
+gaining `Bash` is the change most worth catching here.
+
+If the diff is empty: report "Already up to date" and STOP.
+
+Then **AskUserQuestion**: "Apply these agent updates?"
+- "Apply all"
+- "Apply only some" — then apply per-file with `git checkout upstream/main -- .claude/agents/<file>`
+- "Cancel" (recommended if anything above looked unexplained)
+
+**Do not write anything before this answer.**
+
+## Step 4: Apply and report
+
+Only after confirmation:
+
+```bash
+git checkout upstream/main -- .claude/agents/
+```
+
+Report what changed and remind the user the changes are staged, not committed.

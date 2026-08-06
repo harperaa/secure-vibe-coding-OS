@@ -1074,8 +1074,13 @@ Security architecture is implemented through specialized Claude Code skills mana
 The skills are synchronized with the main package using git subtree. To update:
 
 \`\`\`bash
+# Pin to a reviewed commit, never a moving branch. Files under .claude/ execute
+# as instructions in every session, so tracking `main` means whoever controls
+# that repo controls what runs on your machine. Bump this SHA deliberately,
+# after reading the diff.
 git subtree pull --prefix=.claude/skills/security \\
-  https://github.com/harperaa/secure-claude-skills.git main --squash
+  https://github.com/harperaa/secure-claude-skills.git \\
+  c0b4abbf50f2 --squash
 \`\`\`
 ```
 
@@ -1096,8 +1101,8 @@ The template includes specialized pull commands to help you selectively update d
 |---------|---------|--------------|----------|
 | `/pull-repo-safe` | Entire repository | ✅ Safe (preview first) | General updates to core template |
 | `/pull-security-skills` | Security skills only | ✅ Safe (merge with squash) | Security feature updates |
-| `/pull-commands` | Claude commands only | ⚠️ Force overwrites | Command updates only |
-| `/pull-agents` | Claude agents only | ⚠️ Force overwrites | Agent updates only |
+| `/pull-commands` | Claude commands only | ✅ Safe (shows incoming diff, requires confirmation) | Command updates only |
+| `/pull-agents` | Claude agents only | ✅ Safe (shows incoming diff, requires confirmation) | Agent updates only |
 
 ### How to Update
 
@@ -1182,10 +1187,13 @@ Use this to get the latest Claude Code commands without touching your app code:
 
 **What happens:**
 1. Checks for uncommitted changes in `.claude/commands/`
-2. Shows you what you've modified
-3. Warns that continuing will overwrite your changes
-4. Gives you a chance to cancel (Ctrl+C)
-5. Force pulls latest commands from origin/main
+2. Shows you what you've modified locally
+3. Shows the **incoming** diff from upstream — what the update would change,
+   with any new execution paths (new `allowed-tools`, network calls, hook or
+   settings writes) called out individually
+4. Requires explicit confirmation; you can apply all, some, or nothing
+5. Applies only what you approved, staged but not committed, so you get one
+   more review before it enters history
 
 **After successful update:**
 ```bash
