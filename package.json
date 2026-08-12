@@ -2,7 +2,7 @@
   "name": "secure-vibe-coding-os",
   "version": "7.0.0",
   "private": true,
-  "//engines": "npm >=11.10.0 is the real requirement: it is the first version that honors `min-release-age` in .npmrc, and with engine-strict=true an older npm fails the install instead of silently dropping the cooldown. Node 24 is the floor because no earlier major can satisfy it — Node 20 ships npm 10.8.x and Node 22 ships npm 10.9.x — so a lower Node would make these two lines contradict each other. Floors are set from the DEPLOYMENT TARGETS, not a dev machine: Vercel's Node 24 image is v24.15.0/npm 11.12.1 and GitHub setup-node@24 resolves to v24.18.0/npm 11.16.0, so 24.15.0 is the lowest common denominator. Do NOT raise these to chase a newer local npm: `npm approve-scripts` (npm >=11.16) is a MAINTAINER tool for editing allowScripts, not an install-time requirement — the allowScripts field is inert data that older npm ignores and npm 12 enforces. The <26 ceiling is deliberate: Vercel resolves engines.node to the newest major that satisfies it, so an open range moves production onto a new Node major the day it ships.",
+  "//engines": "npm >=11.10.0 is the real requirement: it is the first version that honors `min-release-age` in .npmrc, and with engine-strict=true an older npm fails the install instead of silently dropping the cooldown. Node 24 is the floor because no earlier major can satisfy it \u2014 Node 20 ships npm 10.8.x and Node 22 ships npm 10.9.x \u2014 so a lower Node would make these two lines contradict each other. Floors are set from the DEPLOYMENT TARGETS, not a dev machine: Vercel's Node 24 image is v24.15.0/npm 11.12.1 and GitHub setup-node@24 resolves to v24.18.0/npm 11.16.0, so 24.15.0 is the lowest common denominator. Do NOT raise these to chase a newer local npm: `npm approve-scripts` (npm >=11.16) is a MAINTAINER tool for editing allowScripts, not an install-time requirement \u2014 the allowScripts field is inert data that older npm ignores and npm 12 enforces. The <26 ceiling is deliberate: Vercel resolves engines.node to the newest major that satisfies it, so an open range moves production onto a new Node major the day it ships.",
   "engines": {
     "node": ">=24.15.0 <26",
     "npm": ">=11.10.0"
@@ -81,14 +81,19 @@
     "vaul": "^1.1.2",
     "zod": "^3.25.76"
   },
-  "//overrides": "Transitive pins for packages with known-vulnerable or incompatible versions deep in the tree. Each was added for a reason; do not remove during a dependency bump without checking why. minimatch is pinned to ^10 because minimatch@3 calls brace-expansion as a function while the patched brace-expansion (>=5.0.8, GHSA-mh99-v99m-4gvg) exports an object — leaving minimatch@3 in the tree breaks `npm run lint`.",
+  "//overrides": "Transitive pins for packages with known-vulnerable or incompatible versions deep in the tree. Each was added for a reason; do not remove during a dependency bump without checking why. minimatch is pinned to ^10 because minimatch@3 calls brace-expansion as a function while the patched brace-expansion (>=5.0.8, GHSA-mh99-v99m-4gvg) exports an object \u2014 leaving minimatch@3 in the tree breaks `npm run lint`.",
   "overrides": {
     "lodash": ">=4.17.22",
     "tar": ">=7.5.21",
     "postcss": ">=8.5.18",
     "sharp": ">=0.35.0",
     "brace-expansion": ">=5.0.8",
-    "minimatch": "^10.2.5"
+    "minimatch": "^10.2.5",
+    "nanoid": ">=3.3.17 <4",
+    "js-yaml": ">=4.3.1 <5",
+    "gray-matter": {
+      "js-yaml": ">=3.15.1 <4"
+    }
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

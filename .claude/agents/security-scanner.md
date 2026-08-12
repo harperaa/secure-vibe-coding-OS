@@ -52,13 +52,34 @@ roleDefinition: You are a comprehensive vulnerability discovery specialist who c
       command -v pnpm || echo "WARN: pnpm not found — DeepSec (Step 2B) will be skipped"
       command -v npx  || echo "WARN: npx not found — DeepSec (Step 2B) will be skipped"
 
-      # The AI provider key is OPTIONAL. If AI_GATEWAY_API_KEY is set, DeepSec uses
-      # it. If not, DO NOT skip DeepSec — it falls back to the Anthropic credentials
-      # of the Claude session already running this assessment. Never hardcode keys.
+      # The AI provider key is OPTIONAL, but there is NO automatic fallback to the
+      # running Claude session's credentials. An earlier version of this file said
+      # there was; that was wrong, and it caused a real assessment to skip the
+      # DeepSec stage entirely — the stage that then went on to find 8 additional
+      # security findings when it was finally run. Do not restore that claim.
+      #
+      # How it actually works: DeepSec's assertAgentCredential checks the CONFIGURED
+      # model route first and hard-throws if that route's key env var is missing. So
+      # a scaffolded deepsec.config.ts containing `ai: {mode:"gateway", provider:"vercel"}`
+      # fails immediately, before any fallback is considered — even though a perfectly
+      # good local path exists.
+      #
+      # The local path: with NO `ai` route configured, control reaches
+      # hasLocalClaudeAgent() (literally `which claude`) and DeepSec drives the local
+      # Claude Code CLI via @anthropic-ai/claude-agent-sdk, inheriting its OAuth
+      # session. No API key and no Vercel project link required. (A Vercel link is
+      # documented as "always required" — that applies to `init` only; `scan`,
+      # `process`, `revalidate` and `export` all run without it.)
+      #
+      # So: if AI_GATEWAY_API_KEY is absent, do NOT skip. Remove any persisted
+      # gateway route from deepsec.config.ts and set defaultAgent: "claude".
       if [ -n "$AI_GATEWAY_API_KEY" ]; then
         echo "DeepSec: using AI_GATEWAY_API_KEY from environment"
+      elif command -v claude >/dev/null 2>&1; then
+        echo "DeepSec: no AI_GATEWAY_API_KEY — use the local Claude CLI agent."
+        echo "         Ensure deepsec.config.ts has NO 'ai' route and sets defaultAgent: \"claude\"."
       else
-        echo "DeepSec: no AI_GATEWAY_API_KEY — falling back to the running Claude session's credentials"
+        echo "WARN: no AI_GATEWAY_API_KEY and no local 'claude' CLI — DeepSec cannot run."
       fi
       ```
 
@@ -170,6 +191,35 @@ roleDefinition: You are a comprehensive vulnerability discovery specialist who c
       Record which mode DeepSec ran in via `"deepsec_mode": "fresh"` or
       `"reassessment"` in `raw_findings.json`. If `process --diff` is unsupported by
       the installed DeepSec version, fall back to a full `process` and note it.
+
+      **Step 2C: Convex Endpoint Auth Audit (deterministic — always run)**
+
+      Convex is the real API surface of this stack, and `middleware.ts` does NOT
+      protect it: Convex RPC goes browser -> Convex deployment and never touches
+      the Next.js server. Every exported `mutation` / `query` / `action` is a
+      public internet endpoint. Semgrep does not model this, and pattern matching
+      structurally cannot — the vulnerability is the ABSENCE of a call.
+
+      ```bash
+      node scripts/check-convex-auth.mjs --json
+      ```
+
+      Report every violation as a finding. Then, because the gate cannot catch
+      everything, read each public function it PASSED and check two things it
+      cannot see:
+
+      1. **Fetch vs. enforce.** A handler may call `getCurrentUser(ctx)` and then
+         proceed regardless of the result. That satisfies the grep and is still
+         unauthenticated. Confirm the identity is actually required (thrown on,
+         or returned early for).
+      2. **Caller-supplied identity.** Any `args.userId` / `args.email` /
+         `args.orgId` used to select or write a row is an authorization bypass
+         even when the function checks that *someone* is logged in. Identity must
+         come from the session, never from an argument.
+
+      Both classes have shipped in this template before and were found by an
+      external assessment rather than by this pipeline. Do not treat a clean gate
+      run as the end of the Convex review.
 
       **Step 3: Discover Security-Critical Areas for Manual Analysis**
 

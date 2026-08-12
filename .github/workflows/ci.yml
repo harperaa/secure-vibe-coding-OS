@@ -58,6 +58,11 @@ jobs:
       # Lockfile/tree consistency. A package present in node_modules without a
       # matching lockfile entry is itself a signal, independent of any CVE feed.
       - run: npm ls --all > /dev/null
+      # Every exported Convex mutation/query/action is a public internet endpoint
+      # — middleware.ts does NOT run for Convex RPC. This fails the build if one
+      # omits an identity check without explicitly declaring itself public.
+      - name: Convex auth gate
+        run: node scripts/check-convex-auth.mjs
 
   # ■■ Job 4: Build verify (only after tests pass) ■■■■■■■■■■■■■■■■■■
   build:

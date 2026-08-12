@@ -285,62 +285,6 @@ export const markEventAsUnread = mutation({
 });
 
 /**
- * Log a security event (for internal use - requires userId)
- */
-export const logSecurityEvent = mutation({
-  args: {
-    userId: v.id("users"),
-    eventType: v.union(
-      v.literal("origin_mismatch"),
-      v.literal("rate_limit_exceeded"),
-      v.literal("invalid_api_key"),
-      v.literal("fingerprint_change"),
-      v.literal("suspicious_activity"),
-      v.literal("jwt_validation_failed"),
-      v.literal("unauthorized_access"),
-      v.literal("input_validation_failed"),
-      v.literal("replay_detected"),
-      v.literal("not_found_enumeration"),
-      v.literal("jwt_algorithm_attack"),
-      v.literal("tenant_isolation_attack"),
-      v.literal("jwt_replay_attack"),
-      v.literal("xss_attempt"),
-      v.literal("fingerprint_manipulation"),
-      v.literal("http_origin_blocked"),
-      v.literal("prompt_injection_attempt"),
-      v.literal("ai_response_validation_failed"),
-      v.literal("csrf_validation_failed")
-    ),
-    severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical")),
-    metadata: v.object({
-      origin: v.optional(v.string()),
-      ipAddress: v.optional(v.string()),
-      fingerprint: v.optional(v.string()),
-      endpoint: v.optional(v.string()),
-      errorMessage: v.optional(v.string()),
-      endUserEmail: v.optional(v.string()),
-      endUserName: v.optional(v.string()),
-      endUserId: v.optional(v.string()),
-      actionType: v.optional(v.string()),
-      requestPayload: v.optional(v.string()),
-    }),
-  },
-  returns: v.id("securityEvents"),
-  handler: async (ctx, args) => {
-    const eventId = await ctx.db.insert("securityEvents", {
-      userId: args.userId,
-      eventType: args.eventType,
-      severity: args.severity,
-      metadata: args.metadata,
-      timestamp: Date.now(),
-      isRead: false,
-    });
-
-    return eventId;
-  },
-});
-
-/**
  * Log a security event for the current authenticated user
  * Used by API routes to log detected security violations
  * Uses the security logger library for PII sanitization and consistent logging
@@ -412,10 +356,25 @@ export const logSecurityEventForCurrentUser = mutation({
 
 /**
  * Log security violations from middleware (rate limiting, CSRF, etc.)
- * Does NOT require authentication - violations can occur before auth
  *
- * Security: Only callable from localhost in development to prevent abuse
- * Events are logged without userId for anonymous violations
+ * @public-endpoint: a violation is by definition recorded when the caller has
+ * failed some check, which frequently means no session exists yet (blocked
+ * origin, CSRF failure, rate limit hit before sign-in). Requiring auth here
+ * would drop exactly the events worth recording. It attaches the caller's user
+ * id only when one happens to exist, and never accepts a caller-supplied id —
+ * so events cannot be attributed to someone else.
+ *
+ * KNOWN LIMITATION — read before relying on this table for anything: because it
+ * is reachable unauthenticated, anyone who knows the Convex deployment URL can
+ * write rows here. Treat `securityEvents` as attacker-influenceable input, not
+ * as trustworthy audit. Do not build alerting that assumes volume is genuine,
+ * and page on absence of expected events rather than presence of unexpected ones.
+ * Rows are size-capped and PII-sanitized by logSecurity(), and the dashboard
+ * queries are paginated so a flood degrades signal rather than availability.
+ *
+ * (A previous version of this comment claimed "only callable from localhost in
+ * development". No such restriction was ever implemented. It has been removed
+ * rather than left to give false assurance to the next reader.)
  */
 export const logSecurityViolation = mutation({
   args: {
