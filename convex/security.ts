@@ -94,11 +94,21 @@ export const listSecurityEvents = query({
 
     const limit = args.limit || 50;
 
-    // Get ALL security events (no user filtering)
+    // Bounded read. This used to be .collect(), which loads the ENTIRE
+    // securityEvents table into memory before any filtering. Because
+    // logSecurityViolation is reachable unauthenticated by design, that made the
+    // admin dashboard denial-of-serviceable by anyone who could write rows: grow
+    // the table past Convex's per-transaction read ceiling and this query throws
+    // on every subsequent call. The monitoring surface was the first casualty of
+    // the flood it existed to reveal.
+    //
+    // Read a bounded window and filter within it. Filters below are applied in
+    // JS, so over-fetch enough that a filtered view still fills a page.
+    const SCAN_CEILING = 2000;
     let events = await ctx.db
       .query("securityEvents")
       .order("desc")
-      .collect();
+      .take(Math.min(Math.max(limit * 10, 200), SCAN_CEILING));
 
     // Apply time range filter if specified
     if (args.startTime !== undefined || args.endTime !== undefined) {
@@ -186,9 +196,16 @@ export const getSecuritySummary = query({
       };
     }
 
+    // Bounded read — see the note in listSecurityEvents. An unbounded .collect()
+    // here made the summary tiles fail exactly when the table was being flooded.
+    // The counts below are therefore over the most recent SCAN_CEILING events,
+    // not all time; that is the correct trade for a dashboard that must keep
+    // rendering under abuse. Surface it in the UI rather than implying totals.
+    const SCAN_CEILING = 2000;
     let events = await ctx.db
       .query("securityEvents")
-      .collect();
+      .order("desc")
+      .take(SCAN_CEILING);
 
     // Apply time range filter if specified
     if (args.startTime !== undefined || args.endTime !== undefined) {
@@ -369,12 +386,18 @@ export const logSecurityEventForCurrentUser = mutation({
  * write rows here. Treat `securityEvents` as attacker-influenceable input, not
  * as trustworthy audit. Do not build alerting that assumes volume is genuine,
  * and page on absence of expected events rather than presence of unexpected ones.
- * Rows are size-capped and PII-sanitized by logSecurity(), and the dashboard
- * queries are paginated so a flood degrades signal rather than availability.
+ * What actually bounds abuse, verified rather than asserted:
+ *   - logSecurity() caps errorMessage and requestPayload at 2000 chars
+ *     (capForLog in convex/lib/securityLogger.ts) and sanitizes PII.
+ *   - listSecurityEvents and getSecuritySummary read a bounded window via
+ *     .take(), so a flood degrades signal rather than breaking the dashboard.
+ * There is still no rate limit on this mutation; row count grows with abuse.
  *
- * (A previous version of this comment claimed "only callable from localhost in
- * development". No such restriction was ever implemented. It has been removed
- * rather than left to give false assurance to the next reader.)
+ * (Two earlier versions of this comment asserted controls that did not exist:
+ * first "only callable from localhost in development", then "rows are
+ * size-capped and the dashboard queries are paginated" — written at a point
+ * when neither was true. Both were caught by assessment, not by review. If you
+ * add a claim here, implement it in the same commit.)
  */
 export const logSecurityViolation = mutation({
   args: {

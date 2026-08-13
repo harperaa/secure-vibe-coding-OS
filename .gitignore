@@ -65,3 +65,11 @@ secure-vibe-kit/*.tgz
 
 # transient worktrees created by Claude Code — never commit these
 .claude/worktrees/
+
+# Security assessment output (/security-assessment). Kept local, never committed:
+# raw findings name exact file paths, line numbers and reproduction steps for
+# issues that may still be open — in a public repo that is a roadmap, not a
+# disclosure. Re-generate with /security-assessment rather than reading a stale copy.
+security_context/
+security_reports/
+threat_modeling_output/
