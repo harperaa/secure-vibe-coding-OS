@@ -19,15 +19,40 @@
 
 const DOPPLER_API_URL = 'https://api.doppler.com/v3/configs/config/secrets/download?format=json';
 
+// Retry tuning: transient network blips between Vercel egress and Doppler's
+// edge last seconds, not milliseconds. Backoff totals ~3.75s across attempts
+// (250/500/1000/2000ms) so a brief blip becomes a slower cold start, not a 500.
+const MAX_ATTEMPTS = 5;
+const BASE_BACKOFF_MS = 250;
+const PER_ATTEMPT_TIMEOUT_MS = 5_000;
+
 type DopplerResponse = Record<string, string>;
 
 let secretsPromise: Promise<void> | null = null;
 
-async function fetchFromDoppler(token: string): Promise<DopplerResponse> {
-  const maxAttempts = 3;
-  let lastError: unknown;
+/**
+ * Flatten an error for logging. Undici wraps the real network failure
+ * (DNS, TLS, connection reset) in `err.cause`, so a bare `err.message`
+ * is often just "fetch failed" — walk the cause chain to keep the detail.
+ */
+function describeError(err: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = err;
+  while (current instanceof Error) {
+    const code = (current as NodeJS.ErrnoException).code;
+    parts.push(`${current.name}: ${current.message}${code ? ` (${code})` : ''}`);
+    current = current.cause;
+  }
+  if (current !== undefined && current !== null) parts.push(String(current));
+  return parts.join(' <- ') || String(err);
+}
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+async function fetchFromDoppler(token: string): Promise<DopplerResponse> {
+  let lastError: unknown;
+  const started = Date.now();
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const attemptStarted = Date.now();
     try {
       const res = await fetch(DOPPLER_API_URL, {
         method: 'GET',
@@ -35,20 +60,34 @@ async function fetchFromDoppler(token: string): Promise<DopplerResponse> {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
         },
+        signal: AbortSignal.timeout(PER_ATTEMPT_TIMEOUT_MS),
       });
       if (!res.ok) {
         throw new Error(`Doppler API returned ${res.status} ${res.statusText}`);
       }
       const json = (await res.json()) as DopplerResponse;
+      if (attempt > 1) {
+        console.warn(
+          `[secrets] Doppler fetch recovered on attempt ${attempt}/${MAX_ATTEMPTS} after ${Date.now() - started}ms`
+        );
+      }
       return json;
     } catch (err) {
       lastError = err;
-      if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 100 * 2 ** (attempt - 1)));
+      console.warn(
+        `[secrets] Doppler fetch attempt ${attempt}/${MAX_ATTEMPTS} failed after ${Date.now() - attemptStarted}ms: ${describeError(err)}`
+      );
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, BASE_BACKOFF_MS * 2 ** (attempt - 1)));
       }
     }
   }
-  throw new Error(`Doppler fetch failed after ${maxAttempts} attempts: ${(lastError as Error)?.message ?? lastError}`);
+  console.error(
+    `[secrets] Doppler fetch exhausted ${MAX_ATTEMPTS} attempts over ${Date.now() - started}ms; last error: ${describeError(lastError)}`
+  );
+  throw new Error(
+    `Doppler fetch failed after ${MAX_ATTEMPTS} attempts: ${describeError(lastError)}`
+  );
 }
 
 async function applySecrets(): Promise<void> {
