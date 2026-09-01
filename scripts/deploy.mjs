@@ -672,20 +672,44 @@ async function runValidateKeys(args) {
     return;
   }
 
-  // Derive frontend API URL from pk_live_ (same pattern as setup.mjs)
+  // Derive frontend API URL from the publishable key. A decoded value that
+  // contains a dot IS the frontend API host — production custom domains decode
+  // to e.g. `clerk.example.com`, which the old `.clerk.` substring guard
+  // missed (no leading dot), producing `clerk.<domain>.clerk.accounts.dev`, a
+  // host that does not exist. Only a bare slug needs the accounts.dev suffix.
   try {
     const pkParts = clerkPk.split('_');
     const encoded = pkParts[pkParts.length - 1];
     const decoded = Buffer.from(encoded, 'base64').toString('utf-8');
     const cleanDomain = decoded.replace(/\$$/, '');
-    if (cleanDomain.includes('.clerk.accounts.') || cleanDomain.includes('.clerk.')) {
-      result.frontendApiUrl = `https://${cleanDomain}`;
-    } else {
-      result.frontendApiUrl = `https://${cleanDomain}.clerk.accounts.dev`;
-    }
+    result.frontendApiUrl = cleanDomain.includes('.')
+      ? `https://${cleanDomain}`
+      : `https://${cleanDomain}.clerk.accounts.dev`;
     result.steps.push(`Derived frontend API URL: ${result.frontendApiUrl}`);
   } catch (err) {
     result.steps.push(`Warning: Could not derive frontend API URL: ${err.message}`);
+  }
+
+  // The derivation is a convenience; Clerk's own /v1/domains is the authority.
+  // When it answers and disagrees, its value wins.
+  try {
+    const domainsRes = await fetch('https://api.clerk.com/v1/domains', {
+      headers: { Authorization: `Bearer ${clerkSk}` },
+    });
+    if (domainsRes.ok) {
+      const domains = (await domainsRes.json()).data || [];
+      const primary = domains.find((d) => d.frontend_api_url) || domains[0];
+      const authority = primary?.frontend_api_url
+        || (primary?.frontend_api ? `https://${primary.frontend_api}` : null);
+      if (authority && authority !== result.frontendApiUrl) {
+        result.steps.push(`Frontend API corrected against Clerk /v1/domains: ${authority} (derived ${result.frontendApiUrl})`);
+        result.frontendApiUrl = authority;
+      } else if (authority) {
+        result.steps.push('Frontend API URL confirmed against Clerk /v1/domains');
+      }
+    }
+  } catch {
+    // Offline or a restricted key — the derived value stands.
   }
 
   // Create JWT template "convex" on production instance (idempotent)
