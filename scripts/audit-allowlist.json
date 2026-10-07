@@ -1,7 +1,7 @@
 {
   "GHSA-vfj7-8cjw-p6xm": {
     "package": "braces",
-    "reason": "Stack exhaustion on deeply nested brace patterns. Only reachable via eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch -> braces, a devDependency chain that never runs at runtime, and the only glob pattern it ever sees is the rootDir string in our own eslint.config.mjs. No patched braces release exists (advisory range is <= 3.0.3, the latest). Remove this entry when braces ships a fix or the plugin drops fast-glob.",
+    "reason": "Stack exhaustion on deeply nested brace patterns. Only reachable via eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch -> braces, a devDependency chain that never runs at runtime. The plugin only calls fast-glob when `settings.next.rootDir` is set in the ESLint config (see node_modules/@next/eslint-plugin-next/dist/utils/get-root-dirs.js); this repo does not set it, so the glob branch never executes. No patched braces release exists (advisory range is <= 3.0.3, the latest). Remove this entry when braces ships a fix or the plugin drops fast-glob.",
     "added": "2026-10-07"
   }
 }

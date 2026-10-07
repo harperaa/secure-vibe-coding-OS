@@ -26,6 +26,12 @@ import { dirname, join } from "node:path";
 const FAIL_ON = new Set(["high", "critical"]);
 const here = dirname(fileURLToPath(import.meta.url));
 const allowlist = JSON.parse(readFileSync(join(here, "audit-allowlist.json"), "utf8"));
+for (const [id, entry] of Object.entries(allowlist)) {
+  if (!/^GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/i.test(id) || typeof entry?.reason !== "string" || !entry.reason.trim()) {
+    console.error(`audit gate: allowlist entry "${id}" must be a GHSA id with a non-empty "reason"`);
+    process.exit(2);
+  }
+}
 
 let report;
 try {
@@ -39,7 +45,16 @@ try {
   report = err.stdout;
 }
 
-const vulns = JSON.parse(report).vulnerabilities ?? {};
+// npm writes `{"error": {...}}` (still exit 1) when the audit endpoint is
+// unreachable or rejects the request. That is not a clean report, and treating
+// it as "no findings" would pass CI without auditing anything.
+const parsed = JSON.parse(report);
+if (parsed.error || typeof parsed.vulnerabilities !== "object" || parsed.vulnerabilities === null) {
+  console.error("audit gate: npm audit did not return a vulnerability report");
+  console.error(JSON.stringify(parsed.error ?? parsed, null, 2).slice(0, 2000));
+  process.exit(2);
+}
+const vulns = parsed.vulnerabilities;
 const ghsaOf = (url) => (url?.match(/GHSA-[a-z0-9-]+/i) ?? [null])[0];
 
 // A package is "covered" when every reason npm gives for it is either an
