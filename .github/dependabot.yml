@@ -27,11 +27,89 @@ updates:
         applies-to: version-updates
         dependency-type: "development"
         update-types: ["minor", "patch"]
+
+    # ── Major-version holds ────────────────────────────────────────────
+    #
+    # These packages' MAJOR versions are coupled to another package's support
+    # matrix — usually Next.js's. Bumping them independently doesn't produce a
+    # mergeable PR, it produces a broken build, so Dependabot opening one is
+    # pure noise that trains people to ignore red CI.
+    #
+    # Observed on a downstream clone: 13 open PRs per repo, every one a major,
+    # most of them unmergeable. `typescript` 5 -> 7 failed with
+    #   "TypeScript 7.0.2 does not provide the compiler API required by Next.js"
+    # which is Next.js declining to support that major yet — not something a
+    # dependency bump can fix.
+    #
+    # MINOR AND PATCH UPDATES STILL FLOW for every package below, and
+    # SECURITY (advisory-driven) UPDATES ARE NEVER IGNORED — GitHub raises those
+    # regardless of this block. This holds routine major churn only.
+    #
+    # When you deliberately take a major (as with the Next.js 15 -> 16 upgrade),
+    # do it by hand with the framework's migration guide, then bump the floor
+    # here. Do not remove an entry to "let Dependabot handle it".
+    ignore:
+      # Compiler/tooling majors gated on Next.js support
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-next"
+        update-types: ["version-update:semver-major"]
+
+      # Must track the framework/runtime major, not npm's latest
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      # @types/node must match the Node major in engines (24.x), NOT latest —
+      # Dependabot proposed 20 -> 26, which is ahead of the runtime we pin.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+
+      # Auth/backend SDK majors require coordinated config + migration
+      - dependency-name: "@clerk/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "convex"
+        update-types: ["version-update:semver-major"]
+
+      # UI/validation majors that are rewrites with breaking APIs
+      - dependency-name: "zod"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "recharts"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-day-picker"
+        update-types: ["version-update:semver-major"]
+      # lib/withRateLimit.ts imports RateLimiterMemory directly and its
+      # documented per-instance caveat is written against that API. Dependabot
+      # proposed 8 -> 11, three majors at once; that is a code change, not a bump.
+      - dependency-name: "rate-limiter-flexible"
+        update-types: ["version-update:semver-major"]
+
     commit-message:
       prefix: "chore"
       include: "scope"
 
   # ── GitHub Actions pinned in our workflows ──────────────────────────
+  #
+  # Third-party actions here are pinned to a full commit SHA on purpose (a tag
+  # is mutable, and a compromised action repo is the same class of problem as a
+  # poisoned npm package). Dependabot understands SHA pins and will bump the SHA
+  # while preserving the `# vN` comment — that is exactly what we want for
+  # patch-level security fixes to an action we already trust.
+  #
+  # What we do NOT want is major bumps: actions/checkout 4 -> 7 and
+  # actions/setup-node 4 -> 7 change runner and input behaviour, and adopting
+  # them is a deliberate decision, not routine maintenance. Those PRs were part
+  # of the 13-PR pileup observed downstream.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -40,6 +118,15 @@ updates:
     open-pull-requests-limit: 5
     cooldown:
       default-days: 7
+    groups:
+      # One PR for all routine action SHA bumps rather than one per action.
+      actions-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+    ignore:
+      # Applies to every action; take majors by hand after reading the changelog.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore"
       include: "scope"

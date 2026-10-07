@@ -24,6 +24,11 @@ rsync -av --delete \
 rsync -av --delete "$SOURCE/.claude/skills/"    "$DEST/.claude/skills/"
 rsync -av --delete "$SOURCE/.github/workflows/" "$DEST/.github/workflows/"
 cp "$SOURCE/scripts/timestamp-helper.sh"        "$DEST/scripts/timestamp-helper.sh"
+# CI gates referenced by files/.github/workflows/ci.yml — ship them or the
+# installed security job fails on a missing script.
+cp "$SOURCE/scripts/check-convex-auth.mjs"      "$DEST/scripts/check-convex-auth.mjs"
+cp "$SOURCE/scripts/audit-gate.mjs"             "$DEST/scripts/audit-gate.mjs"
+cp "$SOURCE/scripts/audit-allowlist.json"       "$DEST/scripts/audit-allowlist.json"
 cp "$SOURCE/.claude/statusline.sh"              "$DEST/.claude/statusline.sh"
 chmod +x "$DEST/.claude/statusline.sh"
 cp "$SOURCE/.claude/settings.json"              "$DEST/.claude/settings.json"

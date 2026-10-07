@@ -61,6 +61,32 @@ function sanitizeIdForLog(id: string | undefined): string | undefined {
 }
 
 /**
+ * Maximum stored length for caller-supplied free-text log fields.
+ *
+ * 2 KB is far more than any genuine errorMessage or requestPayload excerpt needs
+ * for triage, and small enough that even sustained abuse grows the table slowly
+ * relative to Convex's per-transaction read ceiling.
+ */
+const MAX_LOG_FIELD_CHARS = 2000;
+
+/**
+ * Caps a caller-supplied string so one caller cannot write unbounded rows.
+ *
+ * This exists because logSecurityViolation is reachable UNAUTHENTICATED by
+ * design (violations are recorded before a session exists). Without a cap, the
+ * audit table is an unbounded write primitive for anyone who knows the Convex
+ * deployment URL — and the failure mode is self-concealing, because the first
+ * thing that breaks is the dashboard used to notice it.
+ *
+ * Truncation is marked so a reader can tell a clipped value from a short one.
+ */
+function capForLog(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (value.length <= MAX_LOG_FIELD_CHARS) return value;
+  return `${value.substring(0, MAX_LOG_FIELD_CHARS)}…[truncated ${value.length - MAX_LOG_FIELD_CHARS} chars]`;
+}
+
+/**
  * All security event types that can be logged
  */
 export type SecurityEventType =
@@ -135,13 +161,19 @@ export async function logSecurity(
     origin: metadata.origin,
     ipAddress: metadata.ipAddress, // IPs are needed for security analysis
     fingerprint: metadata.fingerprint, // Fingerprints are anonymized identifiers
-    errorMessage: metadata.errorMessage,
+    // Size-capped: these two fields are the only ones carrying caller-supplied
+    // free text, and logSecurityViolation is reachable UNAUTHENTICATED. Without
+    // a cap, one caller can write arbitrarily large rows and grow the
+    // securityEvents table until the dashboard's reads exceed Convex's
+    // per-transaction limit — silencing the monitoring it is meant to feed.
+    // Truncate rather than reject: a clipped event is still evidence.
+    errorMessage: capForLog(metadata.errorMessage),
     // PII fields are sanitized
     endUserEmail: sanitizeEmailForLog(metadata.endUserEmail),
     endUserName: sanitizeNameForLog(metadata.endUserName),
     endUserId: sanitizeIdForLog(metadata.endUserId),
     actionType: metadata.actionType,
-    requestPayload: metadata.requestPayload,
+    requestPayload: capForLog(metadata.requestPayload),
   };
 
   // Direct insert - no scheduler, no separate transaction

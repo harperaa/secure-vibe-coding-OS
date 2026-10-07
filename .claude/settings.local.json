@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:semgrep.dev)",
+      "Bash(git tag:*)",
+      "Bash(gh release:*)",
+      "Skill(advise)",
+      "WebFetch(domain:vercel.com)",
+      "WebSearch",
+      "WebFetch(domain:llmstxt.org)",
+      "Bash(ls:*)",
+      "WebFetch(domain:docs.convex.dev)",
+      "WebFetch(domain:clerk.com)",
+      "WebFetch(domain:clerk-bapi.redoc.ly)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:docs.svix.com)",
+      "WebFetch(domain:stack.convex.dev)",
+      "WebFetch(domain:api.svix.com)",
+      "WebFetch(domain:www.svix.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.convex.dev)",
+      "WebFetch(domain:feedback.clerk.com)",
+      "Bash(detect-secrets-hook --baseline .secrets.baseline)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

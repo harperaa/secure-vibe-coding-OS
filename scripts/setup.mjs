@@ -1442,6 +1442,48 @@ function readVercelEnv() {
   return { ok: true, byTarget };
 }
 
+/**
+ * Writes a file containing secrets with owner-only permissions (0600).
+ *
+ * fs.writeFileSync defaults to 0644 — world-readable. The Doppler migration
+ * inventory holds every secret in the project in cleartext at a fixed,
+ * guessable path under os.tmpdir(), so default perms meant any local account
+ * could read the entire secret store.
+ *
+ * The mode argument only applies when the file is CREATED, so an existing
+ * file's permissions are tightened explicitly afterwards.
+ */
+function writeSecretFile(filePath, contents) {
+  fs.writeFileSync(filePath, contents, { encoding: 'utf-8', mode: 0o600 });
+  try {
+    fs.chmodSync(filePath, 0o600);
+  } catch {
+    // Non-POSIX filesystem; the write above is the best available guarantee.
+  }
+}
+
+/**
+ * Removes the cleartext secret inventory once migration is complete.
+ *
+ * This did not previously exist anywhere in this file: the inventory was
+ * written, read by --phase=cleanup, and then left on disk indefinitely. The
+ * sibling temp files in this script are all unlinked; this one was missed.
+ */
+function shredInventory(inventoryPath) {
+  try {
+    if (!fs.existsSync(inventoryPath)) return { removed: false };
+    // Overwrite before unlinking so the bytes are less trivially recoverable
+    // from a simple undelete. Not a secure-erase guarantee on modern
+    // copy-on-write filesystems — rotation is the real remedy if this leaked.
+    const size = fs.statSync(inventoryPath).size;
+    fs.writeFileSync(inventoryPath, '0'.repeat(size), { encoding: 'utf-8', mode: 0o600 });
+    fs.unlinkSync(inventoryPath);
+    return { removed: true };
+  } catch (err) {
+    return { removed: false, error: err.message };
+  }
+}
+
 async function runMigrateToDoppler(args) {
   const phase = args.phase || 'inventory';
   const inventoryPath = args['inventory-file'] || path.join(os.tmpdir(), 'doppler-migration-inventory.json');
@@ -1468,7 +1510,10 @@ async function runMigrateToDoppler(args) {
     const vercel = readVercelEnv();
     inventory.vercel = vercel.ok ? { ok: true, byTarget: vercel.byTarget } : { ok: false, error: vercel.error, byTarget: { production: {}, preview: {}, development: {} } };
 
-    fs.writeFileSync(inventoryPath, JSON.stringify(inventory, null, 2), 'utf-8');
+    // mode 0o600 — this file contains EVERY secret in the project in cleartext.
+    // writeFileSync's default is 0o644, i.e. readable by any local user, at a
+    // fixed and guessable path under os.tmpdir(). Owner-only is the minimum.
+    writeSecretFile(inventoryPath, JSON.stringify(inventory, null, 2));
 
     const counts = {
       envLocal: Object.keys(inventory.envLocal).length,
@@ -1478,7 +1523,10 @@ async function runMigrateToDoppler(args) {
       vercelDevelopment: Object.keys(inventory.vercel.byTarget.development).length,
     };
 
-    console.log(JSON.stringify({ success: true, phase: 'inventory', inventoryPath, counts, inventory }, null, 2));
+    // Counts only. The raw `inventory` object was previously included here, which
+    // printed every secret value to stdout — and therefore into terminal
+    // scrollback, CI logs, and any agent transcript driving this command.
+    console.log(JSON.stringify({ success: true, phase: 'inventory', inventoryPath, counts }, null, 2));
     return;
   }
 
@@ -1553,7 +1601,7 @@ async function runMigrateToDoppler(args) {
 
     // Persist what was migrated so cleanup knows exactly what to remove.
     inventory._migrated = { dev: Object.keys(devPayload), prd: Object.keys(prdPayload) };
-    fs.writeFileSync(inventoryPath, JSON.stringify(inventory, null, 2), 'utf-8');
+    writeSecretFile(inventoryPath, JSON.stringify(inventory, null, 2));
 
     console.log(JSON.stringify(result, null, 2));
     return;
@@ -1644,6 +1692,12 @@ async function runMigrateToDoppler(args) {
         }
       }
     }
+
+    // The inventory has served its purpose; remove it. Leaving a cleartext copy
+    // of every project secret on disk is a worse outcome than any it prevents.
+    const shred = shredInventory(inventoryPath);
+    result.inventoryFileRemoved = shred.removed;
+    if (shred.error) result.inventoryFileRemoveError = shred.error;
 
     console.log(JSON.stringify(result, null, 2));
     return;

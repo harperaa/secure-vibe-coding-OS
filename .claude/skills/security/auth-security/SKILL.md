@@ -420,6 +420,83 @@ export async function POST(request: NextRequest) {
 
 ## Convex Integration
 
+### ⚠️ Read this first: every exported Convex function is a public endpoint
+
+This is the single most misunderstood thing about Convex security, and it has
+already produced real vulnerabilities in apps built on this template.
+
+**`middleware.ts` does not protect Convex.** Middleware only sees requests to
+the Next.js server. Convex RPC goes **browser → Convex deployment**, directly.
+It never passes through middleware, so `createRouteMatcher(['/dashboard(.*)'])`
+and `auth.protect()` have no effect on it whatsoever.
+
+The consequence:
+
+```typescript
+// This is a PUBLIC INTERNET ENDPOINT. Anyone who knows the deployment URL
+// can call it. There is nothing in this code that says so.
+export const deleteEverything = mutation({
+  handler: async (ctx) => { /* ... */ }
+});
+```
+
+A Convex deployment URL is not a secret — it ships in your client bundle as
+`NEXT_PUBLIC_CONVEX_URL`. Treat every exported function as internet-facing.
+
+**Three rules:**
+
+1. **If a client needs to call it** → check identity in the handler, first line.
+2. **If only your server code calls it** → make it `internalMutation` /
+   `internalQuery` / `internalAction`. These are not reachable from a client at
+   all. This is the correct fix, not an optimisation.
+3. **If it genuinely must be public** → say so explicitly in a comment above the
+   export, with the reason and what bounds abuse. Silence is not a decision.
+
+**Never accept an identity as an argument.**
+
+```typescript
+// ❌ CATASTROPHIC — the caller supplies whose record this is
+export const logEvent = mutation({
+  args: { userId: v.id("users"), action: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("events", { userId: args.userId, ... });
+    // Any caller can forge a record attributed to ANY user.
+  }
+});
+
+// ✅ Derive identity from the session; never trust the argument
+export const logEvent = mutation({
+  args: { action: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+    await ctx.db.insert("events", { userId: identity.subject, ... });
+  }
+});
+```
+
+This exact bug — a public mutation taking a caller-supplied `userId` — shipped
+in this template's own `convex/security.ts` and was found by a downstream
+security assessment, not by us. It had zero callers. It has since been deleted
+and `scripts/check-convex-auth.mjs` now fails CI on the pattern.
+
+**Auditing an existing app:**
+
+```bash
+node scripts/check-convex-auth.mjs     # ships with this template; runs in CI
+```
+
+Or by hand — list every export and check each one has an identity check:
+
+```bash
+grep -rn "^export const" convex/*.ts | grep -v internal
+```
+
+Reviewing only the functions that *look* sensitive is not sufficient. The two
+findings in the assessment above were sibling functions in a file that had
+already been reviewed; one was found only because a second pass read every
+export in the file rather than the ones that seemed interesting.
+
 ### Using Clerk Auth with Convex
 
 ```typescript

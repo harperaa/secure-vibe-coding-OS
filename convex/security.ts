@@ -94,11 +94,21 @@ export const listSecurityEvents = query({
 
     const limit = args.limit || 50;
 
-    // Get ALL security events (no user filtering)
+    // Bounded read. This used to be .collect(), which loads the ENTIRE
+    // securityEvents table into memory before any filtering. Because
+    // logSecurityViolation is reachable unauthenticated by design, that made the
+    // admin dashboard denial-of-serviceable by anyone who could write rows: grow
+    // the table past Convex's per-transaction read ceiling and this query throws
+    // on every subsequent call. The monitoring surface was the first casualty of
+    // the flood it existed to reveal.
+    //
+    // Read a bounded window and filter within it. Filters below are applied in
+    // JS, so over-fetch enough that a filtered view still fills a page.
+    const SCAN_CEILING = 2000;
     let events = await ctx.db
       .query("securityEvents")
       .order("desc")
-      .collect();
+      .take(Math.min(Math.max(limit * 10, 200), SCAN_CEILING));
 
     // Apply time range filter if specified
     if (args.startTime !== undefined || args.endTime !== undefined) {
@@ -186,9 +196,16 @@ export const getSecuritySummary = query({
       };
     }
 
+    // Bounded read — see the note in listSecurityEvents. An unbounded .collect()
+    // here made the summary tiles fail exactly when the table was being flooded.
+    // The counts below are therefore over the most recent SCAN_CEILING events,
+    // not all time; that is the correct trade for a dashboard that must keep
+    // rendering under abuse. Surface it in the UI rather than implying totals.
+    const SCAN_CEILING = 2000;
     let events = await ctx.db
       .query("securityEvents")
-      .collect();
+      .order("desc")
+      .take(SCAN_CEILING);
 
     // Apply time range filter if specified
     if (args.startTime !== undefined || args.endTime !== undefined) {
@@ -285,62 +302,6 @@ export const markEventAsUnread = mutation({
 });
 
 /**
- * Log a security event (for internal use - requires userId)
- */
-export const logSecurityEvent = mutation({
-  args: {
-    userId: v.id("users"),
-    eventType: v.union(
-      v.literal("origin_mismatch"),
-      v.literal("rate_limit_exceeded"),
-      v.literal("invalid_api_key"),
-      v.literal("fingerprint_change"),
-      v.literal("suspicious_activity"),
-      v.literal("jwt_validation_failed"),
-      v.literal("unauthorized_access"),
-      v.literal("input_validation_failed"),
-      v.literal("replay_detected"),
-      v.literal("not_found_enumeration"),
-      v.literal("jwt_algorithm_attack"),
-      v.literal("tenant_isolation_attack"),
-      v.literal("jwt_replay_attack"),
-      v.literal("xss_attempt"),
-      v.literal("fingerprint_manipulation"),
-      v.literal("http_origin_blocked"),
-      v.literal("prompt_injection_attempt"),
-      v.literal("ai_response_validation_failed"),
-      v.literal("csrf_validation_failed")
-    ),
-    severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical")),
-    metadata: v.object({
-      origin: v.optional(v.string()),
-      ipAddress: v.optional(v.string()),
-      fingerprint: v.optional(v.string()),
-      endpoint: v.optional(v.string()),
-      errorMessage: v.optional(v.string()),
-      endUserEmail: v.optional(v.string()),
-      endUserName: v.optional(v.string()),
-      endUserId: v.optional(v.string()),
-      actionType: v.optional(v.string()),
-      requestPayload: v.optional(v.string()),
-    }),
-  },
-  returns: v.id("securityEvents"),
-  handler: async (ctx, args) => {
-    const eventId = await ctx.db.insert("securityEvents", {
-      userId: args.userId,
-      eventType: args.eventType,
-      severity: args.severity,
-      metadata: args.metadata,
-      timestamp: Date.now(),
-      isRead: false,
-    });
-
-    return eventId;
-  },
-});
-
-/**
  * Log a security event for the current authenticated user
  * Used by API routes to log detected security violations
  * Uses the security logger library for PII sanitization and consistent logging
@@ -412,10 +373,31 @@ export const logSecurityEventForCurrentUser = mutation({
 
 /**
  * Log security violations from middleware (rate limiting, CSRF, etc.)
- * Does NOT require authentication - violations can occur before auth
  *
- * Security: Only callable from localhost in development to prevent abuse
- * Events are logged without userId for anonymous violations
+ * @public-endpoint: a violation is by definition recorded when the caller has
+ * failed some check, which frequently means no session exists yet (blocked
+ * origin, CSRF failure, rate limit hit before sign-in). Requiring auth here
+ * would drop exactly the events worth recording. It attaches the caller's user
+ * id only when one happens to exist, and never accepts a caller-supplied id —
+ * so events cannot be attributed to someone else.
+ *
+ * KNOWN LIMITATION — read before relying on this table for anything: because it
+ * is reachable unauthenticated, anyone who knows the Convex deployment URL can
+ * write rows here. Treat `securityEvents` as attacker-influenceable input, not
+ * as trustworthy audit. Do not build alerting that assumes volume is genuine,
+ * and page on absence of expected events rather than presence of unexpected ones.
+ * What actually bounds abuse, verified rather than asserted:
+ *   - logSecurity() caps errorMessage and requestPayload at 2000 chars
+ *     (capForLog in convex/lib/securityLogger.ts) and sanitizes PII.
+ *   - listSecurityEvents and getSecuritySummary read a bounded window via
+ *     .take(), so a flood degrades signal rather than breaking the dashboard.
+ * There is still no rate limit on this mutation; row count grows with abuse.
+ *
+ * (Two earlier versions of this comment asserted controls that did not exist:
+ * first "only callable from localhost in development", then "rows are
+ * size-capped and the dashboard queries are paginated" — written at a point
+ * when neither was true. Both were caught by assessment, not by review. If you
+ * add a claim here, implement it in the same commit.)
  */
 export const logSecurityViolation = mutation({
   args: {
