@@ -222,6 +222,21 @@ async function runInit(args) {
   result.steps.push('Generated CSRF_SECRET and SESSION_SECRET');
   result.envVarsSet.push('CSRF_SECRET', 'SESSION_SECRET');
 
+  // SECURITY_LOG_KEY gates convex/security.ts:logSecurityViolation. The Next.js
+  // server sends it with every security-log write and Convex rejects anything
+  // else, so it has to be the SAME value on both sides: persisted here for the
+  // app, and mirrored into Convex env in Step 5 below.
+  let securityLogKey;
+  if (dopplerMode) {
+    securityLogKey = generateSecret();
+  } else {
+    const existingKey = getEnvValue(readEnvFile(ENV_FILE), 'SECURITY_LOG_KEY');
+    securityLogKey = (existingKey && !existingKey.includes('<')) ? existingKey : generateSecret();
+  }
+  persistEnvVar('SECURITY_LOG_KEY', securityLogKey);
+  result.steps.push('Generated SECURITY_LOG_KEY');
+  result.envVarsSet.push('SECURITY_LOG_KEY');
+
   // Step 3: Site name
   persistEnvVar('NEXT_PUBLIC_SITE_NAME', siteName);
   result.steps.push(`Set NEXT_PUBLIC_SITE_NAME=${siteName}`);
@@ -659,6 +674,20 @@ async function runConfigure(args) {
     convexVarsToSet['CLERK_JWT_ISSUER_DOMAIN'] = frontendApiUrl;
   }
   convexVarsToSet['ADMIN_EMAIL'] = adminEmail;
+
+  // SECURITY_LOG_KEY was minted by `init` and persisted to Doppler dev or
+  // .env.local. Mirror that exact value into Convex; never mint a new one here,
+  // or the app and Convex would hold different keys and every security-log
+  // write would be rejected.
+  const securityLogKey =
+    dopplerSecrets?.SECURITY_LOG_KEY || getEnvValue(envContent, 'SECURITY_LOG_KEY');
+  if (securityLogKey && !securityLogKey.includes('<')) {
+    convexVarsToSet['SECURITY_LOG_KEY'] = securityLogKey;
+  } else {
+    result.manualSteps.push(
+      'SECURITY_LOG_KEY was not found (run `node scripts/setup.mjs init` first). Generate one with `node -p "require(\'crypto\').randomBytes(32).toString(\'base64url\')"`, store it where the app reads secrets (Doppler dev or .env.local), then `npx convex env set SECURITY_LOG_KEY <value>`.'
+    );
+  }
 
   // In Doppler mode: push the values to Doppler dev first, then run the sync
   // script so Doppler is the source of truth and Convex's env mirrors it.
@@ -1345,6 +1374,7 @@ const KEEP_IN_CONVEX = new Set([
   'NEXT_PUBLIC_CLERK_FRONTEND_API_URL',   // Convex-mirrored (used by convex/auth.config.ts)
   'CLERK_JWT_ISSUER_DOMAIN',              // Convex-mirrored (preferred issuer name in auth.config.ts)
   'ADMIN_EMAIL',                          // Convex-mirrored (used by admin queries)
+  'SECURITY_LOG_KEY',                     // Convex-mirrored (gates logSecurityViolation)
 ]);
 
 function commandAvailable(name) {

@@ -41,7 +41,7 @@ The deployment story depends on which secrets-management mode `/install` configu
 
 - **In Doppler:** every app value (`CLERK_SECRET_KEY`, `CSRF_SECRET`, `SESSION_SECRET`, `NEXT_PUBLIC_*`, `CONVEX_DEPLOY_KEY`, etc.) plus `REVALIDATE_TOKEN` for the runtime cache invalidation route.
 - **In Vercel env:** only `DOPPLER_TOKEN` (read-only, scoped to one Doppler config).
-- **In Convex env:** the allowlisted subset Convex functions need (`CLERK_WEBHOOK_SECRET`, `NEXT_PUBLIC_CLERK_FRONTEND_API_URL`, `ADMIN_EMAIL`), kept in sync via `scripts/sync-convex-env.mjs`.
+- **In Convex env:** the allowlisted subset Convex functions need (`CLERK_WEBHOOK_SECRET`, `NEXT_PUBLIC_CLERK_FRONTEND_API_URL`, `ADMIN_EMAIL`, `SECURITY_LOG_KEY`), kept in sync via `scripts/sync-convex-env.mjs`. `SECURITY_LOG_KEY` is the one value that must be identical in Doppler (read by the app) and Convex (checked by `logSecurityViolation`).
 - **In GitHub Actions secrets:** `DOPPLER_TOKEN` (separate `dev`-scoped service token for CI builds).
 
 **Rotation runbook:**
@@ -329,6 +329,7 @@ CLERK_SECRET_KEY=sk_live_...
 NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://your-prod.clerk.accounts.dev
 CSRF_SECRET=<production-secret>
 SESSION_SECRET=<production-secret>
+SECURITY_LOG_KEY=<production-secret, also set in the prod Convex env>
 # etc.
 ```
 
@@ -470,6 +471,8 @@ NEXT_PUBLIC_SITE_NAME=Secure Vibe Coding OS (Staging)
 # CSRF (same as dev)
 CSRF_SECRET=<same-as-dev>
 SESSION_SECRET=<same-as-dev>
+# Security log key (must match the staging Convex deployment's env)
+SECURITY_LOG_KEY=<matches-staging-convex-env>
 
 # Redirects (same)
 NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
@@ -720,6 +723,7 @@ NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://your-staging.clerk.accounts.dev
 NEXT_PUBLIC_SITE_NAME=Secure Vibe Coding OS (Preview)
 CSRF_SECRET=<your-csrf-secret>
 SESSION_SECRET=<your-session-secret>
+SECURITY_LOG_KEY=<matches-the-convex-deployment-this-preview-talks-to>
 NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
 NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=/dashboard
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
@@ -743,6 +747,8 @@ NEXT_PUBLIC_SITE_NAME=Secure Vibe Coding OS
 # CSRF secrets (keep same as dev for simplicity, or use separate prod secrets)
 CSRF_SECRET=<your-csrf-secret>
 SESSION_SECRET=<your-session-secret>
+# Security log key: must equal SECURITY_LOG_KEY in the PROD Convex env
+SECURITY_LOG_KEY=<your-security-log-key>
 
 # Redirects (same)
 NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
@@ -975,6 +981,17 @@ git push origin main
 - Skip backups
 
 ---
+
+### Rate limiting at the edge (Vercel Firewall)
+
+`withRateLimit` keeps its counters in the memory of one function instance, so on Vercel a caller spread across N warm instances gets N times the limit and every recycle resets the count. It is a speed bump, not a quota, and its own comment says so. The limit that actually holds across instances is the one Vercel enforces before the request reaches a function, and it needs no code:
+
+1. Vercel dashboard → your project → **Firewall** → **Configure** → **Add rule**.
+2. Condition: request path starts with `/api/` (add other sensitive paths as needed).
+3. Action: **Rate limit**, keyed by IP, with a window that matches your tolerance (for example 60 requests per minute). Start in log-only mode, read the Firewall logs for a day, then switch to deny.
+4. Keep `withRateLimit` in place: it still covers local and non-Vercel deployments and still writes the `rate_limit_exceeded` rows the security dashboard shows.
+
+Convex mutations never pass through Vercel, so neither control applies to them. Authenticated mutations should carry their own bound, as `convex/jobs.ts` does with its per-user active-job cap, and public ones should be gated the way `logSecurityViolation` is.
 
 ## Monitoring and Observability
 

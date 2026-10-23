@@ -26,9 +26,16 @@ function logCsrfViolation(request: NextRequest, reason: string): void {
   const endpoint = request.nextUrl.pathname;
   const origin = request.headers.get('origin') || undefined;
 
+  // The mutation requires the shared SECURITY_LOG_KEY so that only this server,
+  // not anyone holding the public deployment URL, can write to the security log.
   const client = getConvexClient();
-  if (client) {
+  const key = process.env.SECURITY_LOG_KEY;
+  if (client && !key) {
+    console.error('SECURITY_LOG_KEY is not set; CSRF violation not logged to Convex');
+  }
+  if (client && key) {
     client.mutation(api.security.logSecurityViolation, {
+      key,
       eventType: 'csrf_validation_failed',
       severity: 'critical',
       metadata: {

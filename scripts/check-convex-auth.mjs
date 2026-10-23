@@ -29,7 +29,8 @@
  * The opt-out is deliberately verbose. Write it directly above the export:
  *
  *   // @public-endpoint: violations are recorded before a session exists, so
- *   // this cannot require auth. Abuse is bounded by <the actual control>.
+ *   // this cannot require a user session. Abuse is bounded by <the actual
+ *   // control, e.g. the SECURITY_LOG_KEY shared key>.
  *   export const logSecurityViolation = mutation({ ... })
  *
  * A bare `@public-endpoint` with no reason is rejected. The point is to make

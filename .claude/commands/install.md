@@ -291,8 +291,8 @@ Build the `write-install-summary` arguments from data collected during the insta
 - `--claim-url` from Phase 3 init result (if accountless app was created)
 - `--accountless` = "true" if an accountless app was created, "false" if user provided keys
 - `--completed-steps` = comma-separated list of steps that succeeded. Adjust for the chosen mode:
-  - **Doppler mode** (`<USE_DOPPLER>` is true): "Dependencies installed,Doppler CLI installed and authenticated,Doppler project created with dev/prd configs,Repo pinned to dev (.doppler.yaml written),CSRF and Session secrets pushed to Doppler dev,Clerk application created (accountless),JWT template for Convex created,Frontend API URL pushed to Doppler dev,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL),Convex deployment IDs synced to Doppler dev,CI service token created and pushed to GitHub Actions"
-  - **Legacy mode**: "Dependencies installed,.env.local created and configured,CSRF and Session secrets generated,Clerk application created (accountless),JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)"
+  - **Doppler mode** (`<USE_DOPPLER>` is true): "Dependencies installed,Doppler CLI installed and authenticated,Doppler project created with dev/prd configs,Repo pinned to dev (.doppler.yaml written),CSRF\\, Session and Security Log secrets pushed to Doppler dev,Clerk application created (accountless),JWT template for Convex created,Frontend API URL pushed to Doppler dev,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL\\, SECURITY_LOG_KEY),Convex deployment IDs synced to Doppler dev,CI service token created and pushed to GitHub Actions"
+  - **Legacy mode**: "Dependencies installed,.env.local created and configured,CSRF\\, Session and Security Log secrets generated,Clerk application created (accountless),JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL\\, SECURITY_LOG_KEY)"
 - `--manual-steps` = comma-separated list of anything that failed and needs manual completion (from `manualSteps` arrays in configure output)
 - `--modules-installed` = comma-separated `<MODULES>` (empty string if none were selected)
 - `--modules-skipped` = comma-separated `<SKIPPED_MODULES>` (empty string if all were selected)
@@ -317,7 +317,7 @@ Run: `node scripts/setup.mjs write-install-summary --claim-url="<URL>" --account
 - Frontend API URL configured
 - Convex project set up and functions deployed
 - Webhook endpoint created via Svix
-- Convex environment variables set (CLERK_WEBHOOK_SECRET, ADMIN_EMAIL, NEXT_PUBLIC_CLERK_FRONTEND_API_URL)
+- Convex environment variables set (CLERK_WEBHOOK_SECRET, ADMIN_EMAIL, NEXT_PUBLIC_CLERK_FRONTEND_API_URL, SECURITY_LOG_KEY)
 - (Doppler mode) Convex deployment IDs synced to Doppler dev
 - (Doppler mode) CI service token created and pushed to GitHub as DOPPLER_TOKEN
 

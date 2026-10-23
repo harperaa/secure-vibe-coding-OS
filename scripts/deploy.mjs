@@ -88,6 +88,29 @@ function readEnvFile(filePath) {
   return fs.readFileSync(filePath, 'utf-8');
 }
 
+/**
+ * SECURITY_LOG_KEY gates convex/security.ts:logSecurityViolation and must be
+ * the SAME value in Convex env and in the Vercel app. In legacy mode both
+ * sides are sourced from .env.local by this script, so an install that
+ * predates the key gets one minted here and written back, and every later
+ * subcommand reads that identical value.
+ */
+function ensureSecurityLogKey() {
+  const content = readEnvFile(ENV_FILE);
+  const existing = getEnvValue(content, 'SECURITY_LOG_KEY');
+  if (existing && !existing.includes('<')) return { value: existing, generated: false };
+  const value = crypto.randomBytes(32).toString('base64url');
+  const line = `SECURITY_LOG_KEY=${value}`;
+  // Replace an empty or placeholder entry in place. Appending would leave the
+  // old line first, getEnvValue would keep reading it, and the next subcommand
+  // would mint a different key: Convex and Vercel would then disagree.
+  const next = /^SECURITY_LOG_KEY=.*$/m.test(content)
+    ? content.replace(/^SECURITY_LOG_KEY=.*$/m, line)
+    : `${content}${content.endsWith('\n') || content === '' ? '' : '\n'}${line}\n`;
+  fs.writeFileSync(ENV_FILE, next);
+  return { value, generated: true };
+}
+
 function getEnvValue(content, key) {
   const regex = new RegExp(`^${key}=(.*)$`, 'm');
   const match = content.match(regex);
@@ -961,6 +984,16 @@ async function runConvexProdEnv(args) {
   }
   if (adminEmail) envVars['ADMIN_EMAIL'] = adminEmail;
 
+  // SECURITY_LOG_KEY must match what the Vercel app sends. Legacy mode sources
+  // Vercel's copy from .env.local (see runVercelEnv), so take the same value
+  // here. An install that predates the key gets one minted and written back
+  // so the later vercel-env step picks up the identical value.
+  const securityLogKey = ensureSecurityLogKey();
+  if (securityLogKey.generated) {
+    result.steps.push('Generated SECURITY_LOG_KEY and added it to .env.local');
+  }
+  envVars['SECURITY_LOG_KEY'] = securityLogKey.value;
+
   for (const [key, value] of Object.entries(envVars)) {
     try {
       execSync(`npx convex env set ${key} "${value}"`, {
@@ -1023,6 +1056,7 @@ async function runVercelEnvDev() {
     'NEXT_PUBLIC_SITE_NAME',
     'CSRF_SECRET',
     'SESSION_SECRET',
+    'SECURITY_LOG_KEY',
     'NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL',
     'NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL',
     'NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL',
@@ -1125,6 +1159,8 @@ async function runVercelEnv(args) {
     'NEXT_PUBLIC_SITE_NAME': siteName,
     'CSRF_SECRET': csrfSecret,
     'SESSION_SECRET': sessionSecret,
+    // Same value convex-prod-env mirrored into Convex; both read .env.local.
+    'SECURITY_LOG_KEY': ensureSecurityLogKey().value,
     'NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL': '/dashboard',
     'NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL': '/dashboard',
     'NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL': '/dashboard',
@@ -1246,6 +1282,7 @@ async function runVercelEnvDoppler(opts = {}) {
       'NEXT_PUBLIC_SITE_NAME',
       'CSRF_SECRET',
       'SESSION_SECRET',
+      'SECURITY_LOG_KEY',
     ];
     let prdSecrets;
     try {
@@ -1264,7 +1301,7 @@ async function runVercelEnvDoppler(opts = {}) {
         error: 'doppler_prd_incomplete',
         message: `Doppler 'prd' config is missing required keys: ${missing.join(', ')}`,
         missing,
-        hint: 'Seed Doppler prd before running /deploy-to-prod. For each missing key: doppler secrets set KEY="<value>" --config prd. See .claude/commands/deploy-to-prod.md for the full list (Clerk prod PK/SK/webhook, Convex prod URL/deploy key, NEXT_PUBLIC_SITE_NAME, CSRF_SECRET, SESSION_SECRET).',
+        hint: 'Seed Doppler prd before running /deploy-to-prod. For each missing key: doppler secrets set KEY="<value>" --config prd. See .claude/commands/deploy-to-prod.md for the full list (Clerk prod PK/SK/webhook, Convex prod URL/deploy key, NEXT_PUBLIC_SITE_NAME, CSRF_SECRET, SESSION_SECRET, SECURITY_LOG_KEY).',
       }, null, 2));
       process.exit(1);
     }
