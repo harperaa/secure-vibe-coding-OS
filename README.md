@@ -943,6 +943,14 @@ The application includes a comprehensive real-time security monitoring dashboard
 2. Sign in with the email address matching `ADMIN_EMAIL`
 3. Navigate to the "Security Monitoring" link in the "Administration" section of the sidebar
 
+#### Retention and Limits
+
+The log accepts violations from callers who are not signed in (blocked origins, CSRF failures, rate limits hit before sign-in), so anyone who knows the Convex deployment URL can add rows. Treat the table as attacker-influenceable input, not as a trustworthy audit trail. Three controls bound the damage:
+
+- **Bounded reads.** Dashboard queries read at most the newest 1,000 events in the selected time range (via the `byTimestamp` index), so a flood degrades the view instead of taking it offline. The "Total Events" tile says so.
+- **Retention.** A daily Convex cron (`convex/crons.ts`) deletes events older than 90 days in batches of 200, rescheduling itself until the backlog is drained. Change `RETENTION_DAYS` in `convex/security.ts` to adjust the window.
+- **Size caps.** Every caller-supplied field is truncated before insert (2,000 characters for the two free-text fields, 256 for the rest) and PII is masked. The read and delete batch sizes are derived from the resulting worst-case row size so that a flood of maximum-size rows still fits Convex's per-transaction read budget.
+
 #### Logging Security Events
 
 Security events are automatically logged when using the built-in security middlewares (`withRateLimit`, `withCsrf`, etc.). You can also manually log events using the security logger:

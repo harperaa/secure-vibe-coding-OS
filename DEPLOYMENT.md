@@ -50,6 +50,8 @@ The deployment story depends on which secrets-management mode `/install` configu
 - `NEXT_PUBLIC_*` rotation requires a redeploy (Next.js inlines them at build time). Other server secrets propagate on next cold start, or immediately via `POST /api/revalidate-secrets` with the `REVALIDATE_TOKEN`.
 - Rotating `SESSION_SECRET` or `CSRF_SECRET` invalidates active sessions — `/rotate` warns explicitly.
 
+**Availability trade-off:** in this mode a brand-new function instance cannot serve a request that needs a server secret (sign-in, CSRF, webhooks) until its one Doppler fetch succeeds. `lib/secrets.ts` makes up to five attempts, each with a 5 s timeout, with about 3.75 s of backoff between them, so a fully stalled Doppler costs a cold start roughly 29 s before it fails; a brief blip costs far less. The result is memoized for the instance's lifetime, so warm instances are unaffected. A sustained Doppler outage does affect cold starts, which is exactly when traffic spikes create new instances. If that trade is wrong for your deployment, legacy mode below keeps secrets in Vercel's env store with no runtime dependency, at the cost of `/rotate` losing its seconds-to-contain revoke.
+
 ### Legacy `.env.local` mode
 
 Active when `.doppler.yaml` is absent. `setup.mjs` writes `.env.local`; `deploy.mjs` reads `.env.local` and pushes each value to Vercel via `vercel env add`. Convex env is set via `npx convex env set`. No runtime fetch — secrets sit in Vercel's env store at rest. Use this if Doppler isn't an option for your team.
