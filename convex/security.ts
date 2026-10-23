@@ -4,6 +4,7 @@
  */
 
 import { v } from "convex/values";
+import { IndexRange, paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { internalMutation, mutation, query, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getCurrentUser, getCurrentUserOrThrowForMutation, isCurrentUserAdmin, isCurrentUserAdminMutation } from "./users";
@@ -20,39 +21,62 @@ import {
 import { hourStart, summarize } from "./lib/securityCounts";
 
 /**
- * Upper bound on rows any dashboard query reads in one transaction.
+ * Index-backed, filtered, time-bounded, newest-first query over securityEvents.
  *
- * logSecurityViolation is gated by a shared key, but that key is a secret and
- * secrets leak, so treat the table as attacker-growable. An unbounded read here made the admin dashboard
- * denial-of-serviceable by anyone who could write rows: grow the table past
- * Convex's per-transaction read ceiling and every call throws. The monitoring
- * surface was the first casualty of the flood it existed to reveal. Reading a
- * bounded window means a flood degrades signal rather than availability.
- *
- * Sized in BYTES, not just rows: every caller-supplied field is capped in
- * convex/lib/securityLogger.ts, which puts the worst-case row under ~6 KB, so
- * 1,000 rows stay under Convex's 8 MiB per-transaction read budget even when
- * every row was written by an attacker at the cap. Raise this only together
- * with a tighter field cap.
+ * The feed offers three optional filters. Each combination has its own index
+ * ending in timestamp (see convex/schema.ts), so the query is always a single
+ * index range: the time bounds become a range on the index's last field and
+ * no row is filtered in JavaScript. Paired with .paginate() the read is one
+ * page of matching rows, whatever the table size, which is what keeps the
+ * admin's security view available under exactly the flood it exists to show.
+ * (Earlier versions read a window of the newest N rows and filtered in JS;
+ * that was bounded but could truthfully show "no critical events" when the
+ * window held none, so the ceiling is gone rather than lowered.)
  */
-const SCAN_CEILING = 1000;
-
-/**
- * Newest-first query over securityEvents, bounded to [startTime, endTime] via
- * the byTimestamp index. A time-filtered view therefore reads only rows in
- * range instead of taking the newest N and discarding most of them in JS.
- */
-function eventsInWindow(ctx: QueryCtx, startTime?: number, endTime?: number) {
-  const table = ctx.db.query("securityEvents");
-  const ranged =
-    startTime !== undefined && endTime !== undefined
-      ? table.withIndex("byTimestamp", (q) => q.gte("timestamp", startTime).lte("timestamp", endTime))
-      : startTime !== undefined
-        ? table.withIndex("byTimestamp", (q) => q.gte("timestamp", startTime))
-        : endTime !== undefined
-          ? table.withIndex("byTimestamp", (q) => q.lte("timestamp", endTime))
-          : table.withIndex("byTimestamp");
-  return ranged.order("desc");
+function filteredEvents(
+  ctx: QueryCtx,
+  f: {
+    eventType?: string;
+    severity?: "critical" | "high" | "medium" | "low";
+    isRead?: boolean;
+    startTime?: number;
+    endTime?: number;
+  }
+) {
+  const t = ctx.db.query("securityEvents");
+  // Range on the trailing timestamp field, applied after the equality prefix.
+  // Typed structurally because Convex's builder type changes after each call.
+  type Upper = IndexRange & { lte(field: "timestamp", value: number): IndexRange };
+  type Lower = IndexRange & {
+    gte(field: "timestamp", value: number): Upper;
+    lte(field: "timestamp", value: number): IndexRange;
+  };
+  const time = (q: Lower): IndexRange => {
+    if (f.startTime !== undefined && f.endTime !== undefined)
+      return q.gte("timestamp", f.startTime).lte("timestamp", f.endTime);
+    if (f.startTime !== undefined) return q.gte("timestamp", f.startTime);
+    if (f.endTime !== undefined) return q.lte("timestamp", f.endTime);
+    return q;
+  };
+  const { eventType: ty, severity: sv, isRead: rd } = f;
+  const eventType = ty as SecurityEventType | undefined;
+  const q =
+    eventType !== undefined && sv !== undefined && rd !== undefined
+      ? t.withIndex("byTypeSeverityReadTime", (q) => time(q.eq("eventType", eventType).eq("severity", sv).eq("isRead", rd)))
+      : eventType !== undefined && sv !== undefined
+        ? t.withIndex("byTypeSeverityTime", (q) => time(q.eq("eventType", eventType).eq("severity", sv)))
+        : eventType !== undefined && rd !== undefined
+          ? t.withIndex("byTypeReadTime", (q) => time(q.eq("eventType", eventType).eq("isRead", rd)))
+          : sv !== undefined && rd !== undefined
+            ? t.withIndex("bySeverityReadTime", (q) => time(q.eq("severity", sv).eq("isRead", rd)))
+            : eventType !== undefined
+              ? t.withIndex("byTypeTime", (q) => time(q.eq("eventType", eventType)))
+              : sv !== undefined
+                ? t.withIndex("bySeverityTime", (q) => time(q.eq("severity", sv)))
+                : rd !== undefined
+                  ? t.withIndex("byReadTime", (q) => time(q.eq("isRead", rd)))
+                  : t.withIndex("byTimestamp", (q) => time(q));
+  return q.order("desc");
 }
 
 // Event type validator - reusable across mutations
@@ -100,14 +124,14 @@ const metadataValidator = v.object({
  */
 export const listSecurityEvents = query({
   args: {
-    limit: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
     startTime: v.optional(v.number()),
     endTime: v.optional(v.number()),
     eventType: v.optional(v.string()),
     status: v.optional(v.union(v.literal("open"), v.literal("closed"))),
     severity: v.optional(v.union(v.literal("critical"), v.literal("high"), v.literal("medium"), v.literal("low"))),
   },
-  returns: v.array(
+  returns: paginationResultValidator(
     v.object({
       _id: v.id("securityEvents"),
       _creationTime: v.number(),
@@ -138,31 +162,14 @@ export const listSecurityEvents = query({
       throw new Error("Admin access required");
     }
 
-    const limit = args.limit || 50;
-
-    // Bounded, index-backed read (see SCAN_CEILING). The time range is served
-    // by the byTimestamp index; the remaining filters are applied in JS, so
-    // over-fetch enough that a filtered view still fills a page.
-    let events = await eventsInWindow(ctx, args.startTime, args.endTime)
-      .take(Math.min(Math.max(limit * 10, 200), SCAN_CEILING));
-
-    // Apply event type filter if specified
-    if (args.eventType !== undefined) {
-      events = events.filter(e => e.eventType === args.eventType);
-    }
-
-    // Apply status filter if specified (open = unread, closed = read)
-    if (args.status !== undefined) {
-      events = events.filter(e => args.status === "open" ? !e.isRead : e.isRead);
-    }
-
-    // Apply severity filter if specified
-    if (args.severity !== undefined) {
-      events = events.filter(e => e.severity === args.severity);
-    }
-
-    // Apply limit after filtering
-    events = events.slice(0, limit);
+    const page = await filteredEvents(ctx, {
+      eventType: args.eventType,
+      severity: args.severity,
+      isRead: args.status === undefined ? undefined : args.status === "closed",
+      startTime: args.startTime,
+      endTime: args.endTime,
+    }).paginate(args.paginationOpts);
+    const events = page.page;
 
     // Enrich with user names (for context on which user triggered the event)
     const enrichedEvents = await Promise.all(
@@ -182,7 +189,23 @@ export const listSecurityEvents = query({
       })
     );
 
-    return enrichedEvents;
+    return { ...page, page: enrichedEvents };
+  },
+});
+
+/**
+ * Tells the admin dashboard whether SECURITY_LOG_KEY is set in this Convex
+ * deployment. logSecurityViolation fails closed without it, which is the right
+ * security posture but a silent one: the only other signal is a server-log
+ * line on Vercel. The dashboard shows a banner when this returns false.
+ */
+export const securityLogKeyConfigured = query({
+  args: {},
+  returns: v.boolean(),
+  handler: async (ctx) => {
+    const isAdmin = await isCurrentUserAdmin(ctx);
+    if (!isAdmin) return true; // non-admins get no signal either way
+    return Boolean(process.env.SECURITY_LOG_KEY);
   },
 });
 
@@ -483,8 +506,9 @@ export const logSecurityViolation = mutation({
  * large the backlog is, and a one-off flood is drained over several runs
  * instead of one oversized one.
  *
- * PRUNE_BATCH is a byte budget expressed in rows: at the ~6 KB worst-case row
- * (see SCAN_CEILING), 200 rows is ~1.2 MB read, far under the 8 MiB limit, so
+ * PRUNE_BATCH is a byte budget expressed in rows: every caller-supplied field
+ * is capped in convex/lib/securityLogger.ts, which puts the worst-case row
+ * under ~6 KB, so 200 rows is ~1.2 MB read, far under the 8 MiB limit, and
  * a batch of attacker-fattened rows cannot wedge the cron on the same rows
  * forever.
  */

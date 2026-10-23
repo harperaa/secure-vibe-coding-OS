@@ -70,7 +70,18 @@ export default defineSchema({
       // Cross-user, time-ordered access. The three indexes above all lead with
       // userId, so none of them can serve the admin dashboard (all users) or the
       // retention cron (all rows older than a cutoff) without a table scan.
-      .index("byTimestamp", ["timestamp"]),
+      .index("byTimestamp", ["timestamp"])
+      // One index per filter combination the admin feed offers (event type,
+      // severity, open/closed), each ending in timestamp, so every filtered
+      // view is a single index range read one page at a time. Nothing is
+      // filtered in JavaScript, so no over-read window is needed.
+      .index("byTypeTime", ["eventType", "timestamp"])
+      .index("bySeverityTime", ["severity", "timestamp"])
+      .index("byReadTime", ["isRead", "timestamp"])
+      .index("byTypeSeverityTime", ["eventType", "severity", "timestamp"])
+      .index("byTypeReadTime", ["eventType", "isRead", "timestamp"])
+      .index("bySeverityReadTime", ["severity", "isRead", "timestamp"])
+      .index("byTypeSeverityReadTime", ["eventType", "severity", "isRead", "timestamp"]),
 
     // Exact counters for the security log, one document per UTC hour.
     // Maintained by convex/lib/securityLogger.ts on every insert, delete and
