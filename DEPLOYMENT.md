@@ -982,6 +982,17 @@ git push origin main
 
 ---
 
+### Rate limiting at the edge (Vercel Firewall)
+
+`withRateLimit` keeps its counters in the memory of one function instance, so on Vercel a caller spread across N warm instances gets N times the limit and every recycle resets the count. It is a speed bump, not a quota, and its own comment says so. The limit that actually holds across instances is the one Vercel enforces before the request reaches a function, and it needs no code:
+
+1. Vercel dashboard → your project → **Firewall** → **Configure** → **Add rule**.
+2. Condition: request path starts with `/api/` (add other sensitive paths as needed).
+3. Action: **Rate limit**, keyed by IP, with a window that matches your tolerance (for example 60 requests per minute). Start in log-only mode, read the Firewall logs for a day, then switch to deny.
+4. Keep `withRateLimit` in place: it still covers local and non-Vercel deployments and still writes the `rate_limit_exceeded` rows the security dashboard shows.
+
+Convex mutations never pass through Vercel, so neither control applies to them. Authenticated mutations should carry their own bound, as `convex/jobs.ts` does with its per-user active-job cap, and public ones should be gated the way `logSecurityViolation` is.
+
 ## Monitoring and Observability
 
 ### What to Monitor
