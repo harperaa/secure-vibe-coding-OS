@@ -54,7 +54,11 @@ jobs:
           node-version: '24'
           cache: 'npm'
       - run: npm ci
-      - run: npm audit --audit-level=high
+      # High/critical advisories fail the job, except GHSA ids listed with a
+      # reason in scripts/audit-allowlist.json (for advisories with no patched
+      # release in dev-only chains). See scripts/audit-gate.mjs.
+      - name: Dependency audit gate
+        run: node scripts/audit-gate.mjs
       # Lockfile/tree consistency. A package present in node_modules without a
       # matching lockfile entry is itself a signal, independent of any CVE feed.
       - run: npm ls --all > /dev/null
