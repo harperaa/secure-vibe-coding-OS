@@ -16,44 +16,69 @@
  *     block merges.
  *
  * Usage: node scripts/check-node-version.mjs
+ * Tests: node --test scripts/check-node-version.test.mjs
  */
 
-const INDEX_URL = 'https://nodejs.org/dist/index.json';
-const running = process.version; // e.g. v24.22.1
-const major = running.split('.')[0]; // e.g. v24
+import { pathToFileURL } from 'node:url';
 
-let index;
-try {
-  const res = await fetch(INDEX_URL, { signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  index = await res.json();
-} catch (err) {
-  console.warn(`node version gate: could not fetch ${INDEX_URL} (${err.message}); skipping`);
-  process.exit(0);
-}
+export const INDEX_URL = 'https://nodejs.org/dist/index.json';
 
-const parse = (v) => v.slice(1).split('.').map(Number);
-const isNewer = (a, b) => {
+const parse = (v) => v.replace(/^v/, '').split('.').map(Number);
+
+/** True when semver string `a` is strictly newer than `b`. */
+export function isNewer(a, b) {
   const [x, y] = [parse(a), parse(b)];
   for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
   return false;
-};
-
-// index.json is newest-first.
-const newerSecurity = index.filter(
-  (r) => r.version.startsWith(`${major}.`) && r.security === true && isNewer(r.version, running),
-);
-
-if (newerSecurity.length === 0) {
-  console.log(`node version gate: ok (${running}; no newer ${major}.x security release)`);
-  process.exit(0);
 }
 
-const latest = newerSecurity[0];
-console.error(
-  `node version gate: FAIL — running ${running}, but ${latest.version} (${latest.date}) is a newer ${major}.x security release.`,
-);
-console.error('  Advisory list: https://nodejs.org/en/blog/vulnerability/');
-console.error(`  CI picks it up via setup-node check-latest once actions/node-versions publishes it.`);
-console.error(`  Local: nvm install ${latest.version.slice(1)}`);
-process.exit(1);
+/**
+ * Pure decision: given the running version and the release index (newest
+ * first, as nodejs.org publishes it), return the newest security release in
+ * the same major line that is newer than `running`, or null.
+ */
+export function newerSecurityRelease(running, index) {
+  const major = running.split('.')[0];
+  const candidates = index.filter(
+    (r) => r.version.startsWith(`${major}.`) && r.security === true && isNewer(r.version, running),
+  );
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, r) => (isNewer(r.version, best.version) ? r : best));
+}
+
+/**
+ * Run the gate. Returns the process exit code. `fetchImpl` is injectable so
+ * the fetch-failure path can be tested without a network.
+ */
+export async function run({ running = process.version, fetchImpl = fetch, log = console } = {}) {
+  let index;
+  try {
+    const res = await fetchImpl(INDEX_URL, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    index = await res.json();
+  } catch (err) {
+    log.warn(`node version gate: could not fetch ${INDEX_URL} (${err.message}); skipping`);
+    return 0;
+  }
+
+  const latest = newerSecurityRelease(running, index);
+  const major = running.split('.')[0];
+
+  if (!latest) {
+    log.log(`node version gate: ok (${running}; no newer ${major}.x security release)`);
+    return 0;
+  }
+
+  log.error(
+    `node version gate: FAIL — running ${running}, but ${latest.version} (${latest.date}) is a newer ${major}.x security release.`,
+  );
+  log.error('  Advisory list: https://nodejs.org/en/blog/vulnerability/');
+  log.error('  CI picks it up via setup-node check-latest once actions/node-versions publishes it.');
+  log.error(`  Local: nvm install ${latest.version.replace(/^v/, '')}`);
+  return 1;
+}
+
+// Only run when executed directly, not when imported by the tests.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exit(await run());
+}

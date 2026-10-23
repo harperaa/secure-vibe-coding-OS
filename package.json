@@ -22,7 +22,7 @@
     "sync:convex": "doppler run -- node scripts/sync-convex-env.mjs --config dev",
     "deploy:vercel-env": "node scripts/deploy.mjs vercel-env-doppler",
     "typecheck": "tsc --noEmit",
-    "test": "echo 'no tests configured (placeholder)' && exit 0"
+    "test": "node --test scripts/*.test.mjs"
   },
   "dependencies": {
     "@clerk/backend": "^2.4.1",
