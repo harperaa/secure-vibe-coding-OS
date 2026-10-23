@@ -35,12 +35,23 @@ A daily cron (`convex/crons.ts`, 03:17 UTC) deletes rows older than
 itself until the backlog is gone. Verified against a 100,000-row backlog, which
 drained in about 500 seconds. Change the window by editing `RETENTION_DAYS`.
 
-## Bounded reads
+## Paginated, index-backed reads
 
-The event list reads at most 1,000 rows through the `byTimestamp` index,
-limited to the selected time window. That bound is derived from the field caps
-above so the read stays under Convex's per-transaction budget even if every row
-was written at the cap.
+The event list is paginated: `listSecurityEvents` takes `paginationOpts` and
+the feed uses `usePaginatedQuery` with a "Load more" button, 25 rows at a time.
+The feed's three optional filters (event type, severity, open/closed) each map
+to an index ending in `timestamp`, one per combination, so a filtered view is a
+single index range and no row is filtered in JavaScript. Verified against
+100,000 rows: every combination, including a two-page walk by cursor, answered
+within CLI start-up time. The field caps above still matter: they keep the
+retention batch (200 rows) and any page under Convex's per-transaction budget.
+
+## Missing-key banner
+
+`securityLogKeyConfigured` tells the admin dashboard whether
+`SECURITY_LOG_KEY` is set in the Convex deployment. When it is not, the
+dashboard shows a red banner with the commands to set it, because the mutation
+fails closed and would otherwise be silent.
 
 ## Exact counts
 

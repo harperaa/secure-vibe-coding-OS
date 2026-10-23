@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { usePaginatedQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,15 +17,22 @@ interface SecurityEventsFeedProps {
   severityFilter?: "critical" | "high" | "medium" | "low";
 }
 
+const PAGE_SIZE = 25;
+
 export function SecurityEventsFeed({ startTime, endTime, eventTypeFilter, statusFilter, severityFilter }: SecurityEventsFeedProps) {
-  const events = useQuery(api.security.listSecurityEvents, {
-    limit: 50,
-    startTime,
-    endTime,
-    eventType: eventTypeFilter,
-    status: statusFilter,
-    severity: severityFilter,
-  });
+  // One page of index-backed matches at a time; changing a filter starts a
+  // new pagination, and every page stays live-updated.
+  const { results: events, status, loadMore } = usePaginatedQuery(
+    api.security.listSecurityEvents,
+    {
+      startTime,
+      endTime,
+      eventType: eventTypeFilter,
+      status: statusFilter,
+      severity: severityFilter,
+    },
+    { initialNumItems: PAGE_SIZE }
+  );
   const markAsRead = useMutation(api.security.markEventAsRead);
   const markAsUnread = useMutation(api.security.markEventAsUnread);
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
@@ -42,7 +49,7 @@ export function SecurityEventsFeed({ startTime, endTime, eventTypeFilter, status
     });
   };
 
-  if (events === undefined) {
+  if (status === "LoadingFirstPage") {
     return <p className="text-sm text-muted-foreground">Loading events...</p>;
   }
 
@@ -247,6 +254,19 @@ export function SecurityEventsFeed({ startTime, endTime, eventTypeFilter, status
           </div>
         </div>
       ))}
+      {status !== "Exhausted" && (
+        <div className="pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={status !== "CanLoadMore"}
+            onClick={() => loadMore(PAGE_SIZE)}
+          >
+            {status === "LoadingMore" ? "Loading…" : `Load ${PAGE_SIZE} more`}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
