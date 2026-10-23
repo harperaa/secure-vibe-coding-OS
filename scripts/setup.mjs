@@ -956,6 +956,23 @@ async function runConvexSetup(args) {
       if (convexFunctionsLive()) {
         result.steps.push('Convex CLI exited with warnings but project was created and functions verified live');
       } else {
+        // On a brand-new project the first push always fails: auth.config.ts
+        // reads CLERK_JWT_ISSUER_DOMAIN from the deployment's env, which is
+        // empty until `configure` runs. init already wrote the issuer to
+        // .env.local, so mirror it now and the retry below succeeds instead
+        // of reporting an error that Phase 5 would have healed anyway.
+        const issuer = getEnvValue(fallbackEnv, 'CLERK_JWT_ISSUER_DOMAIN') ||
+          getEnvValue(fallbackEnv, 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL');
+        if (issuer && !issuer.includes('your-clerk')) {
+          for (const key of ['CLERK_JWT_ISSUER_DOMAIN', 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL']) {
+            try {
+              execSync(`npx convex env set ${key} "${issuer}"`, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
+              result.steps.push(`Set Convex env var ${key} so auth.config.ts can be pushed`);
+            } catch (envErr) {
+              result.steps.push(`Could not set ${key} before retry: ${envErr.message}`);
+            }
+          }
+        }
         result.steps.push('Convex project created, but no functions are being served — retrying push');
         const retry = pushConvexAndVerify();
         if (retry.ok) {
