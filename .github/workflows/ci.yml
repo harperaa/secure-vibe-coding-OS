@@ -114,13 +114,17 @@ jobs:
       # breaks the bundle will still be caught by the Vercel preview build,
       # which has its own environment.
       #
-      # Fork PRs are in the same position: GitHub never exposes Actions secrets
-      # to a pull_request run from a fork, so outside contributions hit the
-      # identical always-red build. Same reasoning, same skip.
-      - name: Note — build skipped for Dependabot / fork PRs (no access to Actions secrets)
-        if: github.actor == 'dependabot[bot]' || github.event.pull_request.head.repo.fork == true
+      # PRs from another repository are in the same position: GitHub never
+      # exposes Actions secrets to a pull_request run whose head lives in a
+      # different repo, so outside contributions hit the identical always-red
+      # build. Same reasoning, same skip. The test compares head and base repos
+      # rather than `head.repo.fork`: this template is itself forked by every
+      # cloner, and a PR between two branches inside such a fork CAN read that
+      # fork's own secrets, so it must still build.
+      - name: Note — build skipped for Dependabot / cross-repo PRs (no access to Actions secrets)
+        if: github.actor == 'dependabot[bot]' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
         run: |
-          echo "::notice title=Build skipped::Dependabot and fork PRs cannot read Actions secrets, so a"
+          echo "::notice title=Build skipped::Dependabot and cross-repo PRs cannot read Actions secrets, so a"
           echo "::notice::Doppler-backed build is impossible here. lint, test, security and the"
           echo "::notice::Convex auth gate all ran. Bundle verification happens on the Vercel preview."
 
@@ -130,14 +134,14 @@ jobs:
       # Doppler — the build will type-check and may fail to bundle if it
       # references missing env vars; that's expected for legacy mode.
       - name: Install Doppler CLI
-        if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork != true && env.DOPPLER_TOKEN != ''
+        if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&env.DOPPLER_TOKEN != ''
         # Pinned to a full commit SHA, not a tag. A tag is mutable: whoever
         # controls the action repo can repoint v3 at new code, which is the same
         # class of compromise as a poisoned npm package. Bump deliberately.
         uses: dopplerhq/cli-action@014df23b1329b615816a38eb5f473bb9000700b1 # v3
       - name: Build (Doppler)
-        if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork != true && env.DOPPLER_TOKEN != ''
+        if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&env.DOPPLER_TOKEN != ''
         run: doppler run -- npm run build
       - name: Build (legacy)
-        if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.fork != true && env.DOPPLER_TOKEN == ''
+        if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&env.DOPPLER_TOKEN == ''
         run: npm run build
