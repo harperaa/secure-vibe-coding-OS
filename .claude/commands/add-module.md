@@ -1,6 +1,6 @@
 ---
 allowed-tools: AskUserQuestion, Bash(node *modules.mjs*), Bash(node *generate-sitemap.mjs*), Bash(npm run typecheck*), Bash(npx tsc*), Read, Edit, Grep, Glob
-description: Install an optional content module (homepage-content, blog, dashboard-sample, pricing)
+description: Install an optional content module (homepage-content, blog, dashboard-sample, pricing, background-job)
 argument-hint: "[module-name ...]"
 ---
 
@@ -36,7 +36,7 @@ node scripts/modules.mjs status --json
 ## Phase 3: Install
 
 For the selected modules (the script itself sorts them into the canonical order
-homepage-content → blog → dashboard-sample → pricing), run a single install
+homepage-content → blog → dashboard-sample → pricing → background-job), run a single install
 **without** `--apply-edits` (you will perform the post-copy edits yourself in
 Phase 4, because this repo's files may have been customized):
 
