@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { HOUR_MS, bump, countKey, hourStart, parseKey, summarize } from "../convex/lib/securityCounts.ts";
+import { HOUR_MS, bump, countKey, hourStart, parseKey, summarize } from "../packages/secure-vibe-runtime/src/convex/securityCounts.ts";
 
 test("hourStart floors to the UTC hour", () => {
   const t = Date.UTC(2026, 9, 23, 13, 42, 7, 123);

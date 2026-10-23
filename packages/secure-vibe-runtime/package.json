@@ -1,0 +1,74 @@
+{
+  "name": "secure-vibe-runtime",
+  "version": "7.3.0",
+  "description": "The runtime security pieces of Secure Vibe Coding OS (secrets loading, CSRF, rate limiting, security log) as one package, so every app built from the template gets fixes by updating it.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Allen Harper",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harperaa/secure-vibe-coding-OS.git",
+    "directory": "packages/secure-vibe-runtime"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./csrf": {
+      "types": "./dist/csrf.d.ts",
+      "default": "./dist/csrf.js"
+    },
+    "./secrets": {
+      "types": "./dist/secrets.d.ts",
+      "default": "./dist/secrets.js"
+    },
+    "./withCsrf": {
+      "types": "./dist/withCsrf.d.ts",
+      "default": "./dist/withCsrf.js"
+    },
+    "./withRateLimit": {
+      "types": "./dist/withRateLimit.d.ts",
+      "default": "./dist/withRateLimit.js"
+    },
+    "./convex": {
+      "types": "./dist/convex/index.d.ts",
+      "default": "./dist/convex/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "convex": ">=1.31.0",
+    "next": ">=15.0.0"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0",
+    "rate-limiter-flexible": "^8.1.0",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@types/node": "^20",
+    "convex": "^1.31.3",
+    "next": "^16.4.2",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "security",
+    "nextjs",
+    "convex",
+    "csrf",
+    "rate-limit",
+    "secure-vibe-coding"
+  ]
+}

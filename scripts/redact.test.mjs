@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { redactIdentifiers } from "../convex/lib/redact.ts";
+import { redactIdentifiers } from "../packages/secure-vibe-runtime/src/convex/redact.ts";
 
 test("redacts emails, SSNs, phones, and record ids, counting each", () => {
   const input = "Contact jane.doe+lab@example.org or (555) 123-4567; SSN 123-45-6789; MRN 00123456; patient id: 987654.";

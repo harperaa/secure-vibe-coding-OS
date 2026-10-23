@@ -10,6 +10,7 @@ const eslintConfig = [
   ...nextTypeScript,
   {
     ignores: [
+      "packages/*/dist/**",
       "node_modules/**",
       ".next/**",
       "out/**",
