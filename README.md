@@ -957,6 +957,17 @@ The application includes a comprehensive real-time security monitoring dashboard
 2. Sign in with the email address matching `ADMIN_EMAIL`
 3. Navigate to the "Security Monitoring" link in the "Administration" section of the sidebar
 
+#### Shared runtime package
+
+The runtime security code no app should change ships as the npm package [`secure-vibe-runtime`](packages/secure-vibe-runtime): Doppler secrets loading, CSRF token generation and validation, the rate-limit and CSRF route wrappers, and the security log's schema fragment, logger, exact counters, and identifier redaction. The files under `lib/` and `convex/lib/` are one-line re-exports, so existing imports such as `@/lib/withRateLimit` keep working. A fix to any of these reaches every app with:
+
+```bash
+npm update secure-vibe-runtime
+npx convex deploy   # only when the release notes say the schema fragment changed
+```
+
+The package source lives in `packages/secure-vibe-runtime` and is published by the release flow with the same version as the template.
+
 #### Retention and Limits
 
 The log records violations from callers who are not signed in (blocked origins, CSRF failures, rate limits hit before sign-in), so the write mutation cannot require a user session. Instead it requires a shared key: `SECURITY_LOG_KEY` is held by the Next.js server and mirrored into Convex env, and `logSecurityViolation` rejects any call that does not present it. Someone who only knows the public Convex URL cannot add rows. The key is still a secret that can leak, so treat the table as attacker-influenceable input rather than a trustworthy audit trail, and three further controls bound the damage:

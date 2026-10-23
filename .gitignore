@@ -73,3 +73,7 @@ secure-vibe-kit/*.tgz
 security_context/
 security_reports/
 threat_modeling_output/
+
+# built output of packages/*; published to npm, never committed
+packages/*/dist
+packages/*/node_modules

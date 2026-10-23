@@ -73,6 +73,14 @@ The rebuild pages through the table in batches of 500 and reschedules itself,
 so any table size works; rows written while it runs are counted live and
 skipped by the rebuild.
 
+## Where the code lives
+
+The schema fragment, validators, logger, counter helpers, and redactor are in
+the `secure-vibe-runtime` package (`packages/secure-vibe-runtime/src/convex`),
+published to npm with each release. `convex/lib/*.ts` in the app are re-export
+shims. The dashboard queries and mutations in `convex/security.ts` stay in the
+app because they carry the app's admin check and function references.
+
 ## Rules for contributors
 
 - Never `ctx.db.insert`, `delete`, or `patch(isRead)` on `securityEvents`

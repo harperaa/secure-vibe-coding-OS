@@ -13,12 +13,16 @@ import {
   activeRebuild,
   adjustSecurityCounts,
   deleteSecurityEvent,
+  eventTypeValidator,
+  hourStart,
   logSecurity,
+  metadataValidator,
   SecurityEventType,
   SecuritySeverity,
   setSecurityEventRead,
+  severityValidator,
+  summarize,
 } from "./lib/securityLogger";
-import { hourStart, summarize } from "./lib/securityCounts";
 
 /**
  * Index-backed, filtered, time-bounded, newest-first query over securityEvents.
@@ -80,42 +84,6 @@ function filteredEvents(
 }
 
 // Event type validator - reusable across mutations
-const eventTypeValidator = v.union(
-  v.literal("origin_mismatch"),
-  v.literal("rate_limit_exceeded"),
-  v.literal("invalid_api_key"),
-  v.literal("fingerprint_change"),
-  v.literal("suspicious_activity"),
-  v.literal("jwt_validation_failed"),
-  v.literal("unauthorized_access"),
-  v.literal("input_validation_failed"),
-  v.literal("replay_detected"),
-  v.literal("not_found_enumeration"),
-  v.literal("jwt_algorithm_attack"),
-  v.literal("tenant_isolation_attack"),
-  v.literal("jwt_replay_attack"),
-  v.literal("xss_attempt"),
-  v.literal("fingerprint_manipulation"),
-  v.literal("http_origin_blocked"),
-  v.literal("prompt_injection_attempt"),
-  v.literal("ai_response_validation_failed"),
-  v.literal("csrf_validation_failed")
-);
-
-const severityValidator = v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical"));
-
-const metadataValidator = v.object({
-  origin: v.optional(v.string()),
-  ipAddress: v.optional(v.string()),
-  fingerprint: v.optional(v.string()),
-  endpoint: v.optional(v.string()),
-  errorMessage: v.optional(v.string()),
-  endUserEmail: v.optional(v.string()),
-  endUserName: v.optional(v.string()),
-  endUserId: v.optional(v.string()),
-  actionType: v.optional(v.string()),
-  requestPayload: v.optional(v.string()),
-});
 
 /**
  * List security events - ADMIN ONLY
