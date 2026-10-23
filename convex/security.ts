@@ -9,6 +9,7 @@ import { internal } from "./_generated/api";
 import { getCurrentUser, getCurrentUserOrThrowForMutation, isCurrentUserAdmin, isCurrentUserAdminMutation } from "./users";
 import { Id } from "./_generated/dataModel";
 import {
+  activeRebuild,
   adjustSecurityCounts,
   deleteSecurityEvent,
   logSecurity,
@@ -494,6 +495,11 @@ export const pruneExpiredSecurityEvents = internalMutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
+    if (await activeRebuild(ctx)) {
+      console.log("pruneExpiredSecurityEvents: counters are being rebuilt; skipping this run");
+      return 0;
+    }
+
     const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
     const expired = await ctx.db
       .query("securityEvents")
@@ -523,9 +529,13 @@ export const pruneExpiredSecurityEvents = internalMutation({
  * Paginates through securityEvents oldest-first in bounded batches and
  * reschedules itself with the cursor, so any table size works. Rows written
  * after `upTo` (captured on the first call) are already counted live and are
- * skipped, so a rebuild during traffic neither double-counts nor loses events.
- * Buckets are cleared on the first call (bounded: there are at most a few
- * thousand), then rebuilt.
+ * skipped. While the rebuild runs, a marker row in securityCountsRebuild makes
+ * deletes and read-state changes on not-yet-scanned rows fail (see
+ * adjustSecurityCounts) and the retention cron skip, so the rebuilt totals
+ * are exact even under live traffic. Starting a new rebuild while one is
+ * running replaces it: the marker's runId changes and the old chain stops at
+ * its next step. Buckets are cleared on the first call (bounded: there are at
+ * most a few thousand), then rebuilt.
  */
 const REBUILD_BATCH = 500;
 
@@ -533,18 +543,36 @@ export const rebuildSecurityEventCounts = internalMutation({
   args: {
     cursor: v.optional(v.union(v.string(), v.null())),
     upTo: v.optional(v.number()),
+    runId: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const upTo = args.upTo ?? Date.now();
+    let runId = args.runId;
 
     if (args.cursor === undefined) {
+      // New run: take over (or create) the marker, then clear buckets.
+      runId = `${upTo}-${Math.random().toString(36).slice(2, 10)}`;
+      const existing = await activeRebuild(ctx);
+      if (existing) await ctx.db.patch(existing._id, { runId, upTo, startedAt: Date.now() });
+      else await ctx.db.insert("securityCountsRebuild", { runId, upTo, startedAt: Date.now() });
+
       const stale = await ctx.db.query("securityEventCounts").take(MAX_COUNT_BUCKETS);
       for (const bucket of stale) await ctx.db.delete(bucket._id);
       if (stale.length === MAX_COUNT_BUCKETS) {
-        await ctx.scheduler.runAfter(0, internal.security.rebuildSecurityEventCounts, { upTo });
+        await ctx.scheduler.runAfter(0, internal.security.rebuildSecurityEventCounts, {
+          cursor: null,
+          upTo,
+          runId,
+        });
         return null;
       }
+    }
+
+    const marker = await activeRebuild(ctx);
+    if (!marker || marker.runId !== runId) {
+      console.log("rebuildSecurityEventCounts: superseded by a newer run; stopping");
+      return null;
     }
 
     const page = await ctx.db
@@ -561,8 +589,10 @@ export const rebuildSecurityEventCounts = internalMutation({
       await ctx.scheduler.runAfter(0, internal.security.rebuildSecurityEventCounts, {
         cursor: page.continueCursor,
         upTo,
+        runId,
       });
     } else {
+      await ctx.db.delete(marker._id);
       console.log("securityEventCounts rebuilt");
     }
     return null;

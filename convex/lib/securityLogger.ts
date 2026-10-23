@@ -225,10 +225,24 @@ export async function logSecurity(
 
 type SecurityEventDoc = Omit<Doc<"securityEvents">, "_id" | "_creationTime">;
 
+/** The in-progress rebuild marker, or null. One tiny read. */
+export async function activeRebuild(ctx: MutationCtx) {
+  return await ctx.db.query("securityCountsRebuild").first();
+}
+
 /**
  * Adds `delta` to the hourly bucket for (timestamp, eventType, severity).
  * `unreadDelta` moves the unread counter independently (read-state changes
  * pass count 0). Empty buckets are deleted so retention leaves nothing behind.
+ *
+ * While a rebuild is running, a delete or read-state change on a row the
+ * rebuild has not scanned yet would adjust a counter that does not include
+ * that row, and the rebuild would then count the row in its new state: the
+ * result is off by one forever. So those adjustments (delta <= 0) on rows at
+ * or before the rebuild's upTo are refused until the rebuild finishes. Inserts
+ * are unaffected: new rows have timestamps after upTo. The rebuild's own
+ * +1 adjustments pass because delta > 0. Callers surface the error; the
+ * retention cron checks first and skips the run instead.
  */
 export async function adjustSecurityCounts(
   ctx: MutationCtx,
@@ -236,6 +250,14 @@ export async function adjustSecurityCounts(
   delta: number,
   unreadDelta: number
 ): Promise<void> {
+  if (delta <= 0) {
+    const rebuild = await activeRebuild(ctx);
+    if (rebuild && event.timestamp <= rebuild.upTo) {
+      throw new Error(
+        "Security log counters are being rebuilt; retry this change in a moment."
+      );
+    }
+  }
   const hour = hourStart(event.timestamp);
   const key = countKey(event.eventType, event.severity);
   const bucket = await ctx.db

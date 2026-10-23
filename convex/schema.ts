@@ -82,6 +82,16 @@ export default defineSchema({
       unread: v.record(v.string(), v.number()),
     }).index("byHour", ["hour"]),
 
+    // Single-row marker present only while rebuildSecurityEventCounts runs.
+    // While it exists, deletes and read-state changes on rows the rebuild has
+    // not yet scanned are refused, so live changes cannot drift the rebuilt
+    // totals. runId lets a restarted rebuild cancel the chain it replaced.
+    securityCountsRebuild: defineTable({
+      runId: v.string(),
+      upTo: v.number(),
+      startedAt: v.number(),
+    }),
+
     // Background job example (convex/jobs.ts): one row per job. The browser
     // subscribes to listJobs, so every status change below streams to the
     // screen without a refresh. updatedAt is in the index so the newest
@@ -99,5 +109,8 @@ export default defineSchema({
       error: v.optional(v.string()),
       attempts: v.number(),
       updatedAt: v.number(),
-    }).index("byUser", ["userId", "updatedAt"]),
+    })
+      .index("byUser", ["userId", "updatedAt"])
+      // clearFinishedJobs deletes one status at a time in bounded batches.
+      .index("byUserStatus", ["userId", "status", "updatedAt"]),
   });
