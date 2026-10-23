@@ -96,10 +96,18 @@ function readEnvFile(filePath) {
  * subcommand reads that identical value.
  */
 function ensureSecurityLogKey() {
-  const existing = getEnvValue(readEnvFile(ENV_FILE), 'SECURITY_LOG_KEY');
+  const content = readEnvFile(ENV_FILE);
+  const existing = getEnvValue(content, 'SECURITY_LOG_KEY');
   if (existing && !existing.includes('<')) return { value: existing, generated: false };
   const value = crypto.randomBytes(32).toString('base64url');
-  fs.appendFileSync(ENV_FILE, `\nSECURITY_LOG_KEY=${value}\n`);
+  const line = `SECURITY_LOG_KEY=${value}`;
+  // Replace an empty or placeholder entry in place. Appending would leave the
+  // old line first, getEnvValue would keep reading it, and the next subcommand
+  // would mint a different key: Convex and Vercel would then disagree.
+  const next = /^SECURITY_LOG_KEY=.*$/m.test(content)
+    ? content.replace(/^SECURITY_LOG_KEY=.*$/m, line)
+    : `${content}${content.endsWith('\n') || content === '' ? '' : '\n'}${line}\n`;
+  fs.writeFileSync(ENV_FILE, next);
   return { value, generated: true };
 }
 

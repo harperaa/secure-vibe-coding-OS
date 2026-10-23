@@ -674,7 +674,20 @@ async function runConfigure(args) {
     convexVarsToSet['CLERK_JWT_ISSUER_DOMAIN'] = frontendApiUrl;
   }
   convexVarsToSet['ADMIN_EMAIL'] = adminEmail;
-  convexVarsToSet['SECURITY_LOG_KEY'] = securityLogKey;
+
+  // SECURITY_LOG_KEY was minted by `init` and persisted to Doppler dev or
+  // .env.local. Mirror that exact value into Convex; never mint a new one here,
+  // or the app and Convex would hold different keys and every security-log
+  // write would be rejected.
+  const securityLogKey =
+    dopplerSecrets?.SECURITY_LOG_KEY || getEnvValue(envContent, 'SECURITY_LOG_KEY');
+  if (securityLogKey && !securityLogKey.includes('<')) {
+    convexVarsToSet['SECURITY_LOG_KEY'] = securityLogKey;
+  } else {
+    result.manualSteps.push(
+      'SECURITY_LOG_KEY was not found (run `node scripts/setup.mjs init` first). Generate one with `node -p "require(\'crypto\').randomBytes(32).toString(\'base64url\')"`, store it where the app reads secrets (Doppler dev or .env.local), then `npx convex env set SECURITY_LOG_KEY <value>`.'
+    );
+  }
 
   // In Doppler mode: push the values to Doppler dev first, then run the sync
   // script so Doppler is the source of truth and Convex's env mirrors it.
