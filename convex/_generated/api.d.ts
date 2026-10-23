@@ -11,6 +11,7 @@
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as jobs from "../jobs.js";
+import type * as lib_redact from "../lib/redact.js";
 import type * as lib_securityLogger from "../lib/securityLogger.js";
 import type * as paymentAttemptTypes from "../paymentAttemptTypes.js";
 import type * as paymentAttempts from "../paymentAttempts.js";
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   http: typeof http;
   jobs: typeof jobs;
+  "lib/redact": typeof lib_redact;
   "lib/securityLogger": typeof lib_securityLogger;
   paymentAttemptTypes: typeof paymentAttemptTypes;
   paymentAttempts: typeof paymentAttempts;

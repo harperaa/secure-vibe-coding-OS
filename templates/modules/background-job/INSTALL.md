@@ -36,3 +36,7 @@ File: `app/dashboard/app-sidebar.tsx`:
 - Click **Start flaky demo**: the row goes queued → running → queued (with the
   simulated error shown) twice, then running → done on the third attempt, with
   no page refresh
+- Start a job whose input contains an email address: the result reports
+  "1 identifier(s) redacted before the call"
+- With more than 10 jobs, **Load more** appends the next page; **Clear finished**
+  removes done and failed jobs in server-side batches

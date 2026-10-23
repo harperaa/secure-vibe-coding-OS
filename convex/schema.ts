@@ -89,5 +89,8 @@ export default defineSchema({
       error: v.optional(v.string()),
       attempts: v.number(),
       updatedAt: v.number(),
-    }).index("byUser", ["userId", "updatedAt"]),
+    })
+      .index("byUser", ["userId", "updatedAt"])
+      // clearFinishedJobs deletes one status at a time in bounded batches.
+      .index("byUserStatus", ["userId", "status", "updatedAt"]),
   });
