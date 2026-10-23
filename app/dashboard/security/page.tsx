@@ -329,7 +329,7 @@ export default function SecurityDashboard() {
                 {securitySummary.unreadCount} unread
               </p>
               <p className="text-xs text-muted-foreground">
-                Counts cover the newest 1,000 events in range
+                Exact totals, hour-aligned{securitySummary?.countsFrom ? ` since ${format(new Date(securitySummary.countsFrom), "MMM d, HH:mm")}` : ""}
               </p>
             </CardContent>
           </Card>

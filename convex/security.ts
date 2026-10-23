@@ -8,7 +8,16 @@ import { internalMutation, mutation, query, QueryCtx } from "./_generated/server
 import { internal } from "./_generated/api";
 import { getCurrentUser, getCurrentUserOrThrowForMutation, isCurrentUserAdmin, isCurrentUserAdminMutation } from "./users";
 import { Id } from "./_generated/dataModel";
-import { logSecurity, SecurityEventType, SecuritySeverity } from "./lib/securityLogger";
+import {
+  activeRebuild,
+  adjustSecurityCounts,
+  deleteSecurityEvent,
+  logSecurity,
+  SecurityEventType,
+  SecuritySeverity,
+  setSecurityEventRead,
+} from "./lib/securityLogger";
+import { hourStart, summarize } from "./lib/securityCounts";
 
 /**
  * Upper bound on rows any dashboard query reads in one transaction.
@@ -178,8 +187,23 @@ export const listSecurityEvents = query({
 });
 
 /**
+ * Upper bound on hourly count buckets one summary reads. Retention deletes
+ * buckets as their last row goes, so the table holds at most
+ * (RETENTION_DAYS + a little slack) * 24 buckets; this bound only matters if
+ * retention is disabled, in which case the oldest hours fall off the summary
+ * rather than the query failing.
+ */
+const MAX_COUNT_BUCKETS = 24 * 100;
+
+/**
  * Get security summary for dashboard - ADMIN ONLY
- * Returns counts and statistics for all events within optional time range
+ *
+ * Exact counts for the window, read from the hourly counters in
+ * securityEventCounts rather than from event rows, so the cost is bounded by
+ * the number of hours in the window (not by how many events were logged) and
+ * the numbers are totals, not a sample. Windows are hour-aligned: startTime is
+ * floored to its UTC hour and the aligned value is returned as countsFrom so
+ * the UI can say what the totals cover.
  */
 export const getSecuritySummary = query({
   args: {
@@ -195,6 +219,7 @@ export const getSecuritySummary = query({
     mediumCount: v.number(),
     lowCount: v.number(),
     eventTypeBreakdown: v.any(), // Record<string, number>
+    countsFrom: v.union(v.number(), v.null()),
   }),
   handler: async (ctx, args) => {
     const isAdmin = await isCurrentUserAdmin(ctx);
@@ -207,45 +232,24 @@ export const getSecuritySummary = query({
         mediumCount: 0,
         lowCount: 0,
         eventTypeBreakdown: {},
+        countsFrom: null,
       };
     }
 
-    // Bounded, index-backed read (see SCAN_CEILING). An unbounded .collect()
-    // here made the summary tiles fail exactly when the table was being flooded.
-    // The counts below are therefore over the most recent SCAN_CEILING events
-    // in the requested window, not all time; that is the correct trade for a
-    // dashboard that must keep rendering under abuse. The UI says so.
-    let events = await eventsInWindow(ctx, args.startTime, args.endTime)
-      .take(SCAN_CEILING);
+    const fromHour = args.startTime !== undefined ? hourStart(args.startTime) : undefined;
+    const toHour = args.endTime !== undefined ? hourStart(args.endTime) : undefined;
+    const table = ctx.db.query("securityEventCounts");
+    const ranged =
+      fromHour !== undefined && toHour !== undefined
+        ? table.withIndex("byHour", (q) => q.gte("hour", fromHour).lte("hour", toHour))
+        : fromHour !== undefined
+          ? table.withIndex("byHour", (q) => q.gte("hour", fromHour))
+          : toHour !== undefined
+            ? table.withIndex("byHour", (q) => q.lte("hour", toHour))
+            : table.withIndex("byHour");
+    const buckets = await ranged.order("desc").take(MAX_COUNT_BUCKETS);
 
-    // Apply event type filter if specified
-    if (args.eventType !== undefined) {
-      events = events.filter(e => e.eventType === args.eventType);
-    }
-
-    // Calculate statistics
-    const totalEvents = events.length;
-    const unreadCount = events.filter(e => !e.isRead).length;
-    const criticalCount = events.filter(e => e.severity === "critical").length;
-    const highCount = events.filter(e => e.severity === "high").length;
-    const mediumCount = events.filter(e => e.severity === "medium").length;
-    const lowCount = events.filter(e => e.severity === "low").length;
-
-    // Event type breakdown
-    const eventTypeBreakdown: Record<string, number> = {};
-    for (const event of events) {
-      eventTypeBreakdown[event.eventType] = (eventTypeBreakdown[event.eventType] || 0) + 1;
-    }
-
-    return {
-      totalEvents,
-      unreadCount,
-      criticalCount,
-      highCount,
-      mediumCount,
-      lowCount,
-      eventTypeBreakdown,
-    };
+    return { ...summarize(buckets, args.eventType), countsFrom: fromHour ?? null };
   },
 });
 
@@ -269,7 +273,7 @@ export const markEventAsRead = mutation({
       throw new Error("Event not found");
     }
 
-    await ctx.db.patch(args.eventId, { isRead: true });
+    await setSecurityEventRead(ctx, event, true);
     return null;
   },
 });
@@ -294,7 +298,7 @@ export const markEventAsUnread = mutation({
       throw new Error("Event not found");
     }
 
-    await ctx.db.patch(args.eventId, { isRead: false });
+    await setSecurityEventRead(ctx, event, false);
     return null;
   },
 });
@@ -491,6 +495,11 @@ export const pruneExpiredSecurityEvents = internalMutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
+    if (await activeRebuild(ctx)) {
+      console.log("pruneExpiredSecurityEvents: counters are being rebuilt; skipping this run");
+      return 0;
+    }
+
     const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
     const expired = await ctx.db
       .query("securityEvents")
@@ -498,7 +507,7 @@ export const pruneExpiredSecurityEvents = internalMutation({
       .take(PRUNE_BATCH);
 
     for (const event of expired) {
-      await ctx.db.delete(event._id);
+      await deleteSecurityEvent(ctx, event); // keeps the hourly counters exact
     }
 
     if (expired.length === PRUNE_BATCH) {
@@ -507,5 +516,85 @@ export const pruneExpiredSecurityEvents = internalMutation({
     }
 
     return expired.length;
+  },
+});
+
+/**
+ * Rebuilds securityEventCounts from the event rows. Run once when upgrading a
+ * deployment whose rows predate the counters, or if a raw write ever bypassed
+ * convex/lib/securityLogger.ts:
+ *
+ *   npx convex run security:rebuildSecurityEventCounts '{}'
+ *
+ * Paginates through securityEvents oldest-first in bounded batches and
+ * reschedules itself with the cursor, so any table size works. Rows written
+ * after `upTo` (captured on the first call) are already counted live and are
+ * skipped. While the rebuild runs, a marker row in securityCountsRebuild makes
+ * deletes and read-state changes on not-yet-scanned rows fail (see
+ * adjustSecurityCounts) and the retention cron skip, so the rebuilt totals
+ * are exact even under live traffic. Starting a new rebuild while one is
+ * running replaces it: the marker's runId changes and the old chain stops at
+ * its next step. Buckets are cleared on the first call (bounded: there are at
+ * most a few thousand), then rebuilt.
+ */
+const REBUILD_BATCH = 500;
+
+export const rebuildSecurityEventCounts = internalMutation({
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    upTo: v.optional(v.number()),
+    runId: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const upTo = args.upTo ?? Date.now();
+    let runId = args.runId;
+
+    if (args.cursor === undefined) {
+      // New run: take over (or create) the marker, then clear buckets.
+      runId = `${upTo}-${Math.random().toString(36).slice(2, 10)}`;
+      const existing = await activeRebuild(ctx);
+      if (existing) await ctx.db.patch(existing._id, { runId, upTo, startedAt: Date.now() });
+      else await ctx.db.insert("securityCountsRebuild", { runId, upTo, startedAt: Date.now() });
+
+      const stale = await ctx.db.query("securityEventCounts").take(MAX_COUNT_BUCKETS);
+      for (const bucket of stale) await ctx.db.delete(bucket._id);
+      if (stale.length === MAX_COUNT_BUCKETS) {
+        await ctx.scheduler.runAfter(0, internal.security.rebuildSecurityEventCounts, {
+          cursor: null,
+          upTo,
+          runId,
+        });
+        return null;
+      }
+    }
+
+    const marker = await activeRebuild(ctx);
+    if (!marker || marker.runId !== runId) {
+      console.log("rebuildSecurityEventCounts: superseded by a newer run; stopping");
+      return null;
+    }
+
+    const page = await ctx.db
+      .query("securityEvents")
+      .withIndex("byTimestamp", (q) => q.lte("timestamp", upTo))
+      .order("asc")
+      .paginate({ cursor: args.cursor ?? null, numItems: REBUILD_BATCH });
+
+    for (const event of page.page) {
+      await adjustSecurityCounts(ctx, event, 1, event.isRead ? 0 : 1);
+    }
+
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.security.rebuildSecurityEventCounts, {
+        cursor: page.continueCursor,
+        upTo,
+        runId,
+      });
+    } else {
+      await ctx.db.delete(marker._id);
+      console.log("securityEventCounts rebuilt");
+    }
+    return null;
   },
 });

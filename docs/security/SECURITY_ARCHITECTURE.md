@@ -670,3 +670,9 @@ curl -X POST http://localhost:3000/api/example-protected \
 ---
 
 **This architecture provides the foundation for secure application development. Every feature built on this foundation inherits defense-in-depth protection from day one.**
+
+## Security log
+
+What the security log records, who can write to it, its retention, and how the
+dashboard's totals stay exact without reading the table are documented in
+[AUDIT_LOGGING.md](AUDIT_LOGGING.md).

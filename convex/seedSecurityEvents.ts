@@ -4,6 +4,7 @@
  */
 
 import { internalMutation } from "./_generated/server";
+import { deleteSecurityEvent, insertSecurityEvent } from "./lib/securityLogger";
 import { v } from "convex/values";
 
 export const seedEvents = internalMutation({
@@ -247,7 +248,7 @@ export const seedEvents = internalMutation({
     console.log(`Creating ${sampleEvents.length} sample security events...`);
 
     for (const event of sampleEvents) {
-      await ctx.db.insert("securityEvents", event);
+      await insertSecurityEvent(ctx, event); // keeps the hourly counters exact
     }
 
     console.log("✅ Sample security events created successfully!");
@@ -288,7 +289,7 @@ export const clearEvents = internalMutation({
     console.log(`Deleting ${events.length} security events...`);
 
     for (const event of events) {
-      await ctx.db.delete(event._id);
+      await deleteSecurityEvent(ctx, event); // keeps the hourly counters exact
     }
 
     console.log("✅ All security events cleared!");
