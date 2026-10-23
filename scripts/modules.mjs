@@ -5,7 +5,7 @@
  *
  * Optional page/content modules live in templates/modules/<name>/ and are
  * copied into the repo on demand. Backend and security infrastructure
- * (convex/, lib/, middleware.ts, app/api/) is always installed and is never
+ * (convex/, lib/, proxy.ts, app/api/) is always installed and is never
  * touched by this script.
  *
  * Module layout:
