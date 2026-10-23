@@ -140,11 +140,18 @@ export function withRateLimit(
 
         console.warn(`Rate limit exceeded for IP: ${ip} on ${endpoint}`);
 
-        // Log security violation to Convex
+        // Log security violation to Convex. The mutation requires the shared
+        // SECURITY_LOG_KEY so that only this server, not anyone holding the
+        // public deployment URL, can write to the security log.
         const client = getConvexClient();
-        if (client) {
+        const key = process.env.SECURITY_LOG_KEY;
+        if (client && !key) {
+          console.error('SECURITY_LOG_KEY is not set; rate limit violation not logged to Convex');
+        }
+        if (client && key) {
           try {
             await client.mutation(api.security.logSecurityViolation, {
+              key,
               eventType: 'rate_limit_exceeded',
               severity: 'medium',
               metadata: {

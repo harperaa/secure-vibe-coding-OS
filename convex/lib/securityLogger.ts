@@ -86,10 +86,10 @@ const MAX_LOG_SHORT_FIELD_CHARS = 256;
 /**
  * Caps a caller-supplied string so one caller cannot write unbounded rows.
  *
- * This exists because logSecurityViolation is reachable UNAUTHENTICATED by
- * design (violations are recorded before a session exists). Without a cap, the
- * audit table is an unbounded write primitive for anyone who knows the Convex
- * deployment URL — and the failure mode is self-concealing, because the first
+ * This exists because logSecurityViolation records violations before a session
+ * exists, gated only by a shared server-side key. If that key leaks, and
+ * without a cap, the audit table is an unbounded write primitive for anyone who
+ * knows the Convex deployment URL — and the failure mode is self-concealing, because the first
  * thing that breaks is the dashboard used to notice it. A row of uncapped
  * fields can approach Convex's 1 MiB document limit, and a handful of those
  * exhausts the read budget of any query or cleanup that touches them.
@@ -174,8 +174,8 @@ export async function logSecurity(
 ): Promise<Id<"securityEvents">> {
   // SECURITY: Sanitize PII before logging
   // Preserves enough info for security analysis while protecting user privacy
-  // Every field is size-capped because logSecurityViolation is reachable
-  // UNAUTHENTICATED. Without caps, one caller can write arbitrarily large rows
+  // Every field is size-capped because logSecurityViolation is gated only by a
+  // shared key. If it leaks and without caps, one caller can write arbitrarily large rows
   // and grow the securityEvents table until the dashboard's reads (and the
   // retention cron's deletes) exceed Convex's per-transaction limit —
   // silencing the monitoring it is meant to feed. Truncate rather than

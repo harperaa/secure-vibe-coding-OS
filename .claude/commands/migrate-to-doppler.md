@@ -96,7 +96,7 @@ The next step removes the migrated keys from `.env.local`, Convex env, and Verce
 
 Use AskUserQuestion:
 
-- Question: "Cleanup will: (1) `npx convex env unset` for migrated Convex keys EXCEPT the Convex-runtime allowlist (CLERK_WEBHOOK_SECRET, NEXT_PUBLIC_CLERK_FRONTEND_API_URL, ADMIN_EMAIL stay because Convex functions read them at runtime; CONVEX_DEPLOY_KEY also stays). (2) Strip migrated keys from .env.local (delete the file if it ends up empty). (3) `vercel env rm` for migrated Vercel keys in production / preview / development. After cleanup, only DOPPLER_TOKEN should remain in Vercel. Proceed?"
+- Question: "Cleanup will: (1) `npx convex env unset` for migrated Convex keys EXCEPT the Convex-runtime allowlist (CLERK_WEBHOOK_SECRET, NEXT_PUBLIC_CLERK_FRONTEND_API_URL, ADMIN_EMAIL, SECURITY_LOG_KEY stay because Convex functions read them at runtime; CONVEX_DEPLOY_KEY also stays). (2) Strip migrated keys from .env.local (delete the file if it ends up empty). (3) `vercel env rm` for migrated Vercel keys in production / preview / development. After cleanup, only DOPPLER_TOKEN should remain in Vercel. Proceed?"
 - Header: "Cleanup sources"
 - Options:
   - "Yes — remove from sources" (description: "Doppler now has everything; this removes the duplicates.")
@@ -187,7 +187,7 @@ After cleanup, run the Convex sync once to guarantee the Convex-mirrored runtime
 npm run sync:convex
 ```
 
-Why: Convex functions run on Convex's cloud, not Vercel. They can't fetch from Doppler at runtime — they read `process.env` from Convex's own env store. The cleanup phase intentionally keeps `CLERK_WEBHOOK_SECRET`, `NEXT_PUBLIC_CLERK_FRONTEND_API_URL`, and `ADMIN_EMAIL` in Convex; `sync:convex` keeps those values in lock-step with Doppler going forward.
+Why: Convex functions run on Convex's cloud, not Vercel. They can't fetch from Doppler at runtime — they read `process.env` from Convex's own env store. The cleanup phase intentionally keeps `CLERK_WEBHOOK_SECRET`, `NEXT_PUBLIC_CLERK_FRONTEND_API_URL`, `ADMIN_EMAIL`, and `SECURITY_LOG_KEY` in Convex; `sync:convex` keeps those values in lock-step with Doppler going forward.
 
 If a tester accidentally unset those Convex keys before this fix shipped, `npm run sync:convex` is the recovery command — it pulls the values from Doppler and re-applies them.
 
@@ -205,7 +205,7 @@ echo ""
 echo "Vercel env (should show only DOPPLER_TOKEN):"
 vercel env ls 2>&1 || echo "(skipped — vercel CLI not installed)"
 echo ""
-echo "Convex env (should contain only the allowlist: ADMIN_EMAIL, CLERK_WEBHOOK_SECRET, NEXT_PUBLIC_CLERK_FRONTEND_API_URL, plus CONVEX_DEPLOY_KEY if set):"
+echo "Convex env (should contain only the allowlist: ADMIN_EMAIL, CLERK_WEBHOOK_SECRET, NEXT_PUBLIC_CLERK_FRONTEND_API_URL, SECURITY_LOG_KEY, plus CONVEX_DEPLOY_KEY if set):"
 # Wrap in `doppler run` because the Convex CLI needs CONVEX_DEPLOYMENT injected — it's no longer in .env.local after migration.
 doppler run -- npx convex env list 2>&1 || echo "(skipped — Convex not configured)"
 echo ""

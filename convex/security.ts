@@ -13,8 +13,8 @@ import { logSecurity, SecurityEventType, SecuritySeverity } from "./lib/security
 /**
  * Upper bound on rows any dashboard query reads in one transaction.
  *
- * logSecurityViolation is reachable unauthenticated by design, so the table is
- * attacker-growable. An unbounded read here made the admin dashboard
+ * logSecurityViolation is gated by a shared key, but that key is a secret and
+ * secrets leak, so treat the table as attacker-growable. An unbounded read here made the admin dashboard
  * denial-of-serviceable by anyone who could write rows: grow the table past
  * Convex's per-transaction read ceiling and every call throws. The monitoring
  * surface was the first casualty of the flood it existed to reveal. Reading a
@@ -370,45 +370,77 @@ export const logSecurityEventForCurrentUser = mutation({
 });
 
 /**
- * Log security violations from middleware (rate limiting, CSRF, etc.)
+ * Constant-time string comparison for the shared logging key. A plain `===`
+ * short-circuits on the first differing character, which leaks how much of a
+ * guess was right. Length is compared after the loop for the same reason.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  let diff = a.length ^ b.length;
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diff === 0;
+}
+
+/**
+ * Log security violations from server-side wrappers (lib/withRateLimit.ts,
+ * lib/withCsrf.ts).
  *
  * @public-endpoint: a violation is by definition recorded when the caller has
  * failed some check, which frequently means no session exists yet (blocked
- * origin, CSRF failure, rate limit hit before sign-in). Requiring auth here
- * would drop exactly the events worth recording. It attaches the caller's user
- * id only when one happens to exist, and never accepts a caller-supplied id —
- * so events cannot be attributed to someone else.
+ * origin, CSRF failure, rate limit hit before sign-in). Requiring a user
+ * session here would drop exactly the events worth recording. Abuse is bounded
+ * by a shared key: the mutation rejects any call whose `key` does not equal the
+ * SECURITY_LOG_KEY Convex env var, and that value lives only on the Next.js
+ * server (Doppler or .env.local), never in the browser bundle. So the write
+ * primitive is reachable from our own server, not from anyone who knows the
+ * deployment URL. It attaches the caller's user id only when one happens to
+ * exist, and never accepts a caller-supplied id, so events cannot be
+ * attributed to someone else.
  *
- * KNOWN LIMITATION — read before relying on this table for anything: because it
- * is reachable unauthenticated, anyone who knows the Convex deployment URL can
- * write rows here. Treat `securityEvents` as attacker-influenceable input, not
- * as trustworthy audit. Do not build alerting that assumes volume is genuine,
- * and page on absence of expected events rather than presence of unexpected ones.
- * What actually bounds abuse, verified rather than asserted:
- *   - logSecurity() caps errorMessage and requestPayload at 2000 chars
- *     (capForLog in convex/lib/securityLogger.ts) and sanitizes PII.
+ * Fail closed: if SECURITY_LOG_KEY is not set in Convex env, every call is
+ * rejected. The wrappers catch the error and log to the server console, so an
+ * unconfigured key costs you the dashboard trail, not availability. /install
+ * and /deploy-to-prod set it; see README "Retention and Limits".
+ *
+ * Defence in depth stays in place in case the key leaks (it is a server-side
+ * secret, and secrets leak):
+ *   - logSecurity() caps every field (convex/lib/securityLogger.ts) and
+ *     sanitizes PII.
  *   - listSecurityEvents and getSecuritySummary read a bounded window via
  *     .take(), so a flood degrades signal rather than breaking the dashboard.
  *   - pruneExpiredSecurityEvents (daily cron, convex/crons.ts) deletes rows
- *     older than RETENTION_DAYS, so storage is bounded even under sustained
- *     abuse.
- * There is still no rate limit on this mutation; within the retention window,
- * row count grows with abuse.
+ *     older than RETENTION_DAYS, so storage is bounded.
+ * There is still no rate limit on this mutation: with the key, the only
+ * caller is our own server, so a flood of rows means a flood of real
+ * violations, which is the signal the table exists to carry.
  *
- * (Two earlier versions of this comment asserted controls that did not exist:
+ * (Earlier versions of this comment asserted controls that did not exist:
  * first "only callable from localhost in development", then "rows are
- * size-capped and the dashboard queries are paginated" — written at a point
+ * size-capped and the dashboard queries are paginated", written at a point
  * when neither was true. Both were caught by assessment, not by review. If you
  * add a claim here, implement it in the same commit.)
  */
 export const logSecurityViolation = mutation({
   args: {
+    key: v.string(),
     eventType: eventTypeValidator,
     severity: severityValidator,
     metadata: metadataValidator,
   },
   returns: v.id("securityEvents"),
   handler: async (ctx, args) => {
+    const expected = process.env.SECURITY_LOG_KEY;
+    if (!expected) {
+      throw new Error(
+        "SECURITY_LOG_KEY is not set in Convex env; refusing to log. Run `npx convex env set SECURITY_LOG_KEY <value>` with the same value the Next.js server holds."
+      );
+    }
+    if (!timingSafeEqual(args.key, expected)) {
+      throw new Error("Invalid SECURITY_LOG_KEY");
+    }
+
     // Try to get authenticated user if available
     const user = await getCurrentUser(ctx);
 
@@ -440,7 +472,7 @@ export const logSecurityViolation = mutation({
  * Retention for the security log.
  *
  * Rows older than RETENTION_DAYS are deleted by a daily cron (convex/crons.ts).
- * Because logSecurityViolation is reachable unauthenticated, the table is
+ * If the shared key gating logSecurityViolation ever leaks, the table is
  * attacker-growable; retention is what bounds storage over time. Deletion runs
  * in fixed-size batches and reschedules itself while rows remain, so each
  * transaction stays well under Convex's read/write limits regardless of how

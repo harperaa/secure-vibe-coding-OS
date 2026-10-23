@@ -363,6 +363,9 @@ NEXT_PUBLIC_CONVEX_URL=https://your-convex-url.convex.cloud
 CSRF_SECRET=<32-byte-base64url-string>
 SESSION_SECRET=<32-byte-base64url-string>
 
+# g2. Security Log Key (same value must also be set in Convex env; `npm run setup` does both)
+SECURITY_LOG_KEY=<32-byte-base64url-string>
+
 # Clerk Redirect URLs (leave these for now)
 # These ensure users are redirected to dashboard after authentication
 NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
@@ -654,6 +657,9 @@ node -p "require('crypto').randomBytes(32).toString('base64url')"
 
 # Generate SESSION_SECRET
 node -p "require('crypto').randomBytes(32).toString('base64url')"
+
+# Generate SECURITY_LOG_KEY
+node -p "require('crypto').randomBytes(32).toString('base64url')"
 ```
 
 2. **Add to `.env.local`:**
@@ -661,6 +667,13 @@ node -p "require('crypto').randomBytes(32).toString('base64url')"
 ```bash
 CSRF_SECRET=your_generated_csrf_secret_here
 SESSION_SECRET=your_generated_session_secret_here
+SECURITY_LOG_KEY=your_generated_security_log_key_here
+```
+
+3. **Mirror the log key into Convex** (the server sends it on every security-log write and Convex rejects anything else):
+
+```bash
+npx convex env set SECURITY_LOG_KEY your_generated_security_log_key_here
 ```
 
 ### How CSRF Protection Works
@@ -945,11 +958,13 @@ The application includes a comprehensive real-time security monitoring dashboard
 
 #### Retention and Limits
 
-The log accepts violations from callers who are not signed in (blocked origins, CSRF failures, rate limits hit before sign-in), so anyone who knows the Convex deployment URL can add rows. Treat the table as attacker-influenceable input, not as a trustworthy audit trail. Three controls bound the damage:
+The log records violations from callers who are not signed in (blocked origins, CSRF failures, rate limits hit before sign-in), so the write mutation cannot require a user session. Instead it requires a shared key: `SECURITY_LOG_KEY` is held by the Next.js server and mirrored into Convex env, and `logSecurityViolation` rejects any call that does not present it. Someone who only knows the public Convex URL cannot add rows. The key is still a secret that can leak, so treat the table as attacker-influenceable input rather than a trustworthy audit trail, and three further controls bound the damage:
 
 - **Bounded reads.** Dashboard queries read at most the newest 1,000 events in the selected time range (via the `byTimestamp` index), so a flood degrades the view instead of taking it offline. The "Total Events" tile says so.
 - **Retention.** A daily Convex cron (`convex/crons.ts`) deletes events older than 90 days in batches of 200, rescheduling itself until the backlog is drained. Change `RETENTION_DAYS` in `convex/security.ts` to adjust the window.
 - **Size caps.** Every caller-supplied field is truncated before insert (2,000 characters for the two free-text fields, 256 for the rest) and PII is masked. The read and delete batch sizes are derived from the resulting worst-case row size so that a flood of maximum-size rows still fits Convex's per-transaction read budget.
+
+**Upgrading from 7.2.0 or earlier:** the key is new. `/install` generates it for fresh projects; an existing deployment must add it on both sides or security-log writes fail closed (the wrappers log `SECURITY_LOG_KEY is not set` to the server console and the request itself still succeeds). Doppler mode: `doppler secrets set SECURITY_LOG_KEY="$(node -p "require('crypto').randomBytes(32).toString('base64url')")" --config <dev|prd>` then `node scripts/sync-convex-env.mjs --config <dev|prd>`. Legacy mode: add it to `.env.local`, `npx convex env set SECURITY_LOG_KEY <value>` for dev, and re-run `/deploy-to-prod` Phases 9 and 10 for production. Rotate it with `/rotate`.
 
 #### Logging Security Events
 
@@ -2082,6 +2097,7 @@ git push origin main
 - `NEXT_PUBLIC_SITE_NAME`
 - `CSRF_SECRET`
 - `SESSION_SECRET`
+- `SECURITY_LOG_KEY` (also mirrored into the production Convex env by `convex-prod-env`)
 - All `NEXT_PUBLIC_CLERK_SIGN_*` redirect URLs
 
 ---
