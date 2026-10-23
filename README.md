@@ -1,6 +1,6 @@
 # Secure Vibe Coding OS - More Secure Next.js SaaS Starter Kit
 
-A modern, production-ready and security hardened SaaS starter template for building full-stack applications using Next.js 15, Convex, Clerk, and Clerk Billing. The easiest and most secure way to start accepting payments with beautiful UI and seamless integrations.
+A modern, production-ready and security hardened SaaS starter template for building full-stack applications using Next.js 16, Convex, Clerk, and Clerk Billing. The easiest and most secure way to start accepting payments with beautiful UI and seamless integrations.
 
 [🌐 Live Demo](https://secure-vibe-coding-os.vercel.app/) – Try the app in your browser!
 
@@ -15,7 +15,7 @@ See two sample course modules, in the docs folder.
 
 ## Features
 
-- 🚀 **Next.js 15 with App Router** - Latest React framework with server components
+- 🚀 **Next.js 16 with App Router** - Latest React framework with server components
 - ⚡️ **Turbopack** - Ultra-fast development with hot module replacement
 - 🎨 **TailwindCSS v4** - Modern utility-first CSS with custom design system
 - 🔐 **Clerk Authentication** - Complete user management with social logins
@@ -44,7 +44,7 @@ See two sample course modules, in the docs folder.
 ## Tech Stack
 
 ### Frontend
-- **Next.js 15** - React framework with App Router
+- **Next.js 16** - React framework with App Router
 - **TailwindCSS v4** - Utility-first CSS framework
 - **shadcn/ui** - Modern component library
 - **Radix UI** - Accessible component primitives
@@ -2117,4 +2117,4 @@ This project is licensed under the MIT License.
 
 **Stop rebuilding the same foundation over and over.** More Secure Starter DIY eliminates weeks of integration work by providing a complete, production-ready SaaS template with authentication, payments, and real-time data working seamlessly out of the box.
 
-Built with ❤️ using Next.js 15, Convex, Clerk, and modern web technologies.
+Built with ❤️ using Next.js 16, Convex, Clerk, and modern web technologies.
