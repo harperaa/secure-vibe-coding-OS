@@ -5,7 +5,7 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>http://localhost:3000</loc>
-    <lastmod>2026-10-23T12:54:53.091Z</lastmod>
+    <lastmod>2026-06-11T14:02:30.260Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
