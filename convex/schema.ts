@@ -72,6 +72,16 @@ export default defineSchema({
       // retention cron (all rows older than a cutoff) without a table scan.
       .index("byTimestamp", ["timestamp"]),
 
+    // Exact counters for the security log, one document per UTC hour.
+    // Maintained by convex/lib/securityLogger.ts on every insert, delete and
+    // read-state change, so the dashboard's totals are exact for any window
+    // without reading event rows. Keys are "eventType:severity".
+    securityEventCounts: defineTable({
+      hour: v.number(),
+      counts: v.record(v.string(), v.number()),
+      unread: v.record(v.string(), v.number()),
+    }).index("byHour", ["hour"]),
+
     // Background job example (convex/jobs.ts): one row per job. The browser
     // subscribes to listJobs, so every status change below streams to the
     // screen without a refresh. updatedAt is in the index so the newest

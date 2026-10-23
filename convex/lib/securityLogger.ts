@@ -7,6 +7,8 @@
  */
 
 import { MutationCtx } from "../_generated/server";
+import { Doc } from "../_generated/dataModel";
+import { bump, countKey, hourStart } from "./securityCounts";
 import { Id } from "../_generated/dataModel";
 
 /**
@@ -196,7 +198,7 @@ export async function logSecurity(
   };
 
   // Direct insert - no scheduler, no separate transaction
-  const eventId = await ctx.db.insert("securityEvents", {
+  const eventId = await insertSecurityEvent(ctx, {
     userId,
     eventType,
     severity,
@@ -213,4 +215,66 @@ export async function logSecurity(
   );
 
   return eventId;
+}
+
+// ---------------------------------------------------------------------------
+// Exact counters. Every write to securityEvents MUST go through these three
+// helpers so convex/lib/securityCounts.ts stays exact. A raw ctx.db.insert /
+// delete / patch(isRead) on securityEvents is a counting bug.
+// ---------------------------------------------------------------------------
+
+type SecurityEventDoc = Omit<Doc<"securityEvents">, "_id" | "_creationTime">;
+
+/**
+ * Adds `delta` to the hourly bucket for (timestamp, eventType, severity).
+ * `unreadDelta` moves the unread counter independently (read-state changes
+ * pass count 0). Empty buckets are deleted so retention leaves nothing behind.
+ */
+export async function adjustSecurityCounts(
+  ctx: MutationCtx,
+  event: { timestamp: number; eventType: string; severity: string },
+  delta: number,
+  unreadDelta: number
+): Promise<void> {
+  const hour = hourStart(event.timestamp);
+  const key = countKey(event.eventType, event.severity);
+  const bucket = await ctx.db
+    .query("securityEventCounts")
+    .withIndex("byHour", (q) => q.eq("hour", hour))
+    .unique();
+  const counts = bump(bucket?.counts ?? {}, key, delta);
+  const unread = bump(bucket?.unread ?? {}, key, unreadDelta);
+  if (bucket) {
+    if (Object.keys(counts).length === 0) await ctx.db.delete(bucket._id);
+    else await ctx.db.patch(bucket._id, { counts, unread });
+  } else if (Object.keys(counts).length > 0) {
+    await ctx.db.insert("securityEventCounts", { hour, counts, unread });
+  }
+}
+
+export async function insertSecurityEvent(
+  ctx: MutationCtx,
+  event: SecurityEventDoc
+): Promise<Id<"securityEvents">> {
+  const id = await ctx.db.insert("securityEvents", event);
+  await adjustSecurityCounts(ctx, event, 1, event.isRead ? 0 : 1);
+  return id;
+}
+
+export async function deleteSecurityEvent(
+  ctx: MutationCtx,
+  event: Doc<"securityEvents">
+): Promise<void> {
+  await ctx.db.delete(event._id);
+  await adjustSecurityCounts(ctx, event, -1, event.isRead ? 0 : -1);
+}
+
+export async function setSecurityEventRead(
+  ctx: MutationCtx,
+  event: Doc<"securityEvents">,
+  isRead: boolean
+): Promise<void> {
+  if (event.isRead === isRead) return; // idempotent: no double-counting on repeat clicks
+  await ctx.db.patch(event._id, { isRead });
+  await adjustSecurityCounts(ctx, event, 0, isRead ? -1 : 1);
 }
