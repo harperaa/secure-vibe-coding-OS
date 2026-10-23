@@ -4,10 +4,41 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query, QueryCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { getCurrentUser, getCurrentUserOrThrowForMutation, isCurrentUserAdmin, isCurrentUserAdminMutation } from "./users";
 import { Id } from "./_generated/dataModel";
 import { logSecurity, SecurityEventType, SecuritySeverity } from "./lib/securityLogger";
+
+/**
+ * Upper bound on rows any dashboard query reads in one transaction.
+ *
+ * logSecurityViolation is reachable unauthenticated by design, so the table is
+ * attacker-growable. An unbounded read here made the admin dashboard
+ * denial-of-serviceable by anyone who could write rows: grow the table past
+ * Convex's per-transaction read ceiling and every call throws. The monitoring
+ * surface was the first casualty of the flood it existed to reveal. Reading a
+ * bounded window means a flood degrades signal rather than availability.
+ */
+const SCAN_CEILING = 2000;
+
+/**
+ * Newest-first query over securityEvents, bounded to [startTime, endTime] via
+ * the byTimestamp index. A time-filtered view therefore reads only rows in
+ * range instead of taking the newest N and discarding most of them in JS.
+ */
+function eventsInWindow(ctx: QueryCtx, startTime?: number, endTime?: number) {
+  const table = ctx.db.query("securityEvents");
+  const ranged =
+    startTime !== undefined && endTime !== undefined
+      ? table.withIndex("byTimestamp", (q) => q.gte("timestamp", startTime).lte("timestamp", endTime))
+      : startTime !== undefined
+        ? table.withIndex("byTimestamp", (q) => q.gte("timestamp", startTime))
+        : endTime !== undefined
+          ? table.withIndex("byTimestamp", (q) => q.lte("timestamp", endTime))
+          : table.withIndex("byTimestamp");
+  return ranged.order("desc");
+}
 
 // Event type validator - reusable across mutations
 const eventTypeValidator = v.union(
@@ -94,34 +125,11 @@ export const listSecurityEvents = query({
 
     const limit = args.limit || 50;
 
-    // Bounded read. This used to be .collect(), which loads the ENTIRE
-    // securityEvents table into memory before any filtering. Because
-    // logSecurityViolation is reachable unauthenticated by design, that made the
-    // admin dashboard denial-of-serviceable by anyone who could write rows: grow
-    // the table past Convex's per-transaction read ceiling and this query throws
-    // on every subsequent call. The monitoring surface was the first casualty of
-    // the flood it existed to reveal.
-    //
-    // Read a bounded window and filter within it. Filters below are applied in
-    // JS, so over-fetch enough that a filtered view still fills a page.
-    const SCAN_CEILING = 2000;
-    let events = await ctx.db
-      .query("securityEvents")
-      .order("desc")
+    // Bounded, index-backed read (see SCAN_CEILING). The time range is served
+    // by the byTimestamp index; the remaining filters are applied in JS, so
+    // over-fetch enough that a filtered view still fills a page.
+    let events = await eventsInWindow(ctx, args.startTime, args.endTime)
       .take(Math.min(Math.max(limit * 10, 200), SCAN_CEILING));
-
-    // Apply time range filter if specified
-    if (args.startTime !== undefined || args.endTime !== undefined) {
-      events = events.filter(e => {
-        if (args.startTime !== undefined && e.timestamp < args.startTime) {
-          return false;
-        }
-        if (args.endTime !== undefined && e.timestamp > args.endTime) {
-          return false;
-        }
-        return true;
-      });
-    }
 
     // Apply event type filter if specified
     if (args.eventType !== undefined) {
@@ -196,29 +204,13 @@ export const getSecuritySummary = query({
       };
     }
 
-    // Bounded read — see the note in listSecurityEvents. An unbounded .collect()
+    // Bounded, index-backed read (see SCAN_CEILING). An unbounded .collect()
     // here made the summary tiles fail exactly when the table was being flooded.
-    // The counts below are therefore over the most recent SCAN_CEILING events,
-    // not all time; that is the correct trade for a dashboard that must keep
-    // rendering under abuse. Surface it in the UI rather than implying totals.
-    const SCAN_CEILING = 2000;
-    let events = await ctx.db
-      .query("securityEvents")
-      .order("desc")
+    // The counts below are therefore over the most recent SCAN_CEILING events
+    // in the requested window, not all time; that is the correct trade for a
+    // dashboard that must keep rendering under abuse. The UI says so.
+    let events = await eventsInWindow(ctx, args.startTime, args.endTime)
       .take(SCAN_CEILING);
-
-    // Apply time range filter if specified
-    if (args.startTime !== undefined || args.endTime !== undefined) {
-      events = events.filter(e => {
-        if (args.startTime !== undefined && e.timestamp < args.startTime) {
-          return false;
-        }
-        if (args.endTime !== undefined && e.timestamp > args.endTime) {
-          return false;
-        }
-        return true;
-      });
-    }
 
     // Apply event type filter if specified
     if (args.eventType !== undefined) {
@@ -391,7 +383,11 @@ export const logSecurityEventForCurrentUser = mutation({
  *     (capForLog in convex/lib/securityLogger.ts) and sanitizes PII.
  *   - listSecurityEvents and getSecuritySummary read a bounded window via
  *     .take(), so a flood degrades signal rather than breaking the dashboard.
- * There is still no rate limit on this mutation; row count grows with abuse.
+ *   - pruneExpiredSecurityEvents (daily cron, convex/crons.ts) deletes rows
+ *     older than RETENTION_DAYS, so storage is bounded even under sustained
+ *     abuse.
+ * There is still no rate limit on this mutation; within the retention window,
+ * row count grows with abuse.
  *
  * (Two earlier versions of this comment asserted controls that did not exist:
  * first "only callable from localhost in development", then "rows are
@@ -431,5 +427,42 @@ export const logSecurityViolation = mutation({
     );
 
     return eventId;
+  },
+});
+
+/**
+ * Retention for the security log.
+ *
+ * Rows older than RETENTION_DAYS are deleted by a daily cron (convex/crons.ts).
+ * Because logSecurityViolation is reachable unauthenticated, the table is
+ * attacker-growable; retention is what bounds storage over time. Deletion runs
+ * in fixed-size batches and reschedules itself while rows remain, so each
+ * transaction stays well under Convex's read/write limits regardless of how
+ * large the backlog is, and a one-off flood is drained over several runs
+ * instead of one oversized one.
+ */
+const RETENTION_DAYS = 90;
+const PRUNE_BATCH = 500;
+
+export const pruneExpiredSecurityEvents = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const expired = await ctx.db
+      .query("securityEvents")
+      .withIndex("byTimestamp", (q) => q.lt("timestamp", cutoff))
+      .take(PRUNE_BATCH);
+
+    for (const event of expired) {
+      await ctx.db.delete(event._id);
+    }
+
+    if (expired.length === PRUNE_BATCH) {
+      // More to do: continue in a fresh transaction rather than growing this one.
+      await ctx.scheduler.runAfter(0, internal.security.pruneExpiredSecurityEvents, {});
+    }
+
+    return expired.length;
   },
 });

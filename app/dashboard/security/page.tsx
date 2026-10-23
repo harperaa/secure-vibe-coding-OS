@@ -328,6 +328,9 @@ export default function SecurityDashboard() {
               <p className="text-xs text-muted-foreground">
                 {securitySummary.unreadCount} unread
               </p>
+              <p className="text-xs text-muted-foreground">
+                Counts cover the newest 2,000 events in range
+              </p>
             </CardContent>
           </Card>
 

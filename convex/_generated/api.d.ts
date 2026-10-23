@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as lib_securityLogger from "../lib/securityLogger.js";
 import type * as paymentAttemptTypes from "../paymentAttemptTypes.js";
@@ -23,6 +24,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  crons: typeof crons;
   http: typeof http;
   "lib/securityLogger": typeof lib_securityLogger;
   paymentAttemptTypes: typeof paymentAttemptTypes;
