@@ -5,7 +5,7 @@
  *
  * Why this exists: in Convex, every exported `mutation` / `query` / `action` is
  * a public internet endpoint reachable by anyone who knows the deployment URL.
- * Next.js `middleware.ts` does NOT run for these calls — it only sees requests
+ * Next.js `proxy.ts` does NOT run for these calls — it only sees requests
  * to the Next.js server, and Convex RPC goes straight from the browser to the
  * Convex deployment. So an exported function that omits an identity check is
  * unauthenticated, silently, with nothing in the diff to signal it.

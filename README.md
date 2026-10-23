@@ -1440,7 +1440,7 @@ paymentAttempts: {
 │   └── http.ts             # Webhook handlers
 ├── lib/
 │   └── utils.ts            # Utility functions
-└── middleware.ts           # Route protection
+└── proxy.ts           # Route protection
 ```
 
 ## Key Components
