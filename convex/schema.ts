@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { paymentAttemptSchemaValidator } from "./paymentAttemptTypes";
+import { securityTables } from "secure-vibe-runtime/convex";
 
 export default defineSchema({
     users: defineTable({
@@ -18,57 +19,30 @@ export default defineSchema({
       .index("byUserId", ["userId"])
       .index("byPayerUserId", ["payer.user_id"]),
 
-    // Security monitoring table
-    // userId is optional to allow logging violations from unauthenticated requests
-    securityEvents: defineTable({
-      userId: v.optional(v.id("users")),
-      eventType: v.union(
-        v.literal("origin_mismatch"),
-        v.literal("rate_limit_exceeded"),
-        v.literal("invalid_api_key"),
-        v.literal("fingerprint_change"),
-        v.literal("suspicious_activity"),
-        v.literal("jwt_validation_failed"),
-        v.literal("unauthorized_access"),
-        v.literal("input_validation_failed"),
-        v.literal("replay_detected"),
-        v.literal("not_found_enumeration"),
-        v.literal("jwt_algorithm_attack"),
-        v.literal("tenant_isolation_attack"),
-        v.literal("jwt_replay_attack"),
-        v.literal("xss_attempt"),
-        v.literal("fingerprint_manipulation"),
-        v.literal("http_origin_blocked"),
-        v.literal("prompt_injection_attempt"),
-        v.literal("ai_response_validation_failed"),
-        v.literal("csrf_validation_failed")
+    // Security log tables (securityEvents, securityEventCounts,
+    // securityCountsRebuild): owned by the secure-vibe-runtime package so index
+    // and field changes ship as a package update. See docs/security/AUDIT_LOGGING.md.
+    ...securityTables,
+
+    // Background job example (convex/jobs.ts): one row per job. The browser
+    // subscribes to listJobs, so every status change below streams to the
+    // screen without a refresh. updatedAt is in the index so the newest
+    // activity sorts first.
+    jobs: defineTable({
+      userId: v.id("users"),
+      status: v.union(
+        v.literal("queued"),
+        v.literal("running"),
+        v.literal("done"),
+        v.literal("failed")
       ),
-      severity: v.union(
-        v.literal("low"),
-        v.literal("medium"),
-        v.literal("high"),
-        v.literal("critical")
-      ),
-      metadata: v.object({
-        origin: v.optional(v.string()),
-        ipAddress: v.optional(v.string()),
-        fingerprint: v.optional(v.string()),
-        endpoint: v.optional(v.string()),
-        errorMessage: v.optional(v.string()),
-        endUserEmail: v.optional(v.string()),
-        endUserName: v.optional(v.string()),
-        endUserId: v.optional(v.string()),
-        actionType: v.optional(v.string()),
-        requestPayload: v.optional(v.string()),
-      }),
-      timestamp: v.number(),
-      isRead: v.boolean(),
+      input: v.string(),
+      result: v.optional(v.string()),
+      error: v.optional(v.string()),
+      attempts: v.number(),
+      updatedAt: v.number(),
     })
-      .index("byUser", ["userId", "timestamp"])
-      .index("bySeverity", ["userId", "severity", "timestamp"])
-      .index("byUnread", ["userId", "isRead", "timestamp"])
-      // Cross-user, time-ordered access. The three indexes above all lead with
-      // userId, so none of them can serve the admin dashboard (all users) or the
-      // retention cron (all rows older than a cutoff) without a table scan.
-      .index("byTimestamp", ["timestamp"]),
+      .index("byUser", ["userId", "updatedAt"])
+      // clearFinishedJobs deletes one status at a time in bounded batches.
+      .index("byUserStatus", ["userId", "status", "updatedAt"]),
   });

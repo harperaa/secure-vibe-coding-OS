@@ -380,6 +380,36 @@ No tags or releases were created.
 
 ---
 
+## Step 8D: Publish `secure-vibe-runtime` BEFORE bumping the app
+
+The template depends on `secure-vibe-runtime` from the npm registry (see
+`packages/secure-vibe-runtime`), and the release commit pins the new version, so
+the package must exist on npm before Step 9's `npm install` can resolve it.
+
+```bash
+# 1. Bump the package to the release version and build it
+cd packages/secure-vibe-runtime
+npm pkg set version="X.Y.Z"
+npm run build                # tsc -> dist/ (gitignored, published)
+npm pack --dry-run           # eyeball: dist/**, README.md, package.json only
+
+# 2. Publish (needs the user's npm login + one-time password; run it in a real
+#    terminal, not from the agent, see release-flow notes)
+npm publish
+cd ../..
+
+# 3. Wait for the registry to show it (npm's Validating review can take 20+ min;
+#    never republish while waiting)
+npm view secure-vibe-runtime@X.Y.Z version
+```
+
+Then, in Step 9, pin the dependency in the root `package.json` to the same
+version (`npm install secure-vibe-runtime@X.Y.Z`; the cooldown in `.npmrc`
+excludes this package) and commit `packages/secure-vibe-runtime/package.json`
+alongside the root bump.
+
+---
+
 ## Step 9: Bump the app version on `main`
 
 > **Branch model (read this first).** `secure-vibe-kit/` does NOT live on `main`.
@@ -395,7 +425,8 @@ Bump the root `package.json` to the release version (X.Y.Z, no "v"). Use
 
 ```bash
 npm pkg set version="X.Y.Z"
-git add package.json
+npm install secure-vibe-runtime@X.Y.Z   # published in Step 8D
+git add package.json package-lock.json packages/secure-vibe-runtime/package.json
 git commit -m "chore: bump to X.Y.Z for release"
 git push origin main
 ```

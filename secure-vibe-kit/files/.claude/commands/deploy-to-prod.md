@@ -329,7 +329,7 @@ Parse JSON output and show results.
 
 Run: `node scripts/deploy.mjs convex-prod-env --deploy-key="<KEY>" --webhook-secret="<SECRET>" --frontend-api-url="<URL>" --admin-email="<ADMIN_EMAIL>"`
 
-Parse JSON output and show each env var set.
+Parse JSON output and show each env var set. `SECURITY_LOG_KEY` is read from `.env.local` (minted and written there if absent) so the Vercel push in Phase 10 sends the identical value.
 
 ## Phase 10: Vercel Setup + Environment Variables
 
@@ -428,6 +428,10 @@ DEV_CSRF=$(doppler secrets get CSRF_SECRET --project $PROJECT --config dev --pla
 DEV_SESSION=$(doppler secrets get SESSION_SECRET --project $PROJECT --config dev --plain)
 doppler secrets set CSRF_SECRET="$DEV_CSRF" --project $PROJECT --config prd
 doppler secrets set SESSION_SECRET="$DEV_SESSION" --project $PROJECT --config prd
+
+# Security log key: generate a NEW one for prd (prod Convex is a separate deployment;
+# sync-convex-env.mjs --config prd mirrors it there in Phase 10)
+doppler secrets set SECURITY_LOG_KEY="$(node -p "require('crypto').randomBytes(32).toString('base64url')")" --project $PROJECT --config prd
 
 # Admin (used by Convex queries)
 doppler secrets set ADMIN_EMAIL="<EMAIL>" --project $PROJECT --config prd

@@ -59,6 +59,7 @@ Parse the check-tools result:
    - `NEXT_PUBLIC_SITE_NAME`
    - `CSRF_SECRET`
    - `SESSION_SECRET`
+   - `SECURITY_LOG_KEY`
 
    If any are missing or contain `your_` or `<` or are empty: STOP. Display: "Required environment variables are missing. Run `/install` first."
 

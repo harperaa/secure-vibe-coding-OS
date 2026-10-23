@@ -60,6 +60,9 @@ export default function SecurityDashboard() {
     }
   }, [dateRangePreset, customStartDate, customEndDate]);
 
+  // Missing SECURITY_LOG_KEY makes the log fail closed and silent; surface it.
+  const logKeyConfigured = useQuery(api.security.securityLogKeyConfigured, isAdmin ? {} : "skip");
+
   // Get filtered summary (counts update based on event type filter)
   // Skip query if not admin (will throw on backend anyway)
   const securitySummary = useQuery(
@@ -93,6 +96,21 @@ export default function SecurityDashboard() {
     return (
       <div className="px-4 lg:px-6">
         <div className="flex flex-col gap-6">
+          {logKeyConfigured === false && (
+            <Card className="border-destructive bg-destructive/5">
+              <CardHeader>
+                <CardTitle className="text-destructive">Security log is not accepting writes</CardTitle>
+                <CardDescription>
+                  <code>SECURITY_LOG_KEY</code> is not set in this Convex deployment, so rate-limit and CSRF
+                  violations are refused by the log (the requests themselves are still blocked). Set the same
+                  value where the app reads secrets (Doppler or <code>.env.local</code>) and in Convex:
+                  <code className="ml-1">npx convex env set SECURITY_LOG_KEY &lt;value&gt;</code>. Doppler mode:
+                  <code className="ml-1">node scripts/sync-convex-env.mjs --config &lt;dev|prd&gt;</code>.
+                  See README “Retention and Limits”.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )}
           <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20">
             <CardContent className="pt-6">
               <div className="flex flex-col items-center gap-4 py-8">
@@ -329,7 +347,7 @@ export default function SecurityDashboard() {
                 {securitySummary.unreadCount} unread
               </p>
               <p className="text-xs text-muted-foreground">
-                Counts cover the newest 1,000 events in range
+                Exact totals, hour-aligned{securitySummary?.countsFrom ? ` since ${format(new Date(securitySummary.countsFrom), "MMM d, HH:mm")}` : ""}
               </p>
             </CardContent>
           </Card>

@@ -1,6 +1,6 @@
 {
   "name": "secure-vibe-coding-os",
-  "version": "7.2.0",
+  "version": "7.3.0",
   "private": true,
   "//engines": "npm >=11.10.0 is the real requirement: it is the first version that honors `min-release-age` in .npmrc, and with engine-strict=true an older npm fails the install instead of silently dropping the cooldown. Node 24 is the floor because no earlier major can satisfy it — Node 20 ships npm 10.8.x and Node 22 ships npm 10.9.x — so a lower Node would make these two lines contradict each other. Floors are set from the DEPLOYMENT TARGETS, not a dev machine: Vercel's Node 24 image is v24.15.0/npm 11.12.1 and GitHub setup-node@24 resolves to v24.18.0/npm 11.16.0, so 24.15.0 is the lowest common denominator. Do NOT raise these to chase a newer local npm: `npm approve-scripts` (npm >=11.16) is a MAINTAINER tool for editing allowScripts, not an install-time requirement — the allowScripts field is inert data that older npm ignores and npm 12 enforces. The <26 ceiling is deliberate: Vercel resolves engines.node to the newest major that satisfies it, so an open range moves production onto a new Node major the day it ships.",
   "engines": {
@@ -22,7 +22,8 @@
     "sync:convex": "doppler run -- node scripts/sync-convex-env.mjs --config dev",
     "deploy:vercel-env": "node scripts/deploy.mjs vercel-env-doppler",
     "typecheck": "tsc --noEmit",
-    "test": "node --test scripts/*.test.mjs"
+    "test": "node --test scripts/*.test.mjs",
+    "build:runtime": "tsc -p packages/secure-vibe-runtime/tsconfig.json"
   },
   "dependencies": {
     "@clerk/backend": "^2.4.1",
@@ -74,6 +75,7 @@
     "rehype-highlight": "^7.0.2",
     "rehype-slug": "^6.0.0",
     "remark-gfm": "^4.0.1",
+    "secure-vibe-runtime": "^7.3.0",
     "sonner": "^2.0.6",
     "svix": "^1.69.0",
     "tailwind-merge": "^3.3.1",

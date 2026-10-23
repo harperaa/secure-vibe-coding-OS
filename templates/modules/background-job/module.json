@@ -1,0 +1,24 @@
+{
+  "name": "background-job",
+  "title": "Background job example",
+  "description": "Dashboard page that starts slow work in a Convex action with retries and watches it finish live (backend in convex/jobs.ts is always installed)",
+  "marker": "app/dashboard/jobs",
+  "overwrites": [],
+  "installAfter": [],
+  "edits": [
+    {
+      "file": "app/dashboard/app-sidebar.tsx",
+      "anchor": "} from \"@tabler/icons-react\"",
+      "position": "before",
+      "insert": "  IconClockPlay,\n",
+      "skipIfContains": "IconClockPlay"
+    },
+    {
+      "file": "app/dashboard/app-sidebar.tsx",
+      "anchor": "// modules:nav",
+      "position": "before",
+      "insert": "    {\n      title: \"Background jobs\",\n      url: \"/dashboard/jobs\",\n      icon: IconClockPlay,\n    },\n",
+      "skipIfContains": "/dashboard/jobs\","
+    }
+  ]
+}

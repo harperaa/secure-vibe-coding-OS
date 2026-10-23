@@ -139,6 +139,15 @@ NEW=$(node -p "require('crypto').randomBytes(32).toString('base64url')")
 doppler secrets set CSRF_SECRET="$NEW" --project <PROJECT> --config <DOPPLER_CONFIG>
 ```
 
+### 3.4b SECURITY_LOG_KEY
+
+```bash
+NEW=$(node -p "require('crypto').randomBytes(32).toString('base64url')")
+doppler secrets set SECURITY_LOG_KEY="$NEW" --project <PROJECT> --config <DOPPLER_CONFIG>
+```
+
+This key gates writes to the Convex security log, so it must reach Convex too. Step 4 (`sync-convex-env.mjs`) mirrors it; until both Step 4 and Step 5 have run, security-log writes fail closed and the app logs `Invalid SECURITY_LOG_KEY` to the server console. Requests are unaffected.
+
 ### 3.5 CONVEX_DEPLOY_KEY (only if applicable to <DOPPLER_CONFIG>=prd)
 
 ```

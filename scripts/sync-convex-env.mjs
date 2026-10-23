@@ -26,6 +26,9 @@ const CONVEX_ALLOWLIST = [
   // Preferred issuer name (Convex/Clerk docs). Same value as Frontend API URL.
   'CLERK_JWT_ISSUER_DOMAIN',
   'ADMIN_EMAIL',
+  // Shared key that gates convex/security.ts:logSecurityViolation. Must equal
+  // the value the Next.js server reads from Doppler.
+  'SECURITY_LOG_KEY',
 ];
 
 function parseArgs(argv) {
