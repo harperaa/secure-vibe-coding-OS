@@ -66,6 +66,11 @@ jobs:
           check-latest: true
           cache: 'npm'
       - run: npm ci
+      # The Node runtime is not an npm package, so nothing below sees a Node
+      # security release. This fails when a newer `security: true` release
+      # exists in the running major line. See scripts/check-node-version.mjs.
+      - name: Node security release gate
+        run: node scripts/check-node-version.mjs
       # High/critical advisories fail the job, except GHSA ids listed with a
       # reason in scripts/audit-allowlist.json (for advisories with no patched
       # release in dev-only chains). See scripts/audit-gate.mjs.
