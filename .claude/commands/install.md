@@ -64,8 +64,8 @@ After Phase 1 completes, call AskUserQuestion with ALL FOUR questions in a SINGL
       "multiSelect": false,
       "options": [
         { "label": "Minimal shell (Recommended)", "description": "Login homepage + blank dashboard, no content modules. Add any of them later with /add-module." },
-        { "label": "All modules", "description": "Install every content module now: homepage content, blog, dashboard sample, and pricing." },
-        { "label": "Let me pick modules", "description": "Choose which content modules to install now (homepage content, blog, dashboard sample, pricing)." }
+        { "label": "All modules", "description": "Install every content module now: homepage content, blog, dashboard sample, pricing, and the background-job example." },
+        { "label": "Let me pick modules", "description": "Choose which content modules to install now (homepage content, blog, dashboard sample, pricing, background-job example)." }
       ]
     }
   ]
@@ -86,8 +86,8 @@ Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `fa
 
 Branch on the answer to the "App shell" question above:
 
-- **"Minimal shell" (the default)** — do NOT ask anything further: set `<MODULES>` = empty and `<SKIPPED_MODULES>` = `homepage-content,blog,dashboard-sample,pricing`, and skip the follow-up question entirely.
-- **"All modules"** — do NOT ask anything further: set `<MODULES>` = `homepage-content,blog,dashboard-sample,pricing` and `<SKIPPED_MODULES>` = empty, and skip the follow-up question entirely.
+- **"Minimal shell" (the default)** — do NOT ask anything further: set `<MODULES>` = empty and `<SKIPPED_MODULES>` = `homepage-content,blog,dashboard-sample,pricing,background-job`, and skip the follow-up question entirely.
+- **"All modules"** — do NOT ask anything further: set `<MODULES>` = `homepage-content,blog,dashboard-sample,pricing,background-job` and `<SKIPPED_MODULES>` = empty, and skip the follow-up question entirely.
 - **"Let me pick modules"** — call AskUserQuestion with the module picker below.
 
 Module picker (only for "Let me pick modules"):
@@ -105,12 +105,21 @@ Module picker (only for "Let me pick modules"):
         { "label": "Dashboard sample", "description": "Demo dashboard: KPI cards, interactive chart, data table" },
         { "label": "Pricing", "description": "Clerk Billing pricing section + payment-gated dashboard page" }
       ]
+    },
+    {
+      "question": "Include the background-job example page? (The pattern's backend, convex/jobs.ts, is installed either way; this adds the dashboard page that drives it.)",
+      "header": "Examples",
+      "multiSelect": false,
+      "options": [
+        { "label": "No (Recommended)", "description": "Keep the dashboard minimal; add it later with /add-module background-job" },
+        { "label": "Yes", "description": "Adds /dashboard/jobs: start slow work in a Convex action with retries and watch it finish live" }
+      ]
     }
   ]
 }
 ```
 
-Persist the modules choice as `<MODULES>` — the selected module names mapped to: `homepage-content`, `blog`, `dashboard-sample`, `pricing` (possibly empty if the user deselects everything). Persist the unselected names as `<SKIPPED_MODULES>`. Carry both through every phase below.
+Persist the modules choice as `<MODULES>` — the selected module names mapped to: `homepage-content`, `blog`, `dashboard-sample`, `pricing`, plus `background-job` when the Examples answer was "Yes" (possibly empty if the user deselects everything). Persist the unselected names as `<SKIPPED_MODULES>`. Carry both through every phase below.
 
 ### Install content modules (only if `<MODULES>` is non-empty)
 

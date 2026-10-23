@@ -108,6 +108,7 @@ full; modules only add **pages and content** on top of it:
 | `blog` | MDX blog with categories, tags, search, RSS feed, and 3 sample posts |
 | `dashboard-sample` | Demo dashboard: KPI cards, interactive chart, data table |
 | `pricing` | Clerk Billing pricing section + payment-gated dashboard page |
+| `background-job` | Dashboard page for the background-job pattern: slow work in a Convex action with retries, watched live (the backend, `convex/jobs.ts`, is always installed) |
 
 `/install` asks which to include. Add any of them later — nothing is lost by
 starting minimal:

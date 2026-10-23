@@ -129,7 +129,7 @@ This project supports two flows for environment variables:
 
 ## Content Modules
 
-Optional page/content modules live in `templates/modules/<name>/` (homepage-content, blog, dashboard-sample, pricing). The default site is minimal — login homepage + blank dashboard. `/install` asks which modules to copy in; `/add-module` installs any of them later; `node scripts/modules.mjs install <name...> --apply-edits` does it headlessly. Modules only add pages and content — the security backend (convex/, lib/, proxy.ts, app/api/) is always installed and never gated.
+Optional page/content modules live in `templates/modules/<name>/` (homepage-content, blog, dashboard-sample, pricing, background-job). The default site is minimal — login homepage + blank dashboard. `/install` asks which modules to copy in; `/add-module` installs any of them later; `node scripts/modules.mjs install <name...> --apply-edits` does it headlessly. Modules only add pages and content — the security backend (convex/, lib/, proxy.ts, app/api/) is always installed and never gated.
 
 Conventions (do not break these):
 - `templates/modules/**/files/` mirrors the repo root and is type-checked/linted in place. Imports between two files of the SAME module must use **relative paths** (depth is identical before/after copy); `@/` imports are only allowed for always-installed targets.
