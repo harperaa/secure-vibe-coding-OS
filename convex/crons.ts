@@ -7,9 +7,9 @@ const crons = cronJobs();
 // are deleted in bounded, self-rescheduling batches. logSecurityViolation is
 // reachable unauthenticated by design, so without this the table has no upper
 // bound on size.
-crons.daily(
+crons.cron(
   "prune expired security events",
-  { hourUTC: 3, minuteUTC: 17 },
+  "17 3 * * *", // daily at 03:17 UTC
   internal.security.pruneExpiredSecurityEvents,
   {},
 );

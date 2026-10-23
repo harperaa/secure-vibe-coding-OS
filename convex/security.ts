@@ -19,8 +19,14 @@ import { logSecurity, SecurityEventType, SecuritySeverity } from "./lib/security
  * Convex's per-transaction read ceiling and every call throws. The monitoring
  * surface was the first casualty of the flood it existed to reveal. Reading a
  * bounded window means a flood degrades signal rather than availability.
+ *
+ * Sized in BYTES, not just rows: every caller-supplied field is capped in
+ * convex/lib/securityLogger.ts, which puts the worst-case row under ~6 KB, so
+ * 1,000 rows stay under Convex's 8 MiB per-transaction read budget even when
+ * every row was written by an attacker at the cap. Raise this only together
+ * with a tighter field cap.
  */
-const SCAN_CEILING = 2000;
+const SCAN_CEILING = 1000;
 
 /**
  * Newest-first query over securityEvents, bounded to [startTime, endTime] via
@@ -440,9 +446,14 @@ export const logSecurityViolation = mutation({
  * transaction stays well under Convex's read/write limits regardless of how
  * large the backlog is, and a one-off flood is drained over several runs
  * instead of one oversized one.
+ *
+ * PRUNE_BATCH is a byte budget expressed in rows: at the ~6 KB worst-case row
+ * (see SCAN_CEILING), 200 rows is ~1.2 MB read, far under the 8 MiB limit, so
+ * a batch of attacker-fattened rows cannot wedge the cron on the same rows
+ * forever.
  */
 const RETENTION_DAYS = 90;
-const PRUNE_BATCH = 500;
+const PRUNE_BATCH = 200;
 
 export const pruneExpiredSecurityEvents = internalMutation({
   args: {},
