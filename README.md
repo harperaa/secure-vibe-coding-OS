@@ -1,6 +1,6 @@
 # Secure Vibe Coding OS - More Secure Next.js SaaS Starter Kit
 
-A modern, production-ready and security hardened SaaS starter template for building full-stack applications using Next.js 15, Convex, Clerk, and Clerk Billing. The easiest and most secure way to start accepting payments with beautiful UI and seamless integrations.
+A modern, production-ready and security hardened SaaS starter template for building full-stack applications using Next.js 16, Convex, Clerk, and Clerk Billing. The easiest and most secure way to start accepting payments with beautiful UI and seamless integrations.
 
 [🌐 Live Demo](https://secure-vibe-coding-os.vercel.app/) – Try the app in your browser!
 
@@ -15,7 +15,7 @@ See two sample course modules, in the docs folder.
 
 ## Features
 
-- 🚀 **Next.js 15 with App Router** - Latest React framework with server components
+- 🚀 **Next.js 16 with App Router** - Latest React framework with server components
 - ⚡️ **Turbopack** - Ultra-fast development with hot module replacement
 - 🎨 **TailwindCSS v4** - Modern utility-first CSS with custom design system
 - 🔐 **Clerk Authentication** - Complete user management with social logins
@@ -44,7 +44,7 @@ See two sample course modules, in the docs folder.
 ## Tech Stack
 
 ### Frontend
-- **Next.js 15** - React framework with App Router
+- **Next.js 16** - React framework with App Router
 - **TailwindCSS v4** - Utility-first CSS framework
 - **shadcn/ui** - Modern component library
 - **Radix UI** - Accessible component primitives
@@ -943,6 +943,14 @@ The application includes a comprehensive real-time security monitoring dashboard
 2. Sign in with the email address matching `ADMIN_EMAIL`
 3. Navigate to the "Security Monitoring" link in the "Administration" section of the sidebar
 
+#### Retention and Limits
+
+The log accepts violations from callers who are not signed in (blocked origins, CSRF failures, rate limits hit before sign-in), so anyone who knows the Convex deployment URL can add rows. Treat the table as attacker-influenceable input, not as a trustworthy audit trail. Three controls bound the damage:
+
+- **Bounded reads.** Dashboard queries read at most the newest 1,000 events in the selected time range (via the `byTimestamp` index), so a flood degrades the view instead of taking it offline. The "Total Events" tile says so.
+- **Retention.** A daily Convex cron (`convex/crons.ts`) deletes events older than 90 days in batches of 200, rescheduling itself until the backlog is drained. Change `RETENTION_DAYS` in `convex/security.ts` to adjust the window.
+- **Size caps.** Every caller-supplied field is truncated before insert (2,000 characters for the two free-text fields, 256 for the rest) and PII is masked. The read and delete batch sizes are derived from the resulting worst-case row size so that a flood of maximum-size rows still fits Convex's per-transaction read budget.
+
 #### Logging Security Events
 
 Security events are automatically logged when using the built-in security middlewares (`withRateLimit`, `withCsrf`, etc.). You can also manually log events using the security logger:
@@ -1440,7 +1448,7 @@ paymentAttempts: {
 │   └── http.ts             # Webhook handlers
 ├── lib/
 │   └── utils.ts            # Utility functions
-└── middleware.ts           # Route protection
+└── proxy.ts           # Route protection
 ```
 
 ## Key Components
@@ -2117,4 +2125,4 @@ This project is licensed under the MIT License.
 
 **Stop rebuilding the same foundation over and over.** More Secure Starter DIY eliminates weeks of integration work by providing a complete, production-ready SaaS template with authentication, payments, and real-time data working seamlessly out of the box.
 
-Built with ❤️ using Next.js 15, Convex, Clerk, and modern web technologies.
+Built with ❤️ using Next.js 16, Convex, Clerk, and modern web technologies.

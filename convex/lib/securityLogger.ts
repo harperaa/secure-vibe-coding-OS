@@ -70,21 +70,39 @@ function sanitizeIdForLog(id: string | undefined): string | undefined {
 const MAX_LOG_FIELD_CHARS = 2000;
 
 /**
+ * Cap for every OTHER caller-supplied string (origin, endpoint, IP,
+ * fingerprint, action type, and the PII fields before masking). None of these
+ * has a legitimate value anywhere near this long; an origin or endpoint over
+ * 256 chars is itself evidence of abuse.
+ *
+ * Worst-case row size is what the dashboard's SCAN_CEILING and the retention
+ * cron's PRUNE_BATCH in convex/security.ts are derived from: two 2,000-char
+ * fields plus eight 256-char fields is under ~6 KB per row, so 1,000 rows
+ * stay under Convex's 8 MiB per-transaction read budget. Change these caps
+ * and those batch sizes together.
+ */
+const MAX_LOG_SHORT_FIELD_CHARS = 256;
+
+/**
  * Caps a caller-supplied string so one caller cannot write unbounded rows.
  *
  * This exists because logSecurityViolation is reachable UNAUTHENTICATED by
  * design (violations are recorded before a session exists). Without a cap, the
  * audit table is an unbounded write primitive for anyone who knows the Convex
  * deployment URL — and the failure mode is self-concealing, because the first
- * thing that breaks is the dashboard used to notice it.
+ * thing that breaks is the dashboard used to notice it. A row of uncapped
+ * fields can approach Convex's 1 MiB document limit, and a handful of those
+ * exhausts the read budget of any query or cleanup that touches them.
  *
  * Truncation is marked so a reader can tell a clipped value from a short one.
  */
-function capForLog(value: string | undefined): string | undefined {
+function capForLog(value: string | undefined, max = MAX_LOG_FIELD_CHARS): string | undefined {
   if (!value) return undefined;
-  if (value.length <= MAX_LOG_FIELD_CHARS) return value;
-  return `${value.substring(0, MAX_LOG_FIELD_CHARS)}…[truncated ${value.length - MAX_LOG_FIELD_CHARS} chars]`;
+  if (value.length <= max) return value;
+  return `${value.substring(0, max)}…[truncated ${value.length - max} chars]`;
 }
+
+const capShort = (value: string | undefined) => capForLog(value, MAX_LOG_SHORT_FIELD_CHARS);
 
 /**
  * All security event types that can be logged
@@ -156,23 +174,24 @@ export async function logSecurity(
 ): Promise<Id<"securityEvents">> {
   // SECURITY: Sanitize PII before logging
   // Preserves enough info for security analysis while protecting user privacy
+  // Every field is size-capped because logSecurityViolation is reachable
+  // UNAUTHENTICATED. Without caps, one caller can write arbitrarily large rows
+  // and grow the securityEvents table until the dashboard's reads (and the
+  // retention cron's deletes) exceed Convex's per-transaction limit —
+  // silencing the monitoring it is meant to feed. Truncate rather than
+  // reject: a clipped event is still evidence. The two free-text fields get
+  // the long cap; everything else the short one.
   const sanitizedMetadata = {
-    endpoint: metadata.endpoint,
-    origin: metadata.origin,
-    ipAddress: metadata.ipAddress, // IPs are needed for security analysis
-    fingerprint: metadata.fingerprint, // Fingerprints are anonymized identifiers
-    // Size-capped: these two fields are the only ones carrying caller-supplied
-    // free text, and logSecurityViolation is reachable UNAUTHENTICATED. Without
-    // a cap, one caller can write arbitrarily large rows and grow the
-    // securityEvents table until the dashboard's reads exceed Convex's
-    // per-transaction limit — silencing the monitoring it is meant to feed.
-    // Truncate rather than reject: a clipped event is still evidence.
+    endpoint: capShort(metadata.endpoint),
+    origin: capShort(metadata.origin),
+    ipAddress: capShort(metadata.ipAddress), // IPs are needed for security analysis
+    fingerprint: capShort(metadata.fingerprint), // Fingerprints are anonymized identifiers
     errorMessage: capForLog(metadata.errorMessage),
-    // PII fields are sanitized
-    endUserEmail: sanitizeEmailForLog(metadata.endUserEmail),
-    endUserName: sanitizeNameForLog(metadata.endUserName),
-    endUserId: sanitizeIdForLog(metadata.endUserId),
-    actionType: metadata.actionType,
+    // PII fields are capped first (a masked email still keeps its domain), then sanitized
+    endUserEmail: sanitizeEmailForLog(capShort(metadata.endUserEmail)),
+    endUserName: sanitizeNameForLog(capShort(metadata.endUserName)),
+    endUserId: sanitizeIdForLog(capShort(metadata.endUserId)),
+    actionType: capShort(metadata.actionType),
     requestPayload: capForLog(metadata.requestPayload),
   };
 

@@ -66,5 +66,9 @@ export default defineSchema({
     })
       .index("byUser", ["userId", "timestamp"])
       .index("bySeverity", ["userId", "severity", "timestamp"])
-      .index("byUnread", ["userId", "isRead", "timestamp"]),
+      .index("byUnread", ["userId", "isRead", "timestamp"])
+      // Cross-user, time-ordered access. The three indexes above all lead with
+      // userId, so none of them can serve the admin dashboard (all users) or the
+      // retention cron (all rows older than a cutoff) without a table scan.
+      .index("byTimestamp", ["timestamp"]),
   });

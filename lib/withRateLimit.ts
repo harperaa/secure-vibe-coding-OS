@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { RateLimiterMemory } from 'rate-limiter-flexible';
+import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '@/convex/_generated/api';
 
@@ -127,8 +127,15 @@ export function withRateLimit(
       // Rate limit not exceeded, proceed with the original handler
       return await handler(request);
     } catch (err: unknown) {
-      // Check if this is a rate limit error
-      if (err && typeof err === 'object' && err.constructor.name === 'RateLimiterRes') {
+      // Check if this is a rate limit error.
+      //
+      // instanceof, NOT `err.constructor.name === 'RateLimiterRes'`. The
+      // production server bundle is minified and class names are mangled, so
+      // the name check matched in `next dev` and silently failed in `next
+      // build` + `next start`: every over-limit request fell through to the
+      // rethrow below and surfaced as a 500, and the violation was never
+      // logged. Caught by the release smoke test, not by review.
+      if (err instanceof RateLimiterRes) {
         const endpoint = request.nextUrl.pathname;
 
         console.warn(`Rate limit exceeded for IP: ${ip} on ${endpoint}`);
