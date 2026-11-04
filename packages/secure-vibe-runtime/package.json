@@ -1,6 +1,6 @@
 {
   "name": "secure-vibe-runtime",
-  "version": "7.3.0",
+  "version": "7.4.0",
   "description": "The runtime security pieces of Secure Vibe Coding OS (secrets loading, CSRF, rate limiting, security log) as one package, so every app built from the template gets fixes by updating it.",
   "type": "module",
   "license": "MIT",
