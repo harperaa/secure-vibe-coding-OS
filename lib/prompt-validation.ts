@@ -138,7 +138,7 @@ export function validatePrompt(prompt: string, includesPolicyData: boolean = fal
       // Return the first error message
       return { 
         success: false, 
-        error: error.errors[0]?.message || 'Invalid input' 
+        error: error.issues[0]?.message || 'Invalid input' 
       };
     }
     return { 
