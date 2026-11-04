@@ -296,8 +296,15 @@ export const markEventAsUnread = mutation({
 
 /**
  * Log a security event for the current authenticated user
- * Used by API routes to log detected security violations
  * Uses the security logger library for PII sanitization and consistent logging
+ *
+ * Severity is capped at "medium". Any signed-in user can call this mutation
+ * straight from the browser with any arguments, so accepting "high" or
+ * "critical" here would let a regular user fill the admin's security
+ * dashboard with fake alarms. Code that detects a high or critical event
+ * already runs on a trusted side and has its own write path:
+ *   - a Next.js route calls logSecurityViolation with SECURITY_LOG_KEY;
+ *   - a Convex mutation calls logSecurity() from convex/lib/securityLogger.
  */
 export const logSecurityEventForCurrentUser = mutation({
   args: {
@@ -322,7 +329,7 @@ export const logSecurityEventForCurrentUser = mutation({
       v.literal("ai_response_validation_failed"),
       v.literal("csrf_validation_failed")
     ),
-    severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical")),
+    severity: v.union(v.literal("low"), v.literal("medium")),
     metadata: v.object({
       origin: v.optional(v.string()),
       ipAddress: v.optional(v.string()),
