@@ -88,6 +88,10 @@ interface SecurityMetadata {
 
 ### Pattern 1: Logging from Authenticated API Routes
 
+An API route runs on the server, which holds `SECURITY_LOG_KEY`, so it logs through
+`logSecurityViolation` and may use any severity. Setting the user's token is optional;
+when present, the event is attributed to that user.
+
 ```typescript
 // app/api/protected/route.ts
 import { auth } from '@clerk/nextjs/server';
@@ -108,15 +112,27 @@ export async function POST(request: NextRequest) {
 
   // Detect violation
   if (detectXSS(body.input)) {
-    await convex.mutation(api.security.logSecurityEventForCurrentUser, {
-      eventType: 'xss_attempt',
-      severity: 'critical',
-      metadata: {
-        endpoint: '/api/protected',
-        errorMessage: 'XSS pattern detected',
-        requestPayload: body.input.substring(0, 200),
-      },
-    });
+    // Same handling as the runtime wrappers: a missing key or a failed log
+    // write costs the dashboard entry, never the response.
+    const key = process.env.SECURITY_LOG_KEY;
+    if (!key) {
+      console.error('SECURITY_LOG_KEY is not set; security event not logged to Convex');
+    } else {
+      try {
+        await convex.mutation(api.security.logSecurityViolation, {
+          key,
+          eventType: 'xss_attempt',
+          severity: 'critical',
+          metadata: {
+            endpoint: '/api/protected',
+            errorMessage: 'XSS pattern detected',
+            requestPayload: body.input.substring(0, 200),
+          },
+        });
+      } catch (logErr) {
+        console.error('Failed to log security event:', logErr);
+      }
+    }
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
   }
 }
@@ -171,14 +187,17 @@ export const createPost = mutation({
 
 ### Pattern 3: Logging Security Events Mutation
 
-A dedicated mutation for logging security events from authenticated users:
+A dedicated mutation for logging security events from authenticated users. Any signed-in
+user can call it from the browser with any arguments, so it accepts only `low` and
+`medium`; otherwise a regular user could fill the admin dashboard with fake critical
+alarms. Log `high` and `critical` from the server instead (Pattern 1 or Pattern 2).
 
 ```typescript
 // convex/security.ts
 export const logSecurityEventForCurrentUser = mutation({
   args: {
     eventType: eventTypeValidator,
-    severity: severityValidator,
+    severity: v.union(v.literal("low"), v.literal("medium")),
     metadata: metadataValidator,
   },
   returns: v.id("securityEvents"),
