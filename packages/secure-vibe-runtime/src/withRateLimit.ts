@@ -18,6 +18,12 @@ const logSecurityViolation = makeFunctionReference<
   }
 >('security:logSecurityViolation');
 
+const DEFAULT_POINTS = 5;    // 5 requests
+const DEFAULT_DURATION = 60; // per 60 seconds (1 minute)
+// rate-limiter-flexible expires a window with setTimeout, which Node clamps to
+// 1 ms above 2^31-1 ms. A longer window would silently disable the limit.
+const MAX_DURATION = Math.floor((2 ** 31 - 1) / 1000); // seconds, ~24.8 days
+
 /**
  * Rate limiter instance - 5 requests per minute per IP address
  *
@@ -26,7 +32,7 @@ const logSecurityViolation = makeFunctionReference<
  * RateLimiterMemory keeps its counters in the memory of ONE process. Vercel runs
  * this app across many function instances and recycles them freely, so:
  *
- *   - a caller spread across N warm instances gets up to N x 5 requests/minute
+ *   - a caller spread across N warm instances gets up to N x the limit
  *   - counters reset whenever an instance is recycled
  *
  * That makes this a speed bump against naive scripted abuse, NOT a guarantee.
@@ -41,9 +47,56 @@ const logSecurityViolation = makeFunctionReference<
  * those inside the mutation.
  */
 const rateLimiter = new RateLimiterMemory({
-  points: 5,        // 5 requests
-  duration: 60,     // per 60 seconds (1 minute)
+  points: DEFAULT_POINTS,
+  duration: DEFAULT_DURATION,
 });
+
+/**
+ * Optional per-route limit. Omit it (or pass the default values) and the route
+ * shares the default 5-per-minute bucket above, exactly as before.
+ *
+ * Pass it for a route whose legitimate traffic is higher than 5/min, such as
+ * an endpoint the client calls on every token refresh or reconnect. Routes that
+ * pass the same `{ points, duration }` share one bucket per IP, the same way
+ * every default route shares the default bucket. The scope limitation above
+ * applies unchanged: these are per-instance counters, not a quota.
+ */
+export interface RateLimitOptions {
+  /** Requests allowed per window. Positive integer; defaults to 5. */
+  points?: number;
+  /** Window length in seconds. Integer from 1 to MAX_DURATION (~24.8 days); defaults to 60. */
+  duration?: number;
+}
+
+const customLimiters = new Map<string, RateLimiterMemory>();
+
+function resolveLimiter(opts?: RateLimitOptions) {
+  const points = opts?.points ?? DEFAULT_POINTS;
+  const duration = opts?.duration ?? DEFAULT_DURATION;
+  // Fail at wrap time, when the route module loads, not on the first request:
+  // points: 0 would refuse every caller, a fractional or negative window is a
+  // typo, not a policy, and a window above MAX_DURATION disables the limit.
+  for (const [name, value, max] of [
+    ['points', points, Number.MAX_SAFE_INTEGER],
+    ['duration', duration, MAX_DURATION],
+  ] as const) {
+    if (!Number.isInteger(value) || value < 1 || value > max) {
+      throw new Error(`withRateLimit: ${name} must be an integer from 1 to ${max}, got ${String(value)} (${typeof value})`);
+    }
+  }
+  // Options equal to the default use the default bucket, so `{}` or
+  // `{ points: 5 }` behaves exactly like passing nothing.
+  if (points === DEFAULT_POINTS && duration === DEFAULT_DURATION) {
+    return { limiter: rateLimiter, points, duration };
+  }
+  const key = `${points}:${duration}`;
+  let limiter = customLimiters.get(key);
+  if (!limiter) {
+    limiter = new RateLimiterMemory({ points, duration });
+    customLimiters.set(key, limiter);
+  }
+  return { limiter, points, duration };
+}
 
 /**
  * Resolves the caller's IP from platform-trusted headers.
@@ -64,8 +117,12 @@ const rateLimiter = new RateLimiterMemory({
  * If none are present we return null and the caller fails CLOSED (see below),
  * because a single shared "unknown" bucket would let one abuser exhaust the
  * limit for every anonymous visitor at once.
+ *
+ * Exported so app code that records a caller's IP (audit logs, for example)
+ * uses this same resolution instead of reading a header directly. The trust
+ * assumptions above (Vercel, or a proxy that appends XFF) apply to callers too.
  */
-function clientIp(request: NextRequest): string | null {
+export function clientIp(request: NextRequest): string | null {
   const vercel = request.headers.get('x-vercel-forwarded-for')?.trim();
   if (vercel) return vercel;
 
@@ -99,6 +156,7 @@ function getConvexClient(): ConvexHttpClient | null {
  * Tracks requests by IP address and returns 429 when limit is exceeded
  *
  * @param handler - The API route handler to wrap
+ * @param opts - Optional per-route limit (see RateLimitOptions); omit for the default 5/min
  * @returns A wrapped handler with rate limiting protection
  *
  * @example
@@ -113,11 +171,17 @@ function getConvexClient(): ConvexHttpClient | null {
  *
  * // Apply both rate limiting and CSRF protection
  * export const POST = withRateLimit(withCsrf(sensitiveHandler));
+ *
+ * // A route with more legitimate traffic gets its own, higher limit
+ * export const GET = withRateLimit(tokenHandler, { points: 60, duration: 60 });
  * ```
  */
 export function withRateLimit(
-  handler: (request: NextRequest) => Promise<NextResponse>
+  handler: (request: NextRequest) => Promise<NextResponse>,
+  opts?: RateLimitOptions
 ) {
+  const { limiter, points, duration } = resolveLimiter(opts);
+  const perWindow = duration === 60 ? 'minute' : `${duration} seconds`;
   return async (request: NextRequest) => {
     // Resolve once, outside the try, so the catch block reports the same key
     // that was actually consumed rather than recomputing it.
@@ -137,7 +201,7 @@ export function withRateLimit(
 
     try {
       // Consume a point for this IP address
-      await rateLimiter.consume(ip);
+      await limiter.consume(ip);
 
       // Rate limit not exceeded, proceed with the original handler
       return await handler(request);
@@ -172,7 +236,7 @@ export function withRateLimit(
               metadata: {
                 endpoint,
                 ipAddress: ip,
-                errorMessage: 'Rate limit exceeded: 5 requests per minute',
+                errorMessage: `Rate limit exceeded: ${points} requests per ${perWindow}`,
               },
             });
           } catch (logErr) {

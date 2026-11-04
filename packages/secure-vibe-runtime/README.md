@@ -7,7 +7,7 @@ The runtime security pieces of [Secure Vibe Coding OS](https://github.com/harper
 | `secure-vibe-runtime/secrets` | `ensureSecretsLoaded()`, `revalidateSecrets()`: Doppler runtime fetch with retry and a per-instance cache |
 | `secure-vibe-runtime/csrf` | `generateCsrfToken()`, `validateCsrfToken()`, `generateUUID()`: HMAC tokens bound to a session; refuses to run without `CSRF_SECRET` |
 | `secure-vibe-runtime/withCsrf` | `withCsrf(handler)`: route wrapper that validates the token and logs failures |
-| `secure-vibe-runtime/withRateLimit` | `withRateLimit(handler)`: per-instance IP rate limit that fails closed on an unresolvable IP and logs refusals |
+| `secure-vibe-runtime/withRateLimit` | `withRateLimit(handler, opts?)`: per-instance IP rate limit (default 5/min, optional per-route `{ points, duration }`) that fails closed on an unresolvable IP and logs refusals |
 | `secure-vibe-runtime/convex` | `securityTables` (schema fragment), the validators, `logSecurity()` and the exact-counter helpers, `redactIdentifiers()` |
 
 ## Install
