@@ -744,6 +744,13 @@ async function sensitiveHandler(request: NextRequest) {
 export const POST = withRateLimit(sensitiveHandler);
 ```
 
+A route with more legitimate traffic than 5 requests per minute (for example one the client calls on every token refresh) can pass its own limit. Routes without options keep sharing the default bucket:
+
+```typescript
+// 60 requests per 60 seconds per IP, in a bucket separate from the default
+export const GET = withRateLimit(tokenHandler, { points: 60, duration: 60 });
+```
+
 #### Combining Rate Limiting with CSRF Protection
 
 For maximum security, you can combine both protections:
