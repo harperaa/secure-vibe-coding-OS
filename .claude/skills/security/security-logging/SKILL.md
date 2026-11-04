@@ -185,44 +185,22 @@ export const createPost = mutation({
 });
 ```
 
-### Pattern 3: Logging Security Events Mutation
+### No browser-callable logging mutation
 
-A dedicated mutation for logging security events from authenticated users. Any signed-in
-user can call it from the browser with any arguments, so it accepts only `low` and
-`medium`; otherwise a regular user could fill the admin dashboard with fake critical
-alarms. Log `high` and `critical` from the server instead (Pattern 1 or Pattern 2).
+There is deliberately no public mutation that lets a signed-in user write a security
+event with caller-supplied arguments. Any such mutation is callable straight from the
+browser, so a regular user could fill the admin dashboard with fake alarms, forge
+`endUserEmail` / `endUserId` attribution, and bury real events under noise. Capping the
+severity does not fix the volume or attribution problem, so the template removed the
+mutation (`logSecurityEventForCurrentUser`) in 7.4.0.
 
-```typescript
-// convex/security.ts
-export const logSecurityEventForCurrentUser = mutation({
-  args: {
-    eventType: eventTypeValidator,
-    severity: v.union(v.literal("low"), v.literal("medium")),
-    metadata: metadataValidator,
-  },
-  returns: v.id("securityEvents"),
-  handler: async (ctx, args) => {
-    const user = await getCurrentUserOrThrowForMutation(ctx);
+Every event is written from code that already runs on a trusted side:
+- a Next.js route calls `logSecurityViolation` with `SECURITY_LOG_KEY` (Pattern 1);
+- a Convex mutation calls `logSecurity()` directly (Pattern 2).
 
-    // Use security logger for PII sanitization
-    const eventId = await logSecurity(
-      ctx,
-      user._id,
-      args.eventType as SecurityEventType,
-      args.severity as SecuritySeverity,
-      {
-        endpoint: args.metadata.endpoint || "unknown",
-        origin: args.metadata.origin,
-        ipAddress: args.metadata.ipAddress,
-        errorMessage: args.metadata.errorMessage,
-        requestPayload: args.metadata.requestPayload,
-      }
-    );
-
-    return eventId;
-  },
-});
-```
+If you need a client to report something, add a purpose-specific mutation that derives
+the event type, severity and metadata on the server from what it can verify, rather than
+accepting them as arguments.
 
 ## Attack Detection Patterns
 
