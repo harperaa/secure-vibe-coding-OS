@@ -64,8 +64,12 @@ const rateLimiter = new RateLimiterMemory({
  * If none are present we return null and the caller fails CLOSED (see below),
  * because a single shared "unknown" bucket would let one abuser exhaust the
  * limit for every anonymous visitor at once.
+ *
+ * Exported so app code that records a caller's IP (audit logs, for example)
+ * uses this same resolution instead of reading a header directly. The trust
+ * assumptions above (Vercel, or a proxy that appends XFF) apply to callers too.
  */
-function clientIp(request: NextRequest): string | null {
+export function clientIp(request: NextRequest): string | null {
   const vercel = request.headers.get('x-vercel-forwarded-for')?.trim();
   if (vercel) return vercel;
 
