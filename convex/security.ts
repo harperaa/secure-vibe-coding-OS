@@ -7,7 +7,7 @@ import { v } from "convex/values";
 import { IndexRange, paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { internalMutation, mutation, query, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { getCurrentUser, getCurrentUserOrThrowForMutation, isCurrentUserAdmin, isCurrentUserAdminMutation } from "./users";
+import { getCurrentUser, isCurrentUserAdmin, isCurrentUserAdminMutation } from "./users";
 import { Id } from "./_generated/dataModel";
 import {
   activeRebuild,
@@ -291,83 +291,6 @@ export const markEventAsUnread = mutation({
 
     await setSecurityEventRead(ctx, event, false);
     return null;
-  },
-});
-
-/**
- * Log a security event for the current authenticated user
- * Uses the security logger library for PII sanitization and consistent logging
- *
- * Severity is capped at "medium". Any signed-in user can call this mutation
- * straight from the browser with any arguments, so accepting "high" or
- * "critical" here would let a regular user fill the admin's security
- * dashboard with fake alarms. Code that detects a high or critical event
- * already runs on a trusted side and has its own write path:
- *   - a Next.js route calls logSecurityViolation with SECURITY_LOG_KEY;
- *   - a Convex mutation calls logSecurity() from convex/lib/securityLogger.
- */
-export const logSecurityEventForCurrentUser = mutation({
-  args: {
-    eventType: v.union(
-      v.literal("origin_mismatch"),
-      v.literal("rate_limit_exceeded"),
-      v.literal("invalid_api_key"),
-      v.literal("fingerprint_change"),
-      v.literal("suspicious_activity"),
-      v.literal("jwt_validation_failed"),
-      v.literal("unauthorized_access"),
-      v.literal("input_validation_failed"),
-      v.literal("replay_detected"),
-      v.literal("not_found_enumeration"),
-      v.literal("jwt_algorithm_attack"),
-      v.literal("tenant_isolation_attack"),
-      v.literal("jwt_replay_attack"),
-      v.literal("xss_attempt"),
-      v.literal("fingerprint_manipulation"),
-      v.literal("http_origin_blocked"),
-      v.literal("prompt_injection_attempt"),
-      v.literal("ai_response_validation_failed"),
-      v.literal("csrf_validation_failed")
-    ),
-    severity: v.union(v.literal("low"), v.literal("medium")),
-    metadata: v.object({
-      origin: v.optional(v.string()),
-      ipAddress: v.optional(v.string()),
-      fingerprint: v.optional(v.string()),
-      endpoint: v.optional(v.string()),
-      errorMessage: v.optional(v.string()),
-      endUserEmail: v.optional(v.string()),
-      endUserName: v.optional(v.string()),
-      endUserId: v.optional(v.string()),
-      actionType: v.optional(v.string()),
-      requestPayload: v.optional(v.string()),
-    }),
-  },
-  returns: v.id("securityEvents"),
-  handler: async (ctx, args) => {
-    const user = await getCurrentUserOrThrowForMutation(ctx);
-
-    // Use the security logger library for PII sanitization and consistent logging
-    const eventId = await logSecurity(
-      ctx,
-      user._id,
-      args.eventType as SecurityEventType,
-      args.severity as SecuritySeverity,
-      {
-        endpoint: args.metadata.endpoint || "unknown",
-        origin: args.metadata.origin,
-        ipAddress: args.metadata.ipAddress,
-        fingerprint: args.metadata.fingerprint,
-        errorMessage: args.metadata.errorMessage,
-        endUserEmail: args.metadata.endUserEmail,
-        endUserName: args.metadata.endUserName,
-        endUserId: args.metadata.endUserId,
-        actionType: args.metadata.actionType,
-        requestPayload: args.metadata.requestPayload,
-      }
-    );
-
-    return eventId;
   },
 });
 
