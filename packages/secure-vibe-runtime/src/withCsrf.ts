@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { csrfCookieName, validateCsrfToken } from "./csrf";
+import { clientIp } from "./withRateLimit";
 import { ConvexHttpClient } from 'convex/browser';
 import { makeFunctionReference } from 'convex/server';
 
@@ -35,9 +36,10 @@ function getConvexClient(): ConvexHttpClient | null {
  * Log a CSRF violation to the security dashboard (non-blocking)
  */
 function logCsrfViolation(request: NextRequest, reason: string): void {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-             request.headers.get('x-real-ip') ||
-             'unknown';
+  // Same trusted-header resolution as the rate limiter. The leftmost
+  // X-Forwarded-For entry is whatever the client sent, so reading it here let a
+  // caller choose the IP recorded against a critical event.
+  const ip = clientIp(request) ?? 'unknown';
   const endpoint = request.nextUrl.pathname;
   const origin = request.headers.get('origin') || undefined;
 
