@@ -679,7 +679,7 @@ npx convex env set SECURITY_LOG_KEY your_generated_security_log_key_here
 
 ### How CSRF Protection Works
 
-- CSRF tokens are automatically generated and bound to user sessions using HMAC-SHA256
+- CSRF tokens are `<random>.<HMAC-SHA256>` values signed with `CSRF_SECRET`. `withCsrf` recomputes the HMAC from the request's session cookie (`temp-session`), so a token only validates for the session it was issued to and cannot be minted without the secret (needs a `secure-vibe-runtime` release newer than 7.4.0; up to 7.4.0 the check is a plain header/cookie comparison)
 - Tokens are stored in HTTP-only, SameSite=Strict cookies (`XSRF-TOKEN`)
 - Frontend applications should fetch tokens from `/api/csrf` before making POST requests
 - Tokens are single-use and cleared after validation

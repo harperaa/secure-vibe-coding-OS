@@ -27,19 +27,44 @@ function csrfSecret(): string {
   return secret;
 }
 
+/** Cookie the token is stored in when the app does not use the `__Host-` prefix. */
+export const CSRF_COOKIE = 'XSRF-TOKEN';
+
+/**
+ * Prefixed cookie name. A browser only accepts a `__Host-` cookie from the exact
+ * host over HTTPS (Secure, Path=/, no Domain), so a sibling subdomain or a
+ * network attacker cannot plant one. Use it in production.
+ */
+export const CSRF_HOST_COOKIE = '__Host-XSRF-TOKEN';
+
+const RANDOM_PART = /^[0-9a-f]{64}$/;
+
+// cookieName and random contain no dots, so the fields cannot run into each other.
+function sign(random: string, sessionId: string, cookieName: string, secret: string): string {
+  return CryptoJS.HmacSHA256(`${cookieName}.${random}.${sessionId}`, secret).toString(CryptoJS.enc.Hex);
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 /**
  * Generates a CSRF token bound to a session ID using HMAC-SHA256
  * @param sessionId - The session ID to bind the token to
- * @returns The generated CSRF token (HMAC digest)
+ * @param cookieName - The cookie the token will be stored in (CSRF_COOKIE or
+ *   CSRF_HOST_COOKIE). The token only validates when it comes back in that cookie.
+ * @returns The token, `<random>.<HMAC(cookieName, random, sessionId)>`
  */
-export async function generateCsrfToken(sessionId: string): Promise<string> {
+export async function generateCsrfToken(sessionId: string, cookieName: string = CSRF_COOKIE): Promise<string> {
   // Read the secret OUTSIDE the try. A missing secret is a configuration fault
   // that must propagate, not get swallowed and rethrown as a generic failure.
   const secret = csrfSecret();
   try {
-    const token = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
-    const hmac = CryptoJS.HmacSHA256(token + sessionId, secret).toString(CryptoJS.enc.Hex);
-    return hmac;
+    const random = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
+    return `${random}.${sign(random, sessionId, cookieName, secret)}`;
   } catch (err: any) {
     console.error('CSRF token generation error:', err.message);
     throw new Error('Failed to generate CSRF token');
@@ -47,7 +72,25 @@ export async function generateCsrfToken(sessionId: string): Promise<string> {
 }
 
 /**
- * Validates a CSRF token against the stored token
+ * Checks that a token was issued by this server for this session and cookie.
+ * Recomputes the HMAC from the token's random part, so a value minted without
+ * CSRF_SECRET, issued for another session, or moved to another cookie fails.
+ * @param token - The token as received
+ * @param sessionId - The session ID of the request
+ * @param cookieName - The cookie the token arrived in
+ * @returns True if the token is valid for this session and cookie
+ */
+export function verifyCsrfToken(token: string, sessionId: string, cookieName: string = CSRF_COOKIE): boolean {
+  const secret = csrfSecret();
+  const [random, hmac, ...rest] = token.split('.');
+  if (!hmac || rest.length > 0 || !RANDOM_PART.test(random)) return false;
+  return constantTimeEqual(hmac, sign(random, sessionId, cookieName, secret));
+}
+
+/**
+ * Compares the token sent in the header with the token stored in the cookie.
+ * This is only the double-submit half of the check: it does not prove the token
+ * belongs to the session. Use verifyCsrfToken for that (withCsrf does both).
  * @param sentToken - Token received from the client
  * @param storedToken - Token stored in the cookie
  * @returns True if tokens match, false otherwise

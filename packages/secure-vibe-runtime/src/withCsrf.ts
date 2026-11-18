@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateCsrfToken } from "./csrf";
+import { CSRF_COOKIE, CSRF_HOST_COOKIE, validateCsrfToken, verifyCsrfToken } from "./csrf";
 import { ConvexHttpClient } from 'convex/browser';
 import { makeFunctionReference } from 'convex/server';
 
@@ -67,8 +67,10 @@ function logCsrfViolation(request: NextRequest, reason: string): void {
 
 /**
  * Higher-order function that wraps API route handlers with CSRF protection
- * Validates the CSRF token from the request header against the stored cookie
- * Tokens are single-use and cleared after validation
+ * Validates the CSRF token from the request header against the stored cookie,
+ * and checks the token's HMAC against the request's session cookie
+ * (`temp-session`, else `session`), so a token only works for the session it
+ * was issued to. Tokens are single-use and cleared after validation
  *
  * @param handler - The API route handler to wrap
  * @returns A wrapped handler with CSRF protection
@@ -91,7 +93,10 @@ export function withCsrf(
   return async (request: NextRequest) => {
     try {
       const csrfToken = request.headers.get("x-csrf-token");
-      const storedToken = request.cookies.get("XSRF-TOKEN")?.value;
+      // A token is bound to the cookie it was issued in, so one issued for the
+      // __Host- cookie is rejected if it turns up in the plantable plain cookie.
+      const cookieName = request.cookies.get(CSRF_HOST_COOKIE)?.value ? CSRF_HOST_COOKIE : CSRF_COOKIE;
+      const storedToken = request.cookies.get(cookieName)?.value;
 
       if (!csrfToken || !storedToken) {
         const reason = !csrfToken ? "Missing CSRF token in header" : "Missing CSRF cookie";
@@ -115,11 +120,28 @@ export function withCsrf(
         );
       }
 
+      // Same lookup as the /api/csrf route that issued the token.
+      const sessionId =
+        request.cookies.get("temp-session")?.value || request.cookies.get("session")?.value;
+      if (!sessionId || !verifyCsrfToken(storedToken, sessionId, cookieName)) {
+        console.error("CSRF check failed: Token not valid for this session");
+        logCsrfViolation(request, "CSRF token not valid for this session");
+        return NextResponse.json(
+          { error: "Invalid CSRF token" },
+          { status: 403 }
+        );
+      }
+
       // Call the original handler
       const response = await handler(request);
 
       // Clear the CSRF token after use (single-use tokens)
-      response.cookies.set("XSRF-TOKEN", "", { maxAge: 0, path: "/" });
+      // A browser ignores a __Host- cookie that is not Secure, also when clearing it.
+      response.cookies.set(cookieName, "", {
+        maxAge: 0,
+        path: "/",
+        secure: cookieName === CSRF_HOST_COOKIE,
+      });
 
       return response;
     } catch (err: any) {
