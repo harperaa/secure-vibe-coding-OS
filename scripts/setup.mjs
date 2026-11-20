@@ -29,7 +29,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSync, spawnSync } from 'node:child_process';
+import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import {
   ensureCliInstalled as dopplerEnsureCli,
   ensureLoggedIn as dopplerEnsureLoggedIn,
@@ -730,7 +730,7 @@ async function runConfigure(args) {
   } else {
     for (const [key, value] of Object.entries(convexVarsToSet)) {
       try {
-        execSync(`npx convex env set ${key} "${value}"`, {
+        execFileSync('npx', ['convex', 'env', 'set', key, value], {
           cwd: ROOT_DIR,
           stdio: 'pipe',
           timeout: 30000,
@@ -966,7 +966,7 @@ async function runConvexSetup(args) {
         if (issuer && !issuer.includes('your-clerk')) {
           for (const key of ['CLERK_JWT_ISSUER_DOMAIN', 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL']) {
             try {
-              execSync(`npx convex env set ${key} "${issuer}"`, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
+              execFileSync('npx', ['convex', 'env', 'set', key, issuer], { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
               result.steps.push(`Set Convex env var ${key} so auth.config.ts can be pushed`);
             } catch (envErr) {
               result.steps.push(`Could not set ${key} before retry: ${envErr.message}`);
