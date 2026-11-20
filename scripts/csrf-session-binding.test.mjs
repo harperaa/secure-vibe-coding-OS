@@ -4,10 +4,13 @@ import { registerHooks } from "node:module";
 
 // `next` has no package exports map, so plain Node cannot resolve the bare
 // `next/server`; and withCsrf.ts imports its sibling without an extension.
+const csrfSource = new URL("../packages/secure-vibe-runtime/src/csrf.ts", import.meta.url).href;
 registerHooks({
   resolve: (specifier, context, nextResolve) => {
     if (specifier === "next/server") return nextResolve("next/server.js", context);
     if (specifier === "./csrf") return nextResolve("./csrf.ts", context);
+    // The app's shim re-exports the published package; test the source instead.
+    if (specifier === "@/lib/csrf") return nextResolve(csrfSource, context);
     return nextResolve(specifier, context);
   },
 });
@@ -18,6 +21,7 @@ delete process.env.NEXT_PUBLIC_CONVEX_URL; // no security-log network calls
 const { NextRequest, NextResponse } = await import("next/server");
 const { generateCsrfToken } = await import("../packages/secure-vibe-runtime/src/csrf.ts");
 const { withCsrf } = await import("../packages/secure-vibe-runtime/src/withCsrf.ts");
+const { GET: issueToken } = await import("../app/api/csrf/route.ts");
 
 const handler = withCsrf(async () => NextResponse.json({ ok: true }));
 
@@ -48,4 +52,61 @@ test("a token issued to one session is rejected for another session", async () =
 test("an equal header/cookie pair minted without CSRF_SECRET is rejected", async () => {
   const forged = "a".repeat(64); // same shape as an issued token, no secret involved
   assert.equal((await post("session-a", forged, forged)).status, 403);
+});
+
+test("a token with a tampered random part is rejected", async () => {
+  const token = await generateCsrfToken("session-a");
+  const tampered = (token[0] === "0" ? "1" : "0") + token.slice(1);
+  assert.equal((await post("session-a", tampered, tampered)).status, 403);
+});
+
+test("a request without a session cookie is rejected", async () => {
+  const token = await generateCsrfToken("session-a");
+  const response = await handler(
+    new NextRequest("http://localhost/api/test", {
+      method: "POST",
+      headers: { "x-csrf-token": token, cookie: `XSRF-TOKEN=${token}` },
+    })
+  );
+  assert.equal(response.status, 403);
+});
+
+test("in production the token lives in a __Host- cookie and a planted XSRF-TOKEN is ignored", async (t) => {
+  const before = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  t.after(() => {
+    if (before === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = before;
+  });
+
+  // The victim gets a token from the real route.
+  const issued = await issueToken(new NextRequest("https://app.example/api/csrf"));
+  const { csrfToken } = await issued.json();
+  const cookie = issued.cookies.get("__Host-XSRF-TOKEN");
+  assert.equal(cookie?.value, csrfToken);
+  assert.equal(cookie.secure, true);
+  assert.equal(cookie.path, "/");
+  assert.equal(cookie.domain, undefined);
+  const session = issued.cookies.get("temp-session").value;
+
+  const send = (header, cookies) =>
+    handler(
+      new NextRequest("https://app.example/api/test", {
+        method: "POST",
+        headers: { "x-csrf-token": header, cookie: cookies },
+      })
+    );
+
+  const accepted = await send(csrfToken, `temp-session=${session}; __Host-XSRF-TOKEN=${csrfToken}`);
+  assert.equal(accepted.status, 200);
+  // Single use: the cookie is cleared, with Secure so the browser honours it.
+  const cleared = accepted.cookies.get("__Host-XSRF-TOKEN");
+  assert.equal(cleared.value, "");
+  assert.equal(cleared.secure, true);
+
+  // A sibling subdomain can only plant the unprefixed cookie. Even with a
+  // genuine token of the attacker's own session, the request is refused.
+  const attackerToken = await generateCsrfToken("attacker-session");
+  const planted = await send(attackerToken, `temp-session=attacker-session; XSRF-TOKEN=${attackerToken}`);
+  assert.equal(planted.status, 403);
 });

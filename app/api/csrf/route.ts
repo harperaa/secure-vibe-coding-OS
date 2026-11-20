@@ -27,14 +27,23 @@ export async function GET(request: NextRequest) {
     const token = await generateCsrfToken(sessionId);
     const response = NextResponse.json({ csrfToken: token });
 
-    // Set the CSRF token cookie
-    response.cookies.set('XSRF-TOKEN', token, {
+    // Set the CSRF token cookie. In production it carries the `__Host-` prefix
+    // so a sibling subdomain cannot overwrite it; withCsrf from
+    // secure-vibe-runtime > 7.4.0 reads only that name there.
+    const cookieOptions = {
       httpOnly: true,
       sameSite: 'strict',
       secure: process.env.NODE_ENV === 'production',
       maxAge: 3600, // 1 hour
       path: '/',
-    });
+    } as const;
+    if (process.env.NODE_ENV === 'production') {
+      response.cookies.set('__Host-XSRF-TOKEN', token, cookieOptions);
+    }
+    // Still needed in development, and in production by secure-vibe-runtime
+    // 7.4.0, whose withCsrf only knows this name. Once the dependency is past
+    // 7.4.0, set this one in development only (csrfCookieName() gives the name).
+    response.cookies.set('XSRF-TOKEN', token, cookieOptions);
 
     // Set temporary session cookie if no permanent session exists
     if (!request.cookies.get('session')?.value) {

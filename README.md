@@ -679,8 +679,8 @@ npx convex env set SECURITY_LOG_KEY your_generated_security_log_key_here
 
 ### How CSRF Protection Works
 
-- CSRF tokens are automatically generated and bound to user sessions using HMAC-SHA256
-- Tokens are stored in HTTP-only, SameSite=Strict cookies (`XSRF-TOKEN`)
+- CSRF tokens are automatically generated and bound to the session using HMAC-SHA256: a token is `<random>.<HMAC(random + sessionId, CSRF_SECRET)>`, and `withCsrf` recomputes the HMAC for the request's session cookie (`temp-session`, or `session`), so a token issued to another session or minted without `CSRF_SECRET` is rejected
+- Tokens are stored in HTTP-only, SameSite=Strict cookies (`__Host-XSRF-TOKEN` in production, so a sibling subdomain cannot overwrite it; `XSRF-TOKEN` in development)
 - Frontend applications should fetch tokens from `/api/csrf` before making POST requests
 - Tokens are single-use and cleared after validation
 
