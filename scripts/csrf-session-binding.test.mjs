@@ -2,15 +2,21 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 
-// `next` has no package exports map, so plain Node cannot resolve the bare
-// `next/server`; and withCsrf.ts imports its sibling without an extension.
-const csrfSource = new URL("../packages/secure-vibe-runtime/src/csrf.ts", import.meta.url).href;
+// Everything is loaded the way the app loads it: through the lib/ shims, which
+// resolve the `secure-vibe-runtime` dependency in node_modules. A dependency
+// that still has the equality-only check therefore fails these tests.
+//
+// Plain Node needs three things the Next bundler does on its own: `next` has no
+// exports map, the `@/` alias is a tsconfig path, and the package's compiled
+// files import each other without an extension.
+const shim = new URL("../lib/csrf.ts", import.meta.url).href;
 registerHooks({
   resolve: (specifier, context, nextResolve) => {
     if (specifier === "next/server") return nextResolve("next/server.js", context);
-    if (specifier === "./csrf") return nextResolve("./csrf.ts", context);
-    // The app's shim re-exports the published package; test the source instead.
-    if (specifier === "@/lib/csrf") return nextResolve(csrfSource, context);
+    if (specifier === "@/lib/csrf") return nextResolve(shim, context);
+    if (specifier === "./csrf" && context.parentURL?.endsWith("/dist/withCsrf.js")) {
+      return nextResolve("./csrf.js", context);
+    }
     return nextResolve(specifier, context);
   },
 });
@@ -19,8 +25,8 @@ process.env.CSRF_SECRET = "test-only-csrf-secret-0123456789abcdef";
 delete process.env.NEXT_PUBLIC_CONVEX_URL; // no security-log network calls
 
 const { NextRequest, NextResponse } = await import("next/server");
-const { generateCsrfToken } = await import("../packages/secure-vibe-runtime/src/csrf.ts");
-const { withCsrf } = await import("../packages/secure-vibe-runtime/src/withCsrf.ts");
+const { generateCsrfToken } = await import("../lib/csrf.ts");
+const { withCsrf } = await import("../lib/withCsrf.ts");
 const { GET: issueToken } = await import("../app/api/csrf/route.ts");
 
 const handler = withCsrf(async () => NextResponse.json({ ok: true }));
@@ -84,6 +90,7 @@ test("in production the token lives in a __Host- cookie and a planted XSRF-TOKEN
   const { csrfToken } = await issued.json();
   const cookie = issued.cookies.get("__Host-XSRF-TOKEN");
   assert.equal(cookie?.value, csrfToken);
+  assert.equal(issued.cookies.get("XSRF-TOKEN"), undefined);
   assert.equal(cookie.secure, true);
   assert.equal(cookie.path, "/");
   assert.equal(cookie.domain, undefined);
