@@ -77,3 +77,7 @@ threat_modeling_output/
 # built output of packages/*; published to npm, never committed
 packages/*/dist
 packages/*/node_modules
+
+# CodeDen workspace files (vision, session state). Local to the maintainer;
+# this repo is a template other people clone, so they are never committed.
+.codeden/
