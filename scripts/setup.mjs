@@ -1431,13 +1431,6 @@ const KEEP_IN_CONVEX = new Set([
   'SECURITY_LOG_KEY',                     // Convex-mirrored (gates logSecurityViolation)
 ]);
 
-function commandAvailable(name) {
-  if (os.platform() === 'win32') {
-    return spawnSync('where', [name], { stdio: 'ignore' }).status === 0;
-  }
-  return spawnSync('command', ['-v', name], { stdio: 'ignore', shell: true }).status === 0;
-}
-
 // Vercel is invoked via `npx vercel ...` everywhere in this repo (no global
 // install required). Probe with `npx vercel --version` — npx returns non-zero
 // if the package can't be resolved or the user has no internet to fetch it.

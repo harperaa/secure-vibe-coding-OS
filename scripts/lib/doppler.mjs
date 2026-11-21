@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { resolveGithubRepo } from './github-repo.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -324,14 +325,16 @@ export function revokeServiceToken(config, tokenName, name = getProjectName()) {
 // GitHub Actions secrets
 // ---------------------------------------------------------------------------
 
-export function pushTokenToGithub(token, secretName) {
+export function pushTokenToGithub(token, secretName, repo = resolveGithubRepo()) {
   if (!commandExists('gh')) {
     throw new Error(
       'GitHub CLI (`gh`) is required to push the CI service token to GitHub Actions secrets.\n' +
       'Install: https://cli.github.com/'
     );
   }
-  const result = spawnSync('gh', ['secret', 'set', secretName, '--body', token], {
+  // Name the repo: with origin + upstream remotes gh fails or picks the template.
+  const target = repo ? ['-R', repo] : [];
+  const result = spawnSync('gh', ['secret', 'set', secretName, ...target, '--body', token], {
     stdio: ['ignore', 'inherit', 'inherit'],
   });
   if (result.status !== 0) {

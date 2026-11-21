@@ -46,6 +46,7 @@ import {
   setSecret,
   downloadSecrets,
 } from './lib/doppler.mjs';
+import { parseGithubRepo } from './lib/github-repo.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -433,6 +434,20 @@ async function runGithubSetup(args) {
   }
 
   result.steps.push(`New origin: ${newOrigin}`);
+
+  // The template stays behind as `upstream`. Without a default, gh commands
+  // run later (gh pr create, gh secret set, ...) fail on "multiple remotes" or
+  // resolve the template, so point gh at the product now.
+  const productRepo = parseGithubRepo(newOrigin);
+  if (productRepo) {
+    if (tryExecResult(`gh repo set-default ${productRepo}`).success) {
+      result.steps.push(`Set gh default repo to ${productRepo}`);
+    } else {
+      // The repo exists and is pushed, so this is a warning, not a failure.
+      result.warning = `Could not set the gh default repo. Run: gh repo set-default ${productRepo}`;
+    }
+  }
+
   console.log(JSON.stringify(result, null, 2));
 }
 
