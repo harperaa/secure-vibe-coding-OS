@@ -2,7 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { WebhookEvent } from "@clerk/backend";
-import { Webhook } from "svix";
+import { verifyClerkWebhook } from "./lib/clerkWebhook";
 import { transformWebhookData } from "./paymentAttemptTypes";
 
 const http = httpRouter();
@@ -54,9 +54,9 @@ async function validateRequest(req: Request): Promise<WebhookEvent | null> {
     "svix-timestamp": req.headers.get("svix-timestamp")!,
     "svix-signature": req.headers.get("svix-signature")!,
   };
-  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!);
   try {
-    return wh.verify(payloadString, svixHeaders) as unknown as WebhookEvent;
+    // svix 2 returns nothing from verify(); the helper verifies, then parses.
+    return verifyClerkWebhook(payloadString, svixHeaders, process.env.CLERK_WEBHOOK_SECRET!) as WebhookEvent;
   } catch (error) {
     console.error("Error verifying webhook event", error);
     return null;

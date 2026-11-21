@@ -596,7 +596,8 @@ async function runConfigure(args) {
       const endpoint = await svix.endpoint.create(appId, {
         url: webhookEndpointUrl,
         description: 'Convex clerk-users-webhook',
-        filterTypes: [
+        // svix 2 renamed filterTypes to eventTypes and silently drops the old key.
+        eventTypes: [
           'user.created',
           'user.updated',
           'user.deleted',
