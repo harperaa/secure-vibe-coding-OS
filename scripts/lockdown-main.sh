@@ -38,7 +38,23 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)
+# Name the repo instead of letting gh choose. A product keeps the template as
+# `upstream` next to its own `origin`; with two remotes and no
+# `gh repo set-default`, `gh repo view` resolves the TEMPLATE, and the rules
+# below would be applied to (or removed from) the wrong repository.
+# Order: GH_REPO ([HOST/]OWNER/REPO, gh's own override), then the origin remote.
+REPO="${GH_REPO:-}"
+case "$REPO" in */*/*) REPO="${REPO#*/}" ;; esac
+if [ -z "$REPO" ]; then
+  ORIGIN_URL=$(git remote get-url origin 2>/dev/null || true)
+  REPO=$(printf '%s\n' "$ORIGIN_URL" \
+    | sed -nE 's#^(https://|ssh://git@|git@)github\.com[:/]([^/]+/[^/]+)$#\2#p' \
+    | sed -E 's#\.git$##')
+fi
+# Not a github.com origin (GitHub Enterprise, or no origin): ask gh, as before.
+if [ -z "$REPO" ]; then
+  REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)
+fi
 if [ -z "$REPO" ]; then
   echo "Error: could not determine repo. Run this from inside a git repo with a GitHub remote."
   exit 1

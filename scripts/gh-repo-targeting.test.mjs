@@ -1,0 +1,99 @@
+/**
+ * A product created by `deploy.mjs github-setup` has two remotes: `origin` (the
+ * product) and `upstream` (the template). Scripts that let gh choose the repo
+ * then act on the template, or fail with "multiple remotes detected". These
+ * tests run the real scripts in a throwaway two-remote repo against a stub `gh`
+ * that records its arguments, and check the product repo is named explicitly.
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseGithubRepo, resolveGithubRepo } from "./lib/github-repo.mjs";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+// A repo with the two remotes github-setup leaves behind.
+const repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "gh-repo-")));
+execFileSync("git", ["init", "-q"], { cwd: repo });
+execFileSync("git", ["remote", "add", "origin", "git@github.com:acme/product.git"], { cwd: repo });
+execFileSync("git", ["remote", "add", "upstream", "https://github.com/harperaa/secure-vibe-coding-OS.git"], { cwd: repo });
+
+// Stub gh: logs every call, and answers `repo view` the way real gh does with
+// these remotes and no default set, i.e. with the template.
+const bin = fs.mkdtempSync(path.join(os.tmpdir(), "gh-stub-"));
+const log = path.join(bin, "calls.log");
+fs.writeFileSync(
+  path.join(bin, "gh"),
+  `#!/bin/sh\necho "$*" >> "${log}"\nif [ "$1 $2" = "repo view" ]; then echo "harperaa/secure-vibe-coding-OS"; fi\nexit 0\n`,
+  { mode: 0o755 }
+);
+const stubEnv = (extra = {}) => {
+  const env = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, ...extra };
+  if (!("GH_REPO" in extra)) delete env.GH_REPO;
+  return env;
+};
+const calls = () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "");
+const reset = () => fs.rmSync(log, { force: true });
+
+test("parseGithubRepo reads owner/repo from github.com remotes only", () => {
+  for (const url of [
+    "git@github.com:acme/product.git",
+    "https://github.com/acme/product.git",
+    "https://github.com/acme/product",
+    "https://github.com/acme/product/",
+    "ssh://git@github.com/acme/product.git",
+    "git@github.com:acme/product.git\n",
+  ]) {
+    assert.equal(parseGithubRepo(url), "acme/product", url);
+  }
+  assert.equal(parseGithubRepo("https://github.com/acme/my.repo-1.git"), "acme/my.repo-1");
+  for (const url of ["", null, "https://gitlab.com/acme/product.git", "https://github.com/acme", "https://github.com/acme/product; rm -rf x"]) {
+    assert.equal(parseGithubRepo(url), null, String(url));
+  }
+});
+
+test("resolveGithubRepo prefers GH_REPO, then origin, never upstream", () => {
+  assert.equal(resolveGithubRepo({ cwd: repo, env: {} }), "acme/product");
+  assert.equal(resolveGithubRepo({ cwd: repo, env: { GH_REPO: "other/thing" } }), "other/thing");
+  assert.equal(resolveGithubRepo({ cwd: os.tmpdir(), env: {} }), null);
+});
+
+test("lockdown-main.sh applies protection to origin, not the template", () => {
+  reset();
+  const r = spawnSync("bash", [path.join(here, "lockdown-main.sh"), "--solo"], { cwd: repo, env: stubEnv(), encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(calls(), /api -X PUT repos\/acme\/product\/branches\/main\/protection/);
+  assert.doesNotMatch(calls(), /secure-vibe-coding-OS\/branches/);
+});
+
+test("lockdown-main.sh honours GH_REPO, with or without a host prefix", () => {
+  for (const GH_REPO of ["other/thing", "github.com/other/thing"]) {
+    reset();
+    const r = spawnSync("bash", [path.join(here, "lockdown-main.sh"), "--status"], { cwd: repo, env: stubEnv({ GH_REPO }), encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(calls(), /api repos\/other\/thing\/branches\/main\/protection/, GH_REPO);
+  }
+});
+
+test("pushTokenToGithub passes -R with the origin repo to gh secret set", () => {
+  reset();
+  // doppler.mjs resolves the repo from the working directory, so run it there.
+  const script = `import { pushTokenToGithub } from ${JSON.stringify(path.join(here, "lib", "doppler.mjs"))}; pushTokenToGithub("dp.st.synthetic", "DOPPLER_TOKEN");`;
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: repo, env: stubEnv(), encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(calls(), /^secret set DOPPLER_TOKEN -R acme\/product --body dp\.st\.synthetic$/m);
+});
+
+test("github-setup points gh at the product once the template is upstream", () => {
+  const src = fs.readFileSync(path.join(here, "deploy.mjs"), "utf8");
+  assert.match(src, /gh repo set-default \$\{productRepo\}/);
+});
+
+test("setup.mjs has no spawn with shell: true (Semgrep spawn-shell-true)", () => {
+  const src = fs.readFileSync(path.join(here, "setup.mjs"), "utf8");
+  assert.doesNotMatch(src, /shell:\s*true/);
+});

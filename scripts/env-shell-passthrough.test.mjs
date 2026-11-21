@@ -51,7 +51,7 @@ function makeSandbox(t, envLocal) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
   fs.mkdirSync(path.join(root, 'scripts', 'lib'), { recursive: true });
-  for (const file of ['deploy.mjs', 'setup.mjs', path.join('lib', 'doppler.mjs')]) {
+  for (const file of ['deploy.mjs', 'setup.mjs', path.join('lib', 'doppler.mjs'), path.join('lib', 'github-repo.mjs')]) {
     fs.copyFileSync(path.join(SCRIPTS_DIR, file), path.join(root, 'scripts', file));
   }
 
