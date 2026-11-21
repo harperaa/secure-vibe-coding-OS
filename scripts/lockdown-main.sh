@@ -47,7 +47,7 @@ REPO="${GH_REPO:-}"
 case "$REPO" in */*/*) REPO="${REPO#*/}" ;; esac
 if [ -z "$REPO" ]; then
   ORIGIN_URL=$(git remote get-url origin 2>/dev/null || true)
-  REPO=$(printf '%s\n' "$ORIGIN_URL" \
+  REPO=$(printf '%s\n' "${ORIGIN_URL%/}" \
     | sed -nE 's#^(https://|ssh://git@|git@)github\.com[:/]([^/]+/[^/]+)$#\2#p' \
     | sed -E 's#\.git$##')
 fi

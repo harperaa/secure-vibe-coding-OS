@@ -70,6 +70,30 @@ test("lockdown-main.sh applies protection to origin, not the template", () => {
   assert.doesNotMatch(calls(), /secure-vibe-coding-OS\/branches/);
 });
 
+test("lockdown-main.sh reads every origin URL form parseGithubRepo accepts", () => {
+  // If the shell pattern rejects a form, the script falls back to `gh repo view`,
+  // which answers with the template.
+  try {
+    for (const url of [
+      "https://github.com/acme/product/",
+      "https://github.com/acme/product.git",
+      "https://github.com/acme/product",
+      "ssh://git@github.com/acme/product.git",
+      "https://github.com/acme/my.repo-1.git",
+    ]) {
+      reset();
+      execFileSync("git", ["remote", "set-url", "origin", url], { cwd: repo });
+      const want = parseGithubRepo(url);
+      const r = spawnSync("bash", [path.join(here, "lockdown-main.sh"), "--status"], { cwd: repo, env: stubEnv(), encoding: "utf8" });
+      assert.equal(r.status, 0, r.stderr);
+      assert.ok(calls().includes(`api repos/${want}/branches/main/protection`), `${url} -> ${calls()}`);
+      assert.doesNotMatch(calls(), /repo view/, url);
+    }
+  } finally {
+    execFileSync("git", ["remote", "set-url", "origin", "git@github.com:acme/product.git"], { cwd: repo });
+  }
+});
+
 test("lockdown-main.sh honours GH_REPO, with or without a host prefix", () => {
   for (const GH_REPO of ["other/thing", "github.com/other/thing"]) {
     reset();
@@ -90,7 +114,9 @@ test("pushTokenToGithub passes -R with the origin repo to gh secret set", () => 
 
 test("github-setup points gh at the product once the template is upstream", () => {
   const src = fs.readFileSync(path.join(here, "deploy.mjs"), "utf8");
-  assert.match(src, /gh repo set-default \$\{productRepo\}/);
+  assert.match(src, /tryExecResult\(`gh repo set-default \$\{productRepo\}`\)/);
+  // A failed set-default is reported with the command to finish it by hand.
+  assert.match(src, /result\.warning = `[^`]*gh repo set-default \$\{productRepo\}`/);
 });
 
 test("setup.mjs has no spawn with shell: true (Semgrep spawn-shell-true)", () => {
