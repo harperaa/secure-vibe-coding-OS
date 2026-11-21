@@ -96,18 +96,22 @@ function makeSandbox(t, { envLocal, doppler, convexEnv }) {
   const dopplerLog = path.join(root, 'doppler-calls.jsonl');
   return {
     run() {
+      const env = {
+        ...process.env,
+        PATH: `${binDir}${path.delimiter}${process.env.PATH}`,
+        FAKE_DOPPLER_LOG: dopplerLog,
+        FAKE_DOPPLER_SECRETS: JSON.stringify(doppler || {}),
+      };
+      // The issuer must come from the sandbox, not from the developer's shell.
+      delete env.CLERK_JWT_ISSUER_DOMAIN;
+      delete env.NEXT_PUBLIC_CLERK_FRONTEND_API_URL;
       const r = spawnSync(
         process.execPath,
         [path.join(root, 'scripts', 'setup.mjs'), 'convex-setup', '--project-name=Test'],
         {
           cwd: root,
           encoding: 'utf-8',
-          env: {
-            ...process.env,
-            PATH: `${binDir}${path.delimiter}${process.env.PATH}`,
-            FAKE_DOPPLER_LOG: dopplerLog,
-            FAKE_DOPPLER_SECRETS: JSON.stringify(doppler || {}),
-          },
+          env,
           timeout: 60000,
         }
       );
@@ -124,8 +128,10 @@ function makeSandbox(t, { envLocal, doppler, convexEnv }) {
   };
 }
 
+const siteUrlSets = (calls) =>
+  calls.filter((argv) => argv[0] === 'secrets' && argv[1] === 'set' && argv[2].startsWith('NEXT_PUBLIC_SITE_URL='));
 const setsSiteUrl = (calls) =>
-  calls.some((argv) => argv[0] === 'secrets' && argv[1] === 'set' && argv[2] === 'NEXT_PUBLIC_SITE_URL=http://localhost:3000');
+  siteUrlSets(calls).some((argv) => argv[2] === 'NEXT_PUBLIC_SITE_URL=http://localhost:3000');
 
 test('legacy mode: convex-setup resolves the Clerk issuer from .env.local on a fresh project', (t) => {
   const box = makeSandbox(t, { envLocal: `CLERK_JWT_ISSUER_DOMAIN=${ISSUER}\n` });
@@ -156,4 +162,24 @@ test('Doppler mode: convex-setup pushes NEXT_PUBLIC_SITE_URL to Doppler dev when
   assert.equal(first.result.success, true, JSON.stringify(first.result));
   assert.equal(first.result.alreadyConfigured, true);
   assert.ok(setsSiteUrl(first.dopplerCalls), 'NEXT_PUBLIC_SITE_URL was not pushed to Doppler dev');
+});
+
+test('Doppler mode: convex-setup leaves an existing NEXT_PUBLIC_SITE_URL in Doppler dev alone', (t) => {
+  const box = makeSandbox(t, {
+    envLocal: 'CONVEX_DEPLOYMENT=dev:fake-123\nNEXT_PUBLIC_CONVEX_URL=https://fake-123.convex.cloud\n',
+    doppler: { CLERK_JWT_ISSUER_DOMAIN: ISSUER, NEXT_PUBLIC_SITE_URL: 'http://localhost:3005' },
+    convexEnv: { CLERK_JWT_ISSUER_DOMAIN: ISSUER },
+  });
+  const { result, dopplerCalls } = box.run();
+  assert.equal(result.success, true, JSON.stringify(result));
+  assert.deepEqual(siteUrlSets(dopplerCalls), []);
+});
+
+test('legacy mode: convex-setup on an already configured project does not touch Doppler or .env.local', (t) => {
+  const envLocal = 'CONVEX_DEPLOYMENT=dev:fake-123\nNEXT_PUBLIC_CONVEX_URL=https://fake-123.convex.cloud\n';
+  const box = makeSandbox(t, { envLocal, convexEnv: { CLERK_JWT_ISSUER_DOMAIN: ISSUER } });
+  const run = box.run();
+  assert.equal(run.result.alreadyConfigured, true, JSON.stringify(run.result));
+  assert.deepEqual(run.dopplerCalls, []);
+  assert.equal(run.envLocal, envLocal);
 });
