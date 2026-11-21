@@ -65,6 +65,12 @@ export function getPostSlugs(): string[] {
 export function getPostBySlug(slug: string): BlogPost | null {
   ensureBlogDir()
 
+  // The slug comes from the URL, and Next.js decodes %2F in route params, so
+  // `/blog/..%2F..%2FREADME` would otherwise read a file outside BLOG_DIR.
+  if (path.basename(slug) !== slug || slug.includes('\\')) {
+    return null
+  }
+
   const mdxPath = path.join(BLOG_DIR, `${slug}.mdx`)
   const mdPath = path.join(BLOG_DIR, `${slug}.md`)
 

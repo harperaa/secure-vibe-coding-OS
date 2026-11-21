@@ -38,7 +38,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSync, spawnSync } from 'node:child_process';
+import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import {
   isDopplerEnabled,
   createServiceToken,
@@ -997,7 +997,7 @@ async function runConvexProdEnv(args) {
 
   for (const [key, value] of Object.entries(envVars)) {
     try {
-      execSync(`npx convex env set ${key} "${value}"`, {
+      execFileSync('npx', ['convex', 'env', 'set', key, value], {
         cwd: ROOT_DIR,
         stdio: 'pipe',
         timeout: 30000,
@@ -1096,8 +1096,9 @@ async function runVercelEnvDev() {
 
   for (const [key, value] of Object.entries(envVars)) {
     try {
-      execSync(`printf '%s' "${value.replace(/"/g, '\\"')}" | npx vercel env add ${key} production --force`, {
+      execFileSync('npx', ['vercel', 'env', 'add', key, 'production', '--force'], {
         cwd: ROOT_DIR,
+        input: value,
         stdio: 'pipe',
         timeout: 30000,
       });
@@ -1190,9 +1191,10 @@ async function runVercelEnv(args) {
 
   for (const [key, value] of Object.entries(envVars)) {
     try {
-      // Use printf to avoid issues with special characters in values
-      execSync(`printf '%s' "${value.replace(/"/g, '\\"')}" | npx vercel env add ${key} production --force`, {
+      // Value goes on stdin with no shell involved, so it arrives verbatim
+      execFileSync('npx', ['vercel', 'env', 'add', key, 'production', '--force'], {
         cwd: ROOT_DIR,
+        input: value,
         stdio: 'pipe',
         timeout: 30000,
       });
@@ -1927,8 +1929,9 @@ async function runUpdateVercelClerkKeys(args) {
 
   for (const [key, value] of Object.entries(envVars)) {
     try {
-      execSync(`printf '%s' "${value.replace(/"/g, '\\"')}" | npx vercel env add ${key} production --force`, {
+      execFileSync('npx', ['vercel', 'env', 'add', key, 'production', '--force'], {
         cwd: ROOT_DIR,
+        input: value,
         stdio: 'pipe',
         timeout: 30000,
       });
