@@ -83,14 +83,15 @@
     "vaul": "^1.1.2",
     "zod": "^4.6.7"
   },
-  "//overrides": "Transitive pins for packages with known-vulnerable or incompatible versions deep in the tree. Each was added for a reason; do not remove during a dependency bump without checking why. minimatch is pinned to ^10 because minimatch@3 calls brace-expansion as a function while the patched brace-expansion (>=5.0.8, GHSA-mh99-v99m-4gvg) exports an object — leaving minimatch@3 in the tree breaks `npm run lint`.",
+  "//overrides": "Transitive pins for packages with known-vulnerable or incompatible versions deep in the tree. Each was added for a reason; do not remove during a dependency bump without checking why. minimatch is pinned to a modern major because minimatch@3 calls brace-expansion as a function while the patched brace-expansion (>=5.0.8, GHSA-mh99-v99m-4gvg) exports an object — leaving minimatch@3 in the tree breaks `npm run lint`. It is ^11.0.1 rather than ^10 because 10.x is affected by GHSA-g3hv-75wg-m249 (globparts DoS); minimatch 11 no longer exports makeRe, which only the ESLint rule import/no-internal-modules (with allow/forbid) uses, and that rule is not enabled here. postcss-selector-parser (via @tailwindcss/typography) is floored at 6.1.5 for GHSA-rj75-hqrm-r3gf.",
   "overrides": {
     "lodash": ">=4.17.22",
     "tar": ">=7.5.21",
     "postcss": ">=8.5.18",
     "sharp": ">=0.35.0",
     "brace-expansion": ">=5.0.8",
-    "minimatch": "^10.2.5",
+    "minimatch": "^11.0.1",
+    "postcss-selector-parser": ">=6.1.5 <7",
     "nanoid": ">=3.3.17 <4",
     "js-yaml": ">=4.3.1 <5",
     "gray-matter": {
