@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateCsrfToken, generateUUID } from '@/lib/csrf';
+import { csrfCookieName, generateCsrfToken, generateUUID } from '@/lib/csrf';
 
 /**
  * GET /api/csrf
@@ -27,8 +27,9 @@ export async function GET(request: NextRequest) {
     const token = await generateCsrfToken(sessionId);
     const response = NextResponse.json({ csrfToken: token });
 
-    // Set the CSRF token cookie
-    response.cookies.set('XSRF-TOKEN', token, {
+    // Set the CSRF token cookie. In production the name carries the `__Host-`
+    // prefix so a sibling subdomain cannot overwrite it.
+    response.cookies.set(csrfCookieName(), token, {
       httpOnly: true,
       sameSite: 'strict',
       secure: process.env.NODE_ENV === 'production',
