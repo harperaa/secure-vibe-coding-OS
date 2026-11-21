@@ -29,7 +29,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSync, spawnSync } from 'node:child_process';
+import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import {
   ensureCliInstalled as dopplerEnsureCli,
   ensureLoggedIn as dopplerEnsureLoggedIn,
@@ -730,7 +730,7 @@ async function runConfigure(args) {
   } else {
     for (const [key, value] of Object.entries(convexVarsToSet)) {
       try {
-        execSync(`npx convex env set ${key} "${value}"`, {
+        execFileSync('npx', ['convex', 'env', 'set', key, value], {
           cwd: ROOT_DIR,
           stdio: 'pipe',
           timeout: 30000,
@@ -792,6 +792,55 @@ async function runConfigure(args) {
 }
 
 // ---------------------------------------------------------------------------
+// convex-setup helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * The Clerk issuer `init` stored, wherever this install keeps its values.
+ * Same order `configure` uses for the Clerk secret key: env var (e.g.
+ * `doppler run --`), then Doppler dev, then .env.local. In Doppler mode
+ * .env.local holds no Clerk values, so reading only the file finds nothing.
+ */
+function resolveClerkIssuer(envContent, steps) {
+  const keys = ['CLERK_JWT_ISSUER_DOMAIN', 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL'];
+  const pick = (get) => keys.map(get).find((v) => v && !v.includes('your-clerk'));
+
+  let issuer = pick((key) => process.env[key]);
+  if (!issuer && dopplerIsEnabled()) {
+    try {
+      const secrets = dopplerDownloadSecrets('dev');
+      issuer = pick((key) => secrets?.[key]);
+    } catch (err) {
+      steps.push(`Warning: could not read the Clerk issuer from Doppler: ${err.message}`);
+    }
+  }
+  return issuer || pick((key) => getEnvValue(envContent, key));
+}
+
+/**
+ * Set the local site URL if nothing is there yet. In Doppler mode this goes
+ * straight to Doppler; in legacy mode it lands in .env.local like the other
+ * values.
+ */
+function ensureLocalSiteUrl(steps) {
+  const isSet = (value) => Boolean(value) && !value.includes('your_');
+  if (isSet(getEnvValue(readEnvFile(ENV_FILE), 'NEXT_PUBLIC_SITE_URL'))) return;
+
+  if (dopplerIsEnabled()) {
+    try {
+      if (isSet(dopplerDownloadSecrets('dev')?.NEXT_PUBLIC_SITE_URL)) return;
+      dopplerSetSecrets({ NEXT_PUBLIC_SITE_URL: 'http://localhost:3000' }, 'dev');
+      steps.push('Pushed NEXT_PUBLIC_SITE_URL=http://localhost:3000 to Doppler dev');
+    } catch (err) {
+      steps.push(`Warning: Doppler push for NEXT_PUBLIC_SITE_URL failed: ${err.message}`);
+    }
+  } else {
+    writeEnvVar(ENV_FILE, 'NEXT_PUBLIC_SITE_URL', 'http://localhost:3000');
+    steps.push('Set NEXT_PUBLIC_SITE_URL=http://localhost:3000');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // convex-setup Subcommand
 // ---------------------------------------------------------------------------
 
@@ -831,6 +880,8 @@ async function runConvexSetup(args) {
       result.steps.push('Convex already configured, synced successfully');
       result.deployment = deployment;
       result.url = convexUrl;
+      // Doppler dev still needs the site URL when a re-run lands here.
+      if (dopplerIsEnabled()) ensureLocalSiteUrl(result.steps);
       console.log(JSON.stringify(result, null, 2));
       return;
     } catch {
@@ -958,15 +1009,15 @@ async function runConvexSetup(args) {
       } else {
         // On a brand-new project the first push always fails: auth.config.ts
         // reads CLERK_JWT_ISSUER_DOMAIN from the deployment's env, which is
-        // empty until `configure` runs. init already wrote the issuer to
-        // .env.local, so mirror it now and the retry below succeeds instead
-        // of reporting an error that Phase 5 would have healed anyway.
-        const issuer = getEnvValue(fallbackEnv, 'CLERK_JWT_ISSUER_DOMAIN') ||
-          getEnvValue(fallbackEnv, 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL');
-        if (issuer && !issuer.includes('your-clerk')) {
+        // empty until `configure` runs. init already stored the issuer (in
+        // Doppler dev or .env.local), so mirror it now and the retry below
+        // succeeds instead of reporting an error that Phase 5 would have
+        // healed anyway.
+        const issuer = resolveClerkIssuer(fallbackEnv, result.steps);
+        if (issuer) {
           for (const key of ['CLERK_JWT_ISSUER_DOMAIN', 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL']) {
             try {
-              execSync(`npx convex env set ${key} "${issuer}"`, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
+              execFileSync('npx', ['convex', 'env', 'set', key, issuer], { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
               result.steps.push(`Set Convex env var ${key} so auth.config.ts can be pushed`);
             } catch (envErr) {
               result.steps.push(`Could not set ${key} before retry: ${envErr.message}`);
@@ -1021,22 +1072,7 @@ async function runConvexSetup(args) {
   result.steps.push(`Deployment: ${newDeployment}`);
   result.steps.push(`URL: ${newUrl}`);
 
-  // Also set the local site URL. In Doppler mode this goes straight to Doppler;
-  // in legacy mode it lands in .env.local like the other values.
-  const existingSiteUrl = getEnvValue(updatedEnv, 'NEXT_PUBLIC_SITE_URL');
-  if (!existingSiteUrl || existingSiteUrl.includes('your_')) {
-    if (dopplerIsEnabled()) {
-      try {
-        dopplerSetSecrets({ NEXT_PUBLIC_SITE_URL: 'http://localhost:3000' }, 'dev');
-        result.steps.push('Pushed NEXT_PUBLIC_SITE_URL=http://localhost:3000 to Doppler dev');
-      } catch (err) {
-        result.steps.push(`Warning: Doppler push for NEXT_PUBLIC_SITE_URL failed: ${err.message}`);
-      }
-    } else {
-      writeEnvVar(ENV_FILE, 'NEXT_PUBLIC_SITE_URL', 'http://localhost:3000');
-      result.steps.push('Set NEXT_PUBLIC_SITE_URL=http://localhost:3000');
-    }
-  }
+  ensureLocalSiteUrl(result.steps);
 
   console.log(JSON.stringify(result, null, 2));
 }

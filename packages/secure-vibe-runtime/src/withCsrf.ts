@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateCsrfToken } from "./csrf";
+import { csrfCookieName, validateCsrfToken } from "./csrf";
+import { clientIp } from "./withRateLimit";
 import { ConvexHttpClient } from 'convex/browser';
 import { makeFunctionReference } from 'convex/server';
 
@@ -35,9 +36,10 @@ function getConvexClient(): ConvexHttpClient | null {
  * Log a CSRF violation to the security dashboard (non-blocking)
  */
 function logCsrfViolation(request: NextRequest, reason: string): void {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-             request.headers.get('x-real-ip') ||
-             'unknown';
+  // Same trusted-header resolution as the rate limiter. The leftmost
+  // X-Forwarded-For entry is whatever the client sent, so reading it here let a
+  // caller choose the IP recorded against a critical event.
+  const ip = clientIp(request) ?? 'unknown';
   const endpoint = request.nextUrl.pathname;
   const origin = request.headers.get('origin') || undefined;
 
@@ -68,6 +70,8 @@ function logCsrfViolation(request: NextRequest, reason: string): void {
 /**
  * Higher-order function that wraps API route handlers with CSRF protection
  * Validates the CSRF token from the request header against the stored cookie
+ * and against the request's session (the `temp-session` or `session` cookie the
+ * token was issued for)
  * Tokens are single-use and cleared after validation
  *
  * @param handler - The API route handler to wrap
@@ -91,7 +95,10 @@ export function withCsrf(
   return async (request: NextRequest) => {
     try {
       const csrfToken = request.headers.get("x-csrf-token");
-      const storedToken = request.cookies.get("XSRF-TOKEN")?.value;
+      const cookieName = csrfCookieName();
+      const storedToken = request.cookies.get(cookieName)?.value;
+      // Same lookup as the route that issues the token (app/api/csrf/route.ts).
+      const sessionId = request.cookies.get("temp-session")?.value || request.cookies.get("session")?.value;
 
       if (!csrfToken || !storedToken) {
         const reason = !csrfToken ? "Missing CSRF token in header" : "Missing CSRF cookie";
@@ -106,9 +113,9 @@ export function withCsrf(
         );
       }
 
-      if (!validateCsrfToken(csrfToken, storedToken)) {
-        console.error("CSRF check failed: Token mismatch");
-        logCsrfViolation(request, "CSRF token mismatch");
+      if (!sessionId || !validateCsrfToken(csrfToken, storedToken, sessionId)) {
+        console.error("CSRF check failed: Token mismatch or not valid for this session");
+        logCsrfViolation(request, "CSRF token mismatch or not valid for this session");
         return NextResponse.json(
           { error: "Invalid CSRF token" },
           { status: 403 }
@@ -119,7 +126,12 @@ export function withCsrf(
       const response = await handler(request);
 
       // Clear the CSRF token after use (single-use tokens)
-      response.cookies.set("XSRF-TOKEN", "", { maxAge: 0, path: "/" });
+      // A `__Host-` cookie can only be changed by a Secure Set-Cookie.
+      response.cookies.set(cookieName, "", {
+        maxAge: 0,
+        path: "/",
+        secure: cookieName.startsWith("__Host-"),
+      });
 
       return response;
     } catch (err: any) {
