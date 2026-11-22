@@ -1,0 +1,137 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! The more detail you provide, the faster it can be fixed.
+
+        **Found a security problem?** Please don't file it here. Issues are public. Report it privately instead: <https://github.com/harperaa/secure-vibe-coding-OS/security/advisories/new>.
+
+        **Have a how-to question?** Ask in the [AI Cyber Value Creators Skool group](https://www.skool.com/ai-cyber-value-creators).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem clearly. What did you expect, and what happened instead?
+      placeholder: "After /install finished, signing in with Clerk sent me back to the homepage instead of /dashboard, and the terminal running `npx convex dev` showed..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact steps that trigger the problem, starting from a fresh copy of the template if you can.
+      placeholder: |
+        1. Downloaded the template and ran /install in Claude Code (Doppler mode)
+        2. Started `npm run dev:doppler` and `npm run convex:doppler`
+        3. Opened http://localhost:3000 and signed in with Clerk
+        4. Got redirected to the homepage instead of /dashboard
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of Secure Vibe Coding OS is involved? Pick the closest one.
+      options:
+        - Install / setup (/install, npm run setup)
+        - Deployment (/deploy-to-dev, /deploy-to-prod, Vercel)
+        - Secrets management (Doppler, .env.local, /rotate, /migrate-to-doppler)
+        - Authentication (Clerk)
+        - Backend / database (Convex)
+        - Payments / billing (Clerk Billing, Stripe)
+        - Security runtime (CSRF, rate limiting, security headers, security logging)
+        - Content modules (homepage-content, blog, dashboard-sample, pricing, background-job)
+        - Security skills / security assessment agents
+        - Claude Code commands and skills (git workflow, lessons, site building)
+        - CI/CD / GitHub workflows / branch protection
+        - Dependencies / supply chain
+        - Template updates (/pull-repo-safe, /pull-commands, /pull-agents, /pull-security-skills)
+        - UI / pages / components
+        - Documentation / course material
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: secrets-mode
+    attributes:
+      label: Secrets mode
+      description: Doppler mode is active when `.doppler.yaml` exists in the repo root.
+      options:
+        - Doppler
+        - Legacy .env.local
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it happen?
+      options:
+        - Local development
+        - Vercel preview
+        - Production
+        - During install or setup
+        - CI
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Windows (WSL)
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Please include:
+        - Template version: the `version` field in `package.json`
+        - Node version: the output of `node -v`
+        - Installed content modules: the output of `node scripts/modules.mjs status`
+      placeholder: |
+        Template version: 8.0.0
+        Node: v24.15.0
+        Installed: blog, pricing
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Paste the relevant lines. Where to look:
+        - Terminal output of the failing command or script, or of `npm run dev` / `npx convex dev`
+        - Convex function errors: the **Logs** page of your deployment in the Convex dashboard
+        - Deploy problems: the build and function logs of the deployment in Vercel
+        - UI problems: the browser's developer console
+
+        **Check for anything private first. Do NOT paste secrets: Clerk keys, Convex deploy keys, `DOPPLER_TOKEN`, Stripe keys, webhook secrets, or the contents of `.env.local`.**
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, a screen recording, the slash command you ran, or anything else that might help.
+    validations:
+      required: false

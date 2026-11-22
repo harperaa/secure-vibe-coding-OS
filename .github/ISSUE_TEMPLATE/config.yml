@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/harperaa/secure-vibe-coding-OS/security/advisories/new
+    about: Report security issues privately. Please do NOT open a public issue.
+  - name: Skool community
+    url: https://www.skool.com/ai-cyber-value-creators
+    about: Ask questions, get help and talk with other users in the AI Cyber Value Creators group.

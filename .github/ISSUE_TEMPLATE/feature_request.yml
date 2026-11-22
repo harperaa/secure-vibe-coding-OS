@@ -1,0 +1,60 @@
+name: Feature request
+description: Suggest a new feature or an improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea? Great. Describe the problem first; it makes the right solution much easier to find.
+
+        One constraint to keep in mind: the security backend (`convex/`, `lib/`, `proxy.ts`, `app/api/`) is always installed and is never made optional or gated behind a content module.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case or the pain point.
+      placeholder: "After /deploy-to-dev I have to copy the webhook URL into Clerk by hand. I'd like to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How do you think this should work? Include command, configuration or UI details if you have them.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you've tried, or other approaches you've thought about.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of Secure Vibe Coding OS would this change? Pick the closest one.
+      options:
+        - Install / setup (/install, npm run setup)
+        - Deployment (/deploy-to-dev, /deploy-to-prod, Vercel)
+        - Secrets management (Doppler, .env.local, /rotate, /migrate-to-doppler)
+        - Authentication (Clerk)
+        - Backend / database (Convex)
+        - Payments / billing (Clerk Billing, Stripe)
+        - Security runtime (CSRF, rate limiting, security headers, security logging)
+        - Content modules (homepage-content, blog, dashboard-sample, pricing, background-job)
+        - Security skills / security assessment agents
+        - Claude Code commands and skills (git workflow, lessons, site building)
+        - CI/CD / GitHub workflows / branch protection
+        - Dependencies / supply chain
+        - Template updates (/pull-repo-safe, /pull-commands, /pull-agents, /pull-security-skills)
+        - UI / pages / components
+        - Documentation / course material
+        - Other
+    validations:
+      required: true
