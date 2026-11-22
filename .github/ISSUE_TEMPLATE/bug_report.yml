@@ -7,7 +7,7 @@ body:
       value: |
         Thanks for reporting! The more detail you provide, the faster it can be fixed.
 
-        **Found a security problem?** Please don't file it here. Issues are public. Report it privately instead: <https://github.com/harperaa/secure-vibe-coding-OS/security/advisories/new>.
+        **Found a security problem?** Please don't file it here. Issues are public. Report it privately as [SECURITY.md](https://github.com/harperaa/secure-vibe-coding-OS/blob/main/SECURITY.md) describes: <https://github.com/harperaa/secure-vibe-coding-OS/security/advisories/new>.
 
         **Have a how-to question?** Ask in the [AI Cyber Value Creators Skool group](https://www.skool.com/ai-cyber-value-creators).
 
