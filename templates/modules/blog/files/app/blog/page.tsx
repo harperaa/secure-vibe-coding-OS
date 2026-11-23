@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { Metadata } from 'next'
-import { getAllPostsMeta, getAllCategories, getAllTags, generateBlogListJsonLd } from '../../lib/blog'
+import { getAllPostsMeta, getAllCategories, getAllTags, generateBlogListJsonLd, serializeJsonLd } from '../../lib/blog'
 import { BlogCard } from './components/blog-card'
 import { BlogSearch } from './components/blog-search'
 import { CategoryFilter } from './components/category-filter'
@@ -38,7 +38,7 @@ export default function BlogPage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       <div className="container mx-auto px-4 py-12 max-w-6xl">
