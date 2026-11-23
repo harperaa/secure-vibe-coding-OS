@@ -139,6 +139,24 @@ Conventions (do not break these):
 
 ---
 
+## Publishing secure-vibe-runtime
+
+A real `npm publish` needs the owner's explicit go-ahead for that version. Rules:
+
+1. No tokens: never use, look for, or ask for an npm token or OTP; no `--otp`, no `--provenance`, no CI publish, no `npm whoami`/`NPM_TOKEN` probing. If npm says the machine isn't signed in, stop. The owner runs `npm login`; an agent starts it only if the owner explicitly asks, and the owner approves it in their browser.
+2. Publish with `npm publish --access public` in a pseudo-terminal (e.g. `script`) so npm prints its browser approval URL. Give that URL only to the owner, in the session; the owner approves it.
+3. Publish only from a fresh scratch worktree of the release tag (`git worktree add ../<name>-publish secure-vibe-runtime@X.Y.Z`, `npm ci`, publish from `packages/secure-vibe-runtime`; `prepublishOnly` builds `dist`), then `git worktree remove` it. Never publish from the main clone or a working worktree.
+4. Guards: clean tree; HEAD exactly on the tag; tag equals the package version; the tag is new; npm doesn't already list the version; the owner has confirmed `from -> to` and its contents.
+5. Dry run first: `npm publish --dry-run`. Check the name, version, exports map and file list (only `dist`, `README.md`, `package.json`). `npm pack` alone does not build `dist`.
+6. Verify from outside: `npm view secure-vibe-runtime version dist-tags` shows the new `latest`; install it in an empty folder, import its entry points, and confirm the change is in `dist`.
+7. Clean up: delete logs that could hold the approval URL, and remove the scratch worktree and folders. Publishing changes no repo file. Afterwards a wiring PR bumps the root `version` and the dependency together and regenerates `package-lock.json` (`.npmrc` already excludes this package from `min-release-age`).
+8. Ignore `0.0.0-stage` in npm's version list (npm's own staging artifact).
+9. Never put tokens, approval URLs, IPs, user names or home paths in commits, PRs, comments or reports.
+
+Tags for package releases are `secure-vibe-runtime@X.Y.Z`; `vX.Y.Z` tags are app releases from `/push-release`.
+
+---
+
 ## Security
 
 Run `/security-assessment` before opening any PR.
