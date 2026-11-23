@@ -14,6 +14,16 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PKG_DIR = path.join(ROOT, "packages", "secure-vibe-runtime");
 
+// Scratch installs must not inherit this repo's npm config (strict-allow-scripts,
+// min-release-age, etc.) via npm_config_* when the suite is launched by `npm test`.
+function scratchEnv() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase().startsWith("npm_config_")) delete env[key];
+  }
+  return env;
+}
+
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
     encoding: "utf-8",
@@ -37,20 +47,20 @@ test("every secure-vibe-runtime export loads under plain Node from a packed tarb
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "svr-exports-"));
   try {
     fs.renameSync(tarball, path.join(scratch, filename));
-    run("npm", ["init", "-y"], { cwd: scratch });
+    run("npm", ["init", "-y"], { cwd: scratch, env: scratchEnv() });
 
-    // Peers are required for withCsrf / withRateLimit / convex. Use the same
-    // versions the package declares as peerDependencies floors.
+    // Peers are required for withCsrf / withRateLimit / convex. Pin to the
+    // package's own verified peer installs (devDependencies), not open ranges.
     const pkg = JSON.parse(fs.readFileSync(path.join(PKG_DIR, "package.json"), "utf-8"));
     run(
       "npm",
       [
         "install",
         `./${filename}`,
-        `next@${pkg.peerDependencies.next}`,
-        `convex@${pkg.peerDependencies.convex}`,
+        `next@${pkg.devDependencies.next}`,
+        `convex@${pkg.devDependencies.convex}`,
       ],
-      { cwd: scratch }
+      { cwd: scratch, env: scratchEnv() }
     );
 
     const installedPkg = JSON.parse(

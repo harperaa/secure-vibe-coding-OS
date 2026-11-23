@@ -6,9 +6,9 @@ import { registerHooks } from "node:module";
 // resolve the `secure-vibe-runtime` dependency in node_modules. A dependency
 // that still has the equality-only check therefore fails these tests.
 //
-// Plain Node needs three things the Next bundler does on its own: `next` has no
-// exports map, the `@/` alias is a tsconfig path, and the package's compiled
-// files import each other without an extension.
+// Plain Node still needs the `@/` tsconfig alias. The next/server and
+// extensionless-dist remaps stay until the app installs a runtime release that
+// emits Node-resolvable ESM (issue #57); remove them after that bump.
 const shim = new URL("../lib/csrf.ts", import.meta.url).href;
 registerHooks({
   resolve: (specifier, context, nextResolve) => {
@@ -27,7 +27,7 @@ registerHooks({
 process.env.CSRF_SECRET = "test-only-csrf-secret-0123456789abcdef";
 delete process.env.NEXT_PUBLIC_CONVEX_URL; // no security-log network calls
 
-const { NextRequest, NextResponse } = await import("next/server");
+const { NextRequest, NextResponse } = await import("next/server.js");
 const { generateCsrfToken } = await import("../lib/csrf.ts");
 const { withCsrf } = await import("../lib/withCsrf.ts");
 const { GET: issueToken } = await import("../app/api/csrf/route.ts");

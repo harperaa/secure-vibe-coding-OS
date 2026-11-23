@@ -7,15 +7,15 @@
  */
 
 import { GenericId } from "convex/values";
-import { bump, countKey, hourStart } from "./securityCounts";
+import { bump, countKey, hourStart } from "./securityCounts.js";
 import {
   SecurityEventDoc as SecurityEventRow,
   SecurityEventType,
   SecurityMetadata,
   SecurityMutationCtx as MutationCtx,
   SecuritySeverity,
-} from "./securityTables";
-export type { SecurityEventType, SecurityMetadata, SecuritySeverity } from "./securityTables";
+} from "./securityTables.js";
+export type { SecurityEventType, SecurityMetadata, SecuritySeverity } from "./securityTables.js";
 type Id<T extends string> = GenericId<T>;
 type Doc<T extends "securityEvents"> = T extends "securityEvents" ? SecurityEventRow : never;
 
