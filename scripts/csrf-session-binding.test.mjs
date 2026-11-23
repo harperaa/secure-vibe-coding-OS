@@ -14,8 +14,11 @@ registerHooks({
   resolve: (specifier, context, nextResolve) => {
     if (specifier === "next/server") return nextResolve("next/server.js", context);
     if (specifier === "@/lib/csrf") return nextResolve(shim, context);
-    if (specifier === "./csrf" && context.parentURL?.endsWith("/dist/withCsrf.js")) {
-      return nextResolve("./csrf.js", context);
+    if (
+      /^\.\/[\w/]+$/.test(specifier) &&
+      context.parentURL?.includes("/secure-vibe-runtime/dist/")
+    ) {
+      return nextResolve(`${specifier}.js`, context);
     }
     return nextResolve(specifier, context);
   },
