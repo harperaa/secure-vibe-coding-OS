@@ -463,6 +463,8 @@ done
 
 Then run: `node scripts/deploy.mjs vercel-env`
 
+**If the script returns `error: "vercel_has_app_env"`**: STOP. Display the `message`, the `keys` list and the `hint` verbatim. The Vercel project still stores its own app variables; adding `DOPPLER_TOKEN` on top would mix two sources and can break sign-in on the live site. Nothing was changed. Run `/migrate-to-doppler` first. Do NOT remove variables or add the token by hand to get past this. (`error: "vercel_env_unreadable"`: STOP and show the `message` and `hint`.)
+
 **If the script returns `error: "doppler_prd_incomplete"`**: STOP. Display the `message` and `hint` fields verbatim, then run the `doppler secrets set` commands above for whatever's listed in `missing[]`, then retry `vercel-env`.
 
 The command auto-delegates to `vercel-env-doppler`: issues a fresh `prd`-scoped Doppler service token, pushes only `DOPPLER_TOKEN` (and generates `REVALIDATE_TOKEN` if absent) to Vercel Production, runs `scripts/sync-convex-env.mjs --config prd`, and writes the `_PROD_PROMOTED_AT` marker (which gates future `/deploy-to-dev` runs from stomping prod). The `--clerk-*`, `--deploy-key`, `--frontend-api-url`, `--site-name`, `--convex-url` arguments are ignored in Doppler mode — values come from Doppler.

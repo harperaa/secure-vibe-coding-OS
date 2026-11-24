@@ -112,6 +112,32 @@ Module picker (only for "Let me pick modules"):
 
 Persist the modules choice as `<MODULES>` — the selected module names mapped to: `homepage-content`, `blog`, `dashboard-sample`, `pricing` (possibly empty if the user deselects everything). Persist the unselected names as `<SKIPPED_MODULES>`. Carry both through every phase below.
 
+### Existing configuration check (only if the user chose Doppler)
+
+Choosing Doppler on a project that is ALREADY set up the legacy way (app values in `.env.local` and/or stored on the Vercel project) must not start a fresh Doppler setup next to it. That leaves two sources of truth: the next `/deploy-to-dev` would refuse to run (`vercel_has_app_env`), and before that guard existed it broke sign-in on the live site. Such a project is moved over with the `/migrate-to-doppler` pattern instead.
+
+Run the read-only inventory (it works before Doppler is bootstrapped and changes nothing):
+
+```bash
+node scripts/setup.mjs migrate-to-doppler --phase=inventory
+```
+
+Read `legacy` from the JSON output:
+
+- **`legacy.hasLegacyConfig: false`** — nothing to migrate (fresh clone, or already on Doppler). Continue with the normal flow below. If `legacy.vercelChecked` is false, mention once that the Vercel project could not be checked (CLI missing or project not linked); `/deploy-to-dev` checks again before it touches Vercel.
+- **`legacy.hasLegacyConfig: true`** — show the key NAMES only (never values) from `legacy.envLocalAppKeys` and `legacy.vercelAppKeys`, then call AskUserQuestion:
+  - Question: "This project already has its own configuration (<N> app values in .env.local, <M> on the Vercel project). To use Doppler, those values need to be moved into Doppler rather than replaced. How do you want to proceed?"
+  - Header: "Existing config"
+  - Options:
+    - "Migrate it into Doppler (Recommended)" — "Copy the existing values into Doppler (Vercel Production → prd, everything else → dev), then, after a separate confirmation, remove them from .env.local and Vercel. Your current Clerk app, database and users are kept."
+    - "Stay on legacy .env.local" — "Leave everything where it is and continue the install without Doppler."
+    - "Cancel" — "Stop the install without changing anything."
+
+  Then:
+  - **Migrate:** install the content modules below if any were selected, then follow `.claude/commands/migrate-to-doppler.md` from Phase 0 through Phase 7 exactly as written (it runs `doppler-bootstrap` itself — pass `--project-name="<SITE_NAME>"` — and it has its own confirmation and HARD STOP before any cleanup; honour both). When it finishes, SKIP the "Doppler bootstrap" section below and continue at Phase 3. `init` then finds the migrated Clerk keys and secrets in Doppler `dev` and reuses them (`reusedClerk: true`), so nothing is regenerated.
+  - **Stay on legacy:** set `<USE_DOPPLER>` = `false` and continue; skip every Doppler-only step.
+  - **Cancel:** STOP.
+
 ### Install content modules (only if `<MODULES>` is non-empty)
 
 Before Phase 3, copy the selected modules into the repo. This is a fresh template, so the deterministic anchor edits are safe:
