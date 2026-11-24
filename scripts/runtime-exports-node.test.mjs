@@ -46,19 +46,23 @@ test("every secure-vibe-runtime export loads under plain Node from a packed tarb
 
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "svr-exports-"));
   try {
-    fs.renameSync(tarball, path.join(scratch, filename));
+    // Copy, not rename: the checkout and the temp dir may be on different filesystems.
+    fs.copyFileSync(tarball, path.join(scratch, filename));
+    fs.rmSync(tarball);
     run("npm", ["init", "-y"], { cwd: scratch, env: scratchEnv() });
 
-    // Peers are required for withCsrf / withRateLimit / convex. Pin to the
-    // package's own verified peer installs (devDependencies), not open ranges.
-    const pkg = JSON.parse(fs.readFileSync(path.join(PKG_DIR, "package.json"), "utf-8"));
+    // Peers are required for withCsrf / withRateLimit / convex. Install the
+    // exact versions the repo's lockfile resolved, so an unrelated new release
+    // cannot change this test's result.
+    const installedVersion = (name) =>
+      JSON.parse(fs.readFileSync(path.join(ROOT, "node_modules", name, "package.json"), "utf-8")).version;
     run(
       "npm",
       [
         "install",
         `./${filename}`,
-        `next@${pkg.devDependencies.next}`,
-        `convex@${pkg.devDependencies.convex}`,
+        `next@${installedVersion("next")}`,
+        `convex@${installedVersion("convex")}`,
       ],
       { cwd: scratch, env: scratchEnv() }
     );
