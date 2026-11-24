@@ -181,6 +181,32 @@ async function runInit(args) {
     nextSteps: [],
   };
 
+  // Re-running init must not replace a working setup: values already stored
+  // (Doppler `dev` in Doppler mode, .env.local otherwise) are reused. A fresh
+  // install has none, so everything is generated as before.
+  let storedValues = {};
+  if (dopplerMode) {
+    // A failed read is NOT an empty config. Generating a new Clerk app and new
+    // secrets on a transient Doppler error would overwrite the working ones
+    // as soon as Doppler recovers, so stop instead. (A fresh, empty config
+    // downloads fine and yields no app values.)
+    try {
+      storedValues = dopplerDownloadSecrets('dev');
+    } catch (err) {
+      console.error(JSON.stringify({
+        success: false,
+        step: 'read-existing',
+        error: `Could not read the Doppler dev config, so existing values cannot be checked: ${err.message}`,
+        hint: 'Nothing was changed. Check `doppler me` and your network, then re-run.',
+      }));
+      process.exit(1);
+    }
+  }
+  function existingValue(key) {
+    const val = dopplerMode ? storedValues[key] : getEnvValue(readEnvFile(ENV_FILE), key);
+    return val && !val.includes('<') && !val.includes('your_') ? val : null;
+  }
+
   // Step 1: Ensure .env.local exists (legacy mode only — Doppler mode never
   // writes secrets to .env.local; Convex CLI may create the file later for its
   // own deployment IDs, which is fine since those aren't secrets).
@@ -202,40 +228,25 @@ async function runInit(args) {
     }
   }
 
-  // Step 2: Generate CSRF and Session secrets. In legacy mode, reuse any existing
-  // secrets in .env.local (so re-running init is idempotent). In Doppler mode,
-  // always generate fresh — the bootstrap precondition is a clean Doppler config.
-  let csrfSecret;
-  let sessionSecret;
-  if (dopplerMode) {
-    csrfSecret = generateSecret();
-    sessionSecret = generateSecret();
-  } else {
-    const envContent = readEnvFile(ENV_FILE);
-    const existingCsrf = getEnvValue(envContent, 'CSRF_SECRET');
-    const existingSession = getEnvValue(envContent, 'SESSION_SECRET');
-    csrfSecret = (existingCsrf && !existingCsrf.includes('<')) ? existingCsrf : generateSecret();
-    sessionSecret = (existingSession && !existingSession.includes('<')) ? existingSession : generateSecret();
-  }
+  // Step 2: CSRF and Session secrets. Reuse existing ones in either mode so
+  // re-running init is idempotent; generate only what is missing.
+  const reusedSecrets = Boolean(existingValue('CSRF_SECRET') && existingValue('SESSION_SECRET'));
+  const csrfSecret = existingValue('CSRF_SECRET') || generateSecret();
+  const sessionSecret = existingValue('SESSION_SECRET') || generateSecret();
 
   persistEnvVar('CSRF_SECRET', csrfSecret);
   persistEnvVar('SESSION_SECRET', sessionSecret);
-  result.steps.push('Generated CSRF_SECRET and SESSION_SECRET');
+  result.steps.push(reusedSecrets ? 'Reused existing CSRF_SECRET and SESSION_SECRET' : 'Generated CSRF_SECRET and SESSION_SECRET');
   result.envVarsSet.push('CSRF_SECRET', 'SESSION_SECRET');
 
   // SECURITY_LOG_KEY gates convex/security.ts:logSecurityViolation. The Next.js
   // server sends it with every security-log write and Convex rejects anything
   // else, so it has to be the SAME value on both sides: persisted here for the
   // app, and mirrored into Convex env in Step 5 below.
-  let securityLogKey;
-  if (dopplerMode) {
-    securityLogKey = generateSecret();
-  } else {
-    const existingKey = getEnvValue(readEnvFile(ENV_FILE), 'SECURITY_LOG_KEY');
-    securityLogKey = (existingKey && !existingKey.includes('<')) ? existingKey : generateSecret();
-  }
+  const existingLogKey = existingValue('SECURITY_LOG_KEY');
+  const securityLogKey = existingLogKey || generateSecret();
   persistEnvVar('SECURITY_LOG_KEY', securityLogKey);
-  result.steps.push('Generated SECURITY_LOG_KEY');
+  result.steps.push(existingLogKey ? 'Reused existing SECURITY_LOG_KEY' : 'Generated SECURITY_LOG_KEY');
   result.envVarsSet.push('SECURITY_LOG_KEY');
 
   // Step 3: Site name
@@ -243,8 +254,26 @@ async function runInit(args) {
   result.steps.push(`Set NEXT_PUBLIC_SITE_NAME=${siteName}`);
   result.envVarsSet.push('NEXT_PUBLIC_SITE_NAME');
 
-  // Step 4: Clerk keys - create accountless app or use provided
+  // Step 4: Clerk keys - use provided, else reuse the app already configured,
+  // else create an accountless app. Creating a new app on every re-run would
+  // orphan the existing users, JWT template and webhook. To force a new app,
+  // remove NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY first.
   let accountless = false;
+  let reusedClerk = false;
+  if ((!clerkPk || !clerkSk) && existingValue('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY') && existingValue('CLERK_SECRET_KEY')) {
+    clerkPk = existingValue('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY');
+    clerkSk = existingValue('CLERK_SECRET_KEY');
+    reusedClerk = true;
+    result.reusedClerk = true;
+    result.steps.push('Reused existing Clerk application (keys already configured)');
+    // Reusing the keys doesn't mean the app was claimed. Carry the claim link
+    // from the previous install summary forward so a re-run can't lose it.
+    const summaryPath = path.join(ROOT_DIR, 'docs', 'INSTALL.md');
+    if (fs.existsSync(summaryPath)) {
+      const prior = fs.readFileSync(summaryPath, 'utf-8').match(/^Visit: (https:\/\/\S+)$/m);
+      if (prior) result.claimUrl = prior[1];
+    }
+  }
   if (!clerkPk || !clerkSk) {
     console.log('No Clerk keys provided, creating accountless application...');
     try {
@@ -264,7 +293,7 @@ async function runInit(args) {
       }));
       process.exit(1);
     }
-  } else {
+  } else if (!reusedClerk) {
     result.steps.push('Using provided Clerk API keys');
   }
 

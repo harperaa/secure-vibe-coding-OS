@@ -105,9 +105,13 @@ STOP here.
 
 ## Phase 2: GitHub Setup
 
-Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
+Check the `isUpstreamTemplate`, `isTemplateMaintainer`, `originAccessUnknown` and `gitRemote` values from check-tools.
 
-**If `isUpstreamTemplate: true` (origin points to the template repo):**
+**If `originAccessUnknown: true`**: STOP. Display: "Couldn't check your access to the origin repository (GitHub lookup failed). Nothing was changed. Check `gh auth status` and your network, then re-run `/deploy-to-prod`." Do NOT run `github-setup`.
+
+**If `isTemplateMaintainer: true`** (origin is the template repo and this user can push to it — the template's own working copy): do NOT offer to create a repo. Show checkmark "GitHub repo already configured (template repository)" and proceed.
+
+**If `isUpstreamTemplate: true` and `isTemplateMaintainer: false` (origin points to the template repo):**
 
 **AskUserQuestion**: "Your git origin still points to the template repo. Would you like me to create your own private GitHub repository?"
 - Options:

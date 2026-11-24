@@ -163,6 +163,8 @@ async function runCheckTools() {
     missing: [],
     gitRemote: null,
     isUpstreamTemplate: false,
+    isTemplateMaintainer: false,
+    originAccessUnknown: false,
     needsRepo: false,
   };
 
@@ -214,7 +216,22 @@ async function runCheckTools() {
     result.isUpstreamTemplate = isTemplateRepo(remoteUrl);
   }
 
-  result.needsRepo = result.isUpstreamTemplate || !remoteUrl;
+  // Origin is the template AND this user can push to it: this is the
+  // template's own working copy, not a fresh clone. It already has its repo,
+  // so it must not be renamed to `upstream` and re-created as a new one.
+  const originRepo = parseGithubRepo(remoteUrl);
+  if (result.isUpstreamTemplate && originRepo && result.tools.ghAuth) {
+    const perm = tryExec(`gh repo view ${originRepo} --json viewerPermission -q .viewerPermission`);
+    result.isTemplateMaintainer = ['ADMIN', 'MAINTAIN', 'WRITE'].includes(perm);
+    // A failed lookup is not "no push access". Report it so the caller stops
+    // before github-setup renames origin on a maintainer's working copy.
+    result.originAccessUnknown = !perm;
+  } else if (result.isUpstreamTemplate) {
+    result.originAccessUnknown = true; // gh missing/unauthenticated: could not check
+  }
+
+  result.needsRepo =
+    (result.isUpstreamTemplate && !result.isTemplateMaintainer && !result.originAccessUnknown) || !remoteUrl;
 
   console.log(JSON.stringify(result, null, 2));
 }
