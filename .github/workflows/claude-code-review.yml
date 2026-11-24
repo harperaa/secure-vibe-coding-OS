@@ -23,7 +23,7 @@ jobs:
     steps:
       - id: check
         env:
-          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_ABSENT_FOR_TEST }}
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           if [ -n "$TOKEN" ]; then
             echo "has_token=true" >> "$GITHUB_OUTPUT"
