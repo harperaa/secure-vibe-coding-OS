@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import { csrfCookieName, validateCsrfToken } from "./csrf";
-import { clientIp } from "./withRateLimit";
+import { NextRequest, NextResponse } from "next/server.js";
+import { csrfCookieName, validateCsrfToken } from "./csrf.js";
+import { clientIp } from "./withRateLimit.js";
 import { ConvexHttpClient } from 'convex/browser';
 import { makeFunctionReference } from 'convex/server';
 

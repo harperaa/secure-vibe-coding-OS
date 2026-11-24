@@ -81,3 +81,9 @@ packages/*/node_modules
 # CodeDen workspace files (vision, session state). Local to the maintainer;
 # this repo is a template other people clone, so they are never committed.
 .codeden/
+
+# Per-install records written by /install and /deploy-to-dev. They describe one
+# machine's setup (INSTALL.md can hold a Clerk claim link) and a clone that
+# inherited DEPLOYMENT-DEV.md would look "already deployed".
+docs/INSTALL.md
+docs/DEPLOYMENT-DEV.md
