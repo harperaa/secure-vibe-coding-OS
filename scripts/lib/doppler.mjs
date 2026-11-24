@@ -4,8 +4,9 @@
  * Used by setup.mjs, deploy.mjs, sync-convex-env.mjs, and the rotate command.
  *
  * Conventions:
- *   - Project name is read from package.json `name` field.
+ *   - Project name is read from `.doppler.yaml` when present, else package.json `name`.
  *   - Configs are: `dev` (local dev, deploy-to-dev, CI build) and `prd` (deploy-to-prod).
+ *   - New projects delete Doppler's default unused `stg` environment; existing projects are left alone.
  *   - The marker `.doppler.yaml` (created by `doppler setup`) signals Doppler mode.
  */
 
@@ -230,16 +231,28 @@ export function ensureLoggedIn() {
 // Project & config provisioning
 // ---------------------------------------------------------------------------
 
+/**
+ * Ensure a Doppler project exists. On first create only, remove the default
+ * unused `stg` environment (Doppler auto-creates dev/stg/prd). Existing
+ * projects are never modified.
+ *
+ * @returns {{ created: boolean, stgRemoved: boolean }}
+ */
 export function ensureProject(name = getProjectName()) {
   const probe = tryRun(`doppler projects get ${shellQuote(name)} --json`);
-  if (probe.ok) return;
+  if (probe.ok) {
+    return { created: false, stgRemoved: false };
+  }
 
   console.log(`Creating Doppler project "${name}"…`);
   run(`doppler projects create ${shellQuote(name)}`);
 
-  // Doppler auto-creates dev/stg/prd configs. We only want dev and prd.
-  // Best-effort delete; ignore failures if `stg` doesn't exist.
-  tryRun(`doppler configs delete stg --project ${shellQuote(name)} --yes`);
+  // Doppler auto-creates dev/stg/prd environments. This template only uses
+  // dev and prd — remove stg. Tolerate "not found" / already-absent.
+  const stg = tryRun(
+    `doppler environments delete stg --project ${shellQuote(name)} --yes`
+  );
+  return { created: true, stgRemoved: stg.ok };
 }
 
 export function setupRepoForConfig(config = 'dev', name = getProjectName()) {

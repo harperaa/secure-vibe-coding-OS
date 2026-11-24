@@ -70,6 +70,31 @@ function parseArgs(argv) {
   return args;
 }
 
+/**
+ * Split a comma-separated list where `\,` is an escaped literal comma.
+ * Used by write-install-summary so items like "CSRF\, Session and …" stay intact.
+ */
+function splitEscapedCommaList(value) {
+  if (!value) return [];
+  const items = [];
+  let current = '';
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] === '\\' && i + 1 < value.length && value[i + 1] === ',') {
+      current += ',';
+      i += 1;
+      continue;
+    }
+    if (value[i] === ',') {
+      if (current) items.push(current);
+      current = '';
+      continue;
+    }
+    current += value[i];
+  }
+  if (current) items.push(current);
+  return items;
+}
+
 // ---------------------------------------------------------------------------
 // .env.local Helpers
 // ---------------------------------------------------------------------------
@@ -1112,10 +1137,10 @@ async function runWriteInstallSummary(args) {
   const claimUrl = args['claim-url'] || '';
   const accountless = args['accountless'] === 'true';
 
-  const completedSteps = (args['completed-steps'] || '').split(',').filter(Boolean);
-  const manualSteps = (args['manual-steps'] || '').split(',').filter(Boolean);
-  const modulesInstalled = (args['modules-installed'] || '').split(',').filter(Boolean);
-  const modulesSkipped = (args['modules-skipped'] || '').split(',').filter(Boolean);
+  const completedSteps = splitEscapedCommaList(args['completed-steps'] || '');
+  const manualSteps = splitEscapedCommaList(args['manual-steps'] || '');
+  const modulesInstalled = splitEscapedCommaList(args['modules-installed'] || '');
+  const modulesSkipped = splitEscapedCommaList(args['modules-skipped'] || '');
 
   const lines = [
     `# Installation Complete!`,
@@ -1176,6 +1201,8 @@ async function runWriteInstallSummary(args) {
   lines.push(`2. **Create a Subscription Plan**:`);
   lines.push(`   - Clerk Dashboard > Billing > Plans > Create Plan`);
   lines.push(`   - Name it, set monthly price, save`);
+  lines.push(``);
+  lines.push(`Claude review workflows on pull requests need the \`CLAUDE_CODE_OAUTH_TOKEN\` repository secret (or an organization secret that provides it); until it is set they are skipped. See the GitHub Actions secrets section of [DEPLOYMENT.md](./DEPLOYMENT.md).`);
   lines.push(``);
 
   lines.push(`## Start Development`);
@@ -1263,8 +1290,19 @@ async function runDopplerBootstrap(args = {}) {
   result.project = projectName;
 
   try {
-    dopplerEnsureProject(projectName);
+    const projectInfo = dopplerEnsureProject(projectName);
     result.steps.push(`Doppler project "${projectName}" ready (configs: dev, prd)`);
+    if (projectInfo.created) {
+      result.steps.push(
+        projectInfo.stgRemoved
+          ? 'Removed unused Doppler stg environment'
+          : 'Unused Doppler stg environment already absent (delete was a no-op)'
+      );
+      result.stgRemoved = projectInfo.stgRemoved;
+    } else {
+      result.steps.push('Existing Doppler project reused — environments left untouched');
+      result.stgRemoved = false;
+    }
   } catch (err) {
     console.error(JSON.stringify({ success: false, step: 'project', error: err.message }));
     process.exit(1);
