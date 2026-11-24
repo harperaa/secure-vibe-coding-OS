@@ -1,4 +1,4 @@
-import { Protect } from '@clerk/nextjs'
+import { Show } from '@clerk/nextjs'
 import CustomClerkPricing from "../../../components/custom-clerk-pricing";
 
 function UpgradeCard() {
@@ -37,8 +37,8 @@ function FeaturesCard() {
 
 export default function TeamPage() {
   return (
-    <Protect
-    condition={(has) => {
+    <Show
+    when={(has) => {
       // Check if user has any of the paid plans
       // return has({ plan: "starter" }) || has({ plan: "hobby" }) || has({ plan: "pro" })
       // Or alternatively, check if user doesn't have free plan (if free plan exists)
@@ -47,6 +47,6 @@ export default function TeamPage() {
       fallback={<UpgradeCard/>}
     >
       <FeaturesCard />
-    </Protect>
+    </Show>
   )
 } 

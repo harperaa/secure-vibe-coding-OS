@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { Metadata } from 'next'
-import { getAllPostsMeta, getAllCategories, getAllTags, generateBlogListJsonLd, serializeJsonLd } from '../../lib/blog'
+import { getAllPostsMeta, getAllCategories, getAllTags, generateBlogListJsonLd, searchPosts, serializeJsonLd } from '../../lib/blog'
 import { BlogCard } from './components/blog-card'
 import { BlogSearch } from './components/blog-search'
 import { CategoryFilter } from './components/category-filter'
@@ -26,8 +26,15 @@ export const metadata: Metadata = {
   },
 }
 
-export default function BlogPage() {
-  const posts = getAllPostsMeta()
+export default async function BlogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[] }>
+}) {
+  // The search box writes ?q=...; filter the list by it (bounded: it is user input).
+  const { q } = await searchParams
+  const query = (Array.isArray(q) ? q[0] : q || '').trim().slice(0, 100)
+  const posts = query ? searchPosts(query) : getAllPostsMeta()
   const categories = getAllCategories()
   const tags = getAllTags()
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com'
@@ -73,7 +80,7 @@ export default function BlogPage() {
         ) : (
           <div className="text-center py-16">
             <p className="text-muted-foreground text-lg">
-              No blog posts yet. Check back soon!
+              {query ? 'No articles match your search.' : 'No blog posts yet. Check back soon!'}
             </p>
           </div>
         )}

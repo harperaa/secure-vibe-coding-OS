@@ -129,7 +129,7 @@ This project supports two flows for environment variables:
 
 ## Content Modules
 
-Optional page/content modules live in `templates/modules/<name>/` (homepage-content, blog, dashboard-sample, pricing, background-job). The default site is minimal — login homepage + blank dashboard. `/install` asks which modules to copy in; `/add-module` installs any of them later; `node scripts/modules.mjs install <name...> --apply-edits` does it headlessly. Modules only add pages and content — the security backend (convex/, lib/, proxy.ts, app/api/) is always installed and never gated.
+Optional page/content modules live in `templates/modules/<name>/` (homepage-content, blog, dashboard-sample, pricing). The default site is minimal — login homepage + blank dashboard. `/install` asks which modules to copy in; `/add-module` installs any of them later; `node scripts/modules.mjs install <name...> --apply-edits` does it headlessly. Modules only add pages and content — the security backend (convex/, lib/, proxy.ts, app/api/) is always installed and never gated.
 
 The runtime security code (secrets loading, CSRF, rate limiting, security log schema/logger/counters/redaction) lives in `packages/secure-vibe-runtime` and is consumed as the npm dependency `secure-vibe-runtime`. `lib/csrf.ts`, `lib/secrets.ts`, `lib/withCsrf.ts`, `lib/withRateLimit.ts` and `convex/lib/*.ts` are re-export shims: edit the package source, rebuild (`npm run build:runtime`), and bump both versions together at release.
 

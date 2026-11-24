@@ -23,26 +23,4 @@ export default defineSchema({
     // securityCountsRebuild): owned by the secure-vibe-runtime package so index
     // and field changes ship as a package update. See docs/security/AUDIT_LOGGING.md.
     ...securityTables,
-
-    // Background job example (convex/jobs.ts): one row per job. The browser
-    // subscribes to listJobs, so every status change below streams to the
-    // screen without a refresh. updatedAt is in the index so the newest
-    // activity sorts first.
-    jobs: defineTable({
-      userId: v.id("users"),
-      status: v.union(
-        v.literal("queued"),
-        v.literal("running"),
-        v.literal("done"),
-        v.literal("failed")
-      ),
-      input: v.string(),
-      result: v.optional(v.string()),
-      error: v.optional(v.string()),
-      attempts: v.number(),
-      updatedAt: v.number(),
-    })
-      .index("byUser", ["userId", "updatedAt"])
-      // clearFinishedJobs deletes one status at a time in bounded batches.
-      .index("byUserStatus", ["userId", "status", "updatedAt"]),
   });
