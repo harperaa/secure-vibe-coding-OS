@@ -2,13 +2,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 
-// Same `next/server` shim as rate-limit-options.test.mjs, plus `.ts` for the
-// package's extensionless relative imports (the bundler resolves those).
+// Loading package .ts sources under Node: relative imports use NodeNext-style
+// `.js` specifiers that must map back to `.ts` files on disk.
 registerHooks({
   resolve: (specifier, context, nextResolve) => {
-    if (specifier === "next/server") return nextResolve("next/server.js", context);
-    if (specifier.startsWith("./") && context.parentURL?.includes("/secure-vibe-runtime/src/"))
-      return nextResolve(`${specifier}.ts`, context);
+    if (
+      specifier.startsWith("./") &&
+      specifier.endsWith(".js") &&
+      context.parentURL?.includes("/secure-vibe-runtime/src/")
+    ) {
+      return nextResolve(specifier.replace(/\.js$/, ".ts"), context);
+    }
     return nextResolve(specifier, context);
   },
 });
@@ -16,7 +20,7 @@ registerHooks({
 process.env.NEXT_PUBLIC_CONVEX_URL = "https://example.convex.cloud";
 process.env.SECURITY_LOG_KEY = "test-key";
 
-const { NextRequest, NextResponse } = await import("next/server");
+const { NextRequest, NextResponse } = await import("next/server.js");
 const { withCsrf } = await import("../packages/secure-vibe-runtime/src/withCsrf.ts");
 
 test("a CSRF violation is logged with the proxy-appended IP, not the client-supplied one", async () => {
