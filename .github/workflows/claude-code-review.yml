@@ -11,7 +11,32 @@ on:
     #   - "src/**/*.jsx"
 
 jobs:
+  # Template repos and fork PRs do not receive CLAUDE_CODE_OAUTH_TOKEN.
+  # Skip the review jobs at job level (not step level) so a missing secret
+  # shows as Skipped rather than a green "all steps skipped" success that
+  # looks like a passed review, or a red failure after ~25s.
+  review-gate:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      has_token: ${{ steps.check.outputs.has_token }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            NOTICE='Claude review and security review were skipped because the CLAUDE_CODE_OAUTH_TOKEN repository secret is not set. Add it under Settings > Secrets and variables > Actions. See DEPLOYMENT.md (GitHub Actions secrets).'
+            echo "$NOTICE" >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::$NOTICE"
+          fi
+
   security-review:
+    needs: review-gate
+    if: needs.review-gate.outputs.has_token == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -45,6 +70,8 @@ jobs:
           claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
 
   claude-review:
+    needs: review-gate
+    if: needs.review-gate.outputs.has_token == 'true'
     # Optional: Filter by PR author
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||

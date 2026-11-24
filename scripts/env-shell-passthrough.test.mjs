@@ -65,7 +65,19 @@ function makeSandbox(t, envLocal) {
 
   const binDir = path.join(root, 'bin');
   fs.mkdirSync(binDir);
-  fs.writeFileSync(path.join(binDir, 'npx'), FAKE_NPX, { mode: 0o755 });
+  // `npx vercel` must not be used: inside this repo npx's install of the CLI is
+  // blocked by strict-allow-scripts. The npx stub rejects it without recording a
+  // `vercel ...` call, so the Vercel assertions below fail if a script reverts.
+  fs.writeFileSync(
+    path.join(binDir, 'npx'),
+    FAKE_NPX.replace(
+      'const argv = process.argv.slice(2);',
+      "const argv = process.argv.slice(2);\nif (argv[0] === 'vercel') { fs.appendFileSync(process.env.FAKE_NPX_LOG, JSON.stringify({ argv: ['npx', ...argv], stdin: null }) + '\\n'); process.exit(1); }"
+    ),
+    { mode: 0o755 }
+  );
+  // The globally installed `vercel` binary, recorded as `vercel ...`.
+  fs.writeFileSync(path.join(binDir, 'vercel'), FAKE_NPX.replace("const argv = process.argv.slice(2);", "const argv = ['vercel', ...process.argv.slice(2)];"), { mode: 0o755 });
 
   fs.writeFileSync(path.join(root, '.env.local'), envLocal);
 
@@ -105,6 +117,13 @@ function vercelValue(calls, key) {
   return call ? call.stdin : undefined;
 }
 
+// True if a script tried to remove a Vercel variable. Vercel CLI 66 refuses `env rm --yes`
+// from an agent session, so values are overwritten with `env add --force` instead.
+const usedVercelEnvRm = (calls) => calls.some((c) => c.argv.slice(0, 3).join(' ') === 'vercel env rm');
+
+// True if any script reached for the Vercel CLI through npx.
+const usedNpxVercel = (calls) => calls.some((c) => c.argv[0] === 'npx' && c.argv[1] === 'vercel');
+
 test('deploy.mjs convex-prod-env passes SECURITY_LOG_KEY to Convex verbatim', (t) => {
   const box = makeSandbox(t, `SECURITY_LOG_KEY=${HOSTILE}\n`);
   const { calls } = box.run('deploy.mjs', ['convex-prod-env', '--deploy-key=prod:fake']);
@@ -115,6 +134,8 @@ test('deploy.mjs vercel-env-dev passes .env.local values to Vercel verbatim', (t
   const box = makeSandbox(t, `CSRF_SECRET=${HOSTILE}\n`);
   const { calls } = box.run('deploy.mjs', ['vercel-env-dev']);
   assert.equal(vercelValue(calls, 'CSRF_SECRET'), HOSTILE);
+  assert.equal(usedNpxVercel(calls), false);
+  assert.equal(usedVercelEnvRm(calls), false);
 });
 
 test('deploy.mjs vercel-env passes .env.local values to Vercel verbatim', (t) => {
@@ -128,6 +149,8 @@ test('deploy.mjs vercel-env passes .env.local values to Vercel verbatim', (t) =>
     '--site-name=Test',
   ]);
   assert.equal(vercelValue(calls, 'CSRF_SECRET'), HOSTILE);
+  assert.equal(usedNpxVercel(calls), false);
+  assert.equal(usedVercelEnvRm(calls), false);
 });
 
 test('deploy.mjs update-vercel-clerk-keys passes the Clerk secret key to Vercel verbatim', (t) => {
@@ -139,6 +162,8 @@ test('deploy.mjs update-vercel-clerk-keys passes the Clerk secret key to Vercel 
     '--frontend-api-url=https://clerk.example.test',
   ]);
   assert.equal(vercelValue(calls, 'CLERK_SECRET_KEY'), HOSTILE);
+  assert.equal(usedNpxVercel(calls), false);
+  assert.equal(usedVercelEnvRm(calls), false);
 });
 
 test('setup.mjs configure passes SECURITY_LOG_KEY to Convex verbatim', (t) => {

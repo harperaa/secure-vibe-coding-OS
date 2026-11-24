@@ -97,7 +97,10 @@ After installation, your app runs locally at the provided URL (typically `http:/
 
 ### Content Modules (optional pages — pick what you want)
 
-The default install is **minimal**: a login homepage and a blank dashboard page.
+This repository's `main` branch is the reference website, so it has every module
+below installed. Your own site is whatever you choose in `/install`, whatever
+the repo has installed. The default is **minimal**: a login homepage and a blank
+dashboard page, with the other modules removed.
 The secure backend — Clerk auth, Convex, rate limiting, CSRF protection, input
 validation, and the admin security monitoring dashboard — is always installed in
 full; modules only add **pages and content** on top of it:
@@ -108,7 +111,6 @@ full; modules only add **pages and content** on top of it:
 | `blog` | MDX blog with categories, tags, search, RSS feed, and 3 sample posts |
 | `dashboard-sample` | Demo dashboard: KPI cards, interactive chart, data table |
 | `pricing` | Clerk Billing pricing section + payment-gated dashboard page |
-| `background-job` | Dashboard page for the background-job pattern: slow work in a Convex action with retries, watched live (the backend, `convex/jobs.ts`, is always installed) |
 
 `/install` asks which to include. Add any of them later — nothing is lost by
 starting minimal:
@@ -183,7 +185,7 @@ claude
 # Then type: /deploy-to-dev
 ```
 
-This is **fully automated** — no manual steps required (assuming `gh` and `npx vercel` are already authenticated). It uses your existing Clerk dev keys and Convex dev instance.
+This is **fully automated** — no manual steps required (assuming `gh` and `vercel` are already authenticated). It uses your existing Clerk dev keys and Convex dev instance.
 
 **What gets automated:**
 - Private GitHub repo creation + remote reconfiguration
@@ -191,7 +193,7 @@ This is **fully automated** — no manual steps required (assuming `gh` and `npx
 - All environment variables set on Vercel (read from `.env.local`)
 - Production deployment to Vercel
 
-**Prerequisites:** `gh auth login` and `npx vercel login` must be done once beforehand. The command checks and tells you if either is missing.
+**Prerequisites:** `gh auth login`, plus the Vercel CLI installed once globally **from outside this repo** (`cd ~ && npm i -g vercel`, then `vercel login`). The repo's `.npmrc` enforces `strict-allow-scripts`, which blocks `vercel` from installing the CLI inside the project. The command checks and tells you if either is missing.
 
 Your app will be fully functional on Vercel with a small Clerk development badge. After the initial deployment, updating your site is just `git push origin main` — Vercel automatically rebuilds on every push.
 
@@ -283,7 +285,7 @@ claude
 
 The flow is staged so nothing destructive happens without your confirmation:
 
-1. **Phase 0 — Preflight.** Bootstraps Doppler if `.doppler.yaml` is missing (creates the project, `dev`/`prd` configs, drives `doppler login`, pins the repo). Probes for the optional tools — `npx vercel`, `npx convex env`, `gh` — and tells you up-front which sources will be migrated based on what's available.
+1. **Phase 0 — Preflight.** Bootstraps Doppler if `.doppler.yaml` is missing (creates the project, `dev`/`prd` configs, drives `doppler login`, pins the repo). Probes for the optional tools — `vercel`, `npx convex env`, `gh` — and tells you up-front which sources will be migrated based on what's available.
 2. **Phase 1 — Inventory (read-only).** Gathers every key found in `.env.local`, Convex env, and all three Vercel targets (production / preview / development). Displays a count-only table to keep secrets off the screen, plus an explicit **conflicts list** when the same key has different values across sources (with truncated previews) so you can see exactly what will land in Doppler. The full inventory is also written to `/tmp/doppler-migration-inventory.json` for offline review.
 3. **Phase 2 — Confirm.** `AskUserQuestion` gate before *any* Doppler write — push or cancel.
 4. **Phase 3 — Migrate (idempotent, non-destructive).** Pushes the union of `.env.local` + Convex + Vercel-Development + Vercel-Preview into Doppler `dev`, and Vercel-Production into Doppler `prd`. The merge rule is **most-local wins** (`.env.local` overrides Vercel-Development, etc.) so your local source of truth is honored. Re-running just overwrites the same keys.
@@ -449,6 +451,8 @@ Secure Vibe Coding OS ships with 11 slash commands that cover the full developme
 ```
 
 Every push and PR automatically runs the CI pipeline (lint → test → security → build) defined in `.github/workflows/ci.yml`. All four jobs must pass before merging to `main`.
+
+**GitHub Actions secrets:** template clones do not inherit secrets. Set `DOPPLER_TOKEN` (Doppler-mode CI builds) and optionally `CLAUDE_CODE_OAUTH_TOKEN` (Claude PR review + `@claude` mentions) under **Settings → Secrets and variables → Actions**. Without `CLAUDE_CODE_OAUTH_TOKEN`, the Claude review jobs are **skipped** — that is not a passed review. Full table and token setup steps: [`DEPLOYMENT.md` → GitHub Actions secrets](DEPLOYMENT.md#github-actions-secrets).
 
 For a detailed guide on branch strategy, commit conventions, CI/CD pipeline design, and deployment environments, see [`docs/git_cicd_workflow_guide.pdf`](docs/git_cicd_workflow_guide.pdf).
 

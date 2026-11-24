@@ -22,7 +22,7 @@
  *
  * Usage:
  *   node scripts/deploy.mjs check-tools
- *   node scripts/deploy.mjs github-setup --repo-name="my-project"
+ *   node scripts/deploy.mjs github-setup --repo-name="my-project" [--owner=<user|org>] [--no-push]
  *   node scripts/deploy.mjs convex-deploy-key
  *   node scripts/deploy.mjs validate-keys --clerk-pk=pk_live_... --clerk-sk=sk_live_... [--deploy-key=prod:...|...]
  *   node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...
@@ -42,22 +42,15 @@ import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import {
   isDopplerEnabled,
   createServiceToken,
-  revokeServiceToken,
   setSecret,
   downloadSecrets,
 } from './lib/doppler.mjs';
-import { parseGithubRepo } from './lib/github-repo.mjs';
+import { parseGithubRepo, isTemplateRepo } from './lib/github-repo.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.join(__dirname, '..');
 const ENV_FILE = path.join(ROOT_DIR, '.env.local');
-
-// Template repo identifiers used to detect upstream origin
-const TEMPLATE_REPOS = [
-  'harperaa/secure-vibe-coding-OS',
-  'harperaa/secure-vibe-coding-os',
-];
 
 // ---------------------------------------------------------------------------
 // Argument Parsing (same pattern as setup.mjs)
@@ -169,6 +162,8 @@ async function runCheckTools() {
     missing: [],
     gitRemote: null,
     isUpstreamTemplate: false,
+    isTemplateMaintainer: false,
+    originAccessUnknown: false,
     needsRepo: false,
   };
 
@@ -203,7 +198,7 @@ async function runCheckTools() {
   }
 
   // Vercel CLI
-  const vercelVersion = tryExec('npx vercel --version');
+  const vercelVersion = tryExec('vercel --version');
   if (vercelVersion) {
     const match = vercelVersion.match(/(\d+\.\d+\.\d+)/);
     result.tools.vercel = match ? match[1] : vercelVersion;
@@ -217,12 +212,25 @@ async function runCheckTools() {
   result.gitRemote = remoteUrl;
 
   if (remoteUrl) {
-    result.isUpstreamTemplate = TEMPLATE_REPOS.some(
-      repo => remoteUrl.toLowerCase().includes(repo.toLowerCase())
-    );
+    result.isUpstreamTemplate = isTemplateRepo(remoteUrl);
   }
 
-  result.needsRepo = result.isUpstreamTemplate || !remoteUrl;
+  // Origin is the template AND this user can push to it: this is the
+  // template's own working copy, not a fresh clone. It already has its repo,
+  // so it must not be renamed to `upstream` and re-created as a new one.
+  const originRepo = parseGithubRepo(remoteUrl);
+  if (result.isUpstreamTemplate && originRepo && result.tools.ghAuth) {
+    const perm = tryExec(`gh repo view ${originRepo} --json viewerPermission -q .viewerPermission`);
+    result.isTemplateMaintainer = ['ADMIN', 'MAINTAIN', 'WRITE'].includes(perm);
+    // A failed lookup is not "no push access". Report it so the caller stops
+    // before github-setup renames origin on a maintainer's working copy.
+    result.originAccessUnknown = !perm;
+  } else if (result.isUpstreamTemplate) {
+    result.originAccessUnknown = true; // gh missing/unauthenticated: could not check
+  }
+
+  result.needsRepo =
+    (result.isUpstreamTemplate && !result.isTemplateMaintainer && !result.originAccessUnknown) || !remoteUrl;
 
   console.log(JSON.stringify(result, null, 2));
 }
@@ -302,6 +310,9 @@ async function runGithubSetup(args) {
   // personal account. Without OWNER/, `gh repo create REPO` always uses the
   // user's account, which has caused org-targeted deploys to land personally.
   const owner = args['owner'];
+  // Optional: --no-push creates the repo and remote without pushing, so the
+  // caller can set Actions secrets before the first push triggers CI.
+  const push = args['no-push'] !== 'true';
 
   if (!repoName) {
     console.error(JSON.stringify({
@@ -346,9 +357,7 @@ async function runGithubSetup(args) {
   // Check if origin points to template — rename to upstream
   const currentOrigin = tryExec('git remote get-url origin');
   if (currentOrigin) {
-    const isTemplate = TEMPLATE_REPOS.some(
-      repo => currentOrigin.toLowerCase().includes(repo.toLowerCase())
-    );
+    const isTemplate = isTemplateRepo(currentOrigin);
 
     if (isTemplate) {
       // Check if upstream already exists
@@ -380,7 +389,7 @@ async function runGithubSetup(args) {
   // to the authenticated user's personal account.
   const repoArg = owner ? `${owner}/${repoName}` : repoName;
   const createResult = tryExecResult(
-    `gh repo create "${repoArg}" --private --source=. --remote=origin --push`,
+    `gh repo create "${repoArg}" --private --source=. --remote=origin${push ? ' --push' : ''}`,
     { timeout: 60000 }
   );
 
@@ -1111,7 +1120,7 @@ async function runVercelEnvDev() {
 
   for (const [key, value] of Object.entries(envVars)) {
     try {
-      execFileSync('npx', ['vercel', 'env', 'add', key, 'production', '--force'], {
+      execFileSync('vercel', ['env', 'add', key, 'production', '--force'], {
         cwd: ROOT_DIR,
         input: value,
         stdio: 'pipe',
@@ -1207,7 +1216,7 @@ async function runVercelEnv(args) {
   for (const [key, value] of Object.entries(envVars)) {
     try {
       // Value goes on stdin with no shell involved, so it arrives verbatim
-      execFileSync('npx', ['vercel', 'env', 'add', key, 'production', '--force'], {
+      execFileSync('vercel', ['env', 'add', key, 'production', '--force'], {
         cwd: ROOT_DIR,
         input: value,
         stdio: 'pipe',
@@ -1337,19 +1346,74 @@ async function runVercelEnvDoppler(opts = {}) {
   // 1. Issue a fresh service token for this Vercel environment.
   //    Token name encodes config so dev/prd tokens never collide.
   const tokenName = `vercel-runtime-${config}`;
-  // Revoke any existing token with the same name (idempotent — ignores absence)
-  // so re-running this command always produces a freshly-scoped credential.
-  revokeServiceToken(config, tokenName);
-  let dopplerToken;
-  try {
-    dopplerToken = createServiceToken(config, tokenName);
-    result.steps.push(`Issued Doppler service token (${tokenName}) for config=${config}`);
-  } catch (err) {
-    console.error(JSON.stringify({
+  // Idempotent: a target that already has DOPPLER_TOKEN keeps it. Minting a
+  // new token on every run piled up credentials, and nothing here revokes one:
+  // the live deployment keeps reading the token it was built with, and
+  // retiring credentials is /rotate's job, not a deploy re-run's.
+  //   - dev: mint only for targets that have no DOPPLER_TOKEN yet.
+  //   - prd: production must swap the dev-scoped token for a prd-scoped one the
+  //     first time, so "already set" only counts once production was promoted.
+  const allTargets = config === 'dev'
+    ? ['development', 'preview', 'production']
+    : ['production'];
+  const vercelEnvs = listVercelEnv();
+  if (vercelEnvs === null) {
+    console.log(JSON.stringify({
       success: false,
-      error: `Failed to create Doppler service token: ${err.message}`,
-    }));
+      error: 'vercel_env_unreadable',
+      message: 'Could not list the Vercel project\'s environment variables, so it is not safe to add DOPPLER_TOKEN. Nothing was changed.',
+      hint: 'Check `vercel whoami` and that the project is linked (`vercel link`), then re-run.',
+    }, null, 2));
     process.exit(1);
+  }
+
+  // Never add DOPPLER_TOKEN to a project that still stores its own app values.
+  // The build inlines NEXT_PUBLIC_* from Vercel's variables (they win over the
+  // prebuild's .env.production.local), while the server overwrites process.env
+  // from Doppler at runtime. If the two disagree - e.g. Vercel holds one Clerk
+  // app's publishable key and Doppler another app's secret key - every Clerk
+  // handshake fails and the live site returns 500s. Such a project has to be
+  // moved over with /migrate-to-doppler, which copies Vercel's values into
+  // Doppler and removes them from Vercel before the token is added.
+  const dopplerKeys = new Set(Object.keys(downloadSecrets(config)));
+  const overlapTargets = new Set(allTargets);
+  const overlapping = [...new Set(
+    vercelEnvs
+      .filter(e => e.key !== 'DOPPLER_TOKEN' && dopplerKeys.has(e.key) && (e.target || []).some(t => overlapTargets.has(t)))
+      .map(e => e.key)
+  )].sort();
+  if (overlapping.length) {
+    console.log(JSON.stringify({
+      success: false,
+      error: 'vercel_has_app_env',
+      keys: overlapping,
+      message: `This Vercel project already stores ${overlapping.length} app variable(s) that Doppler (${config}) also provides. Adding DOPPLER_TOKEN would mix the two sources at build and runtime and can break sign-in on the live site. Nothing was changed.`,
+      hint: 'Run /migrate-to-doppler to move the Vercel values into Doppler and remove them from Vercel, then re-run this deploy. To keep this project on its own Vercel variables instead, deploy without Doppler (legacy mode).',
+    }, null, 2));
+    process.exit(1);
+  }
+
+  const present = new Set(vercelEnvs.filter(e => e.key === 'DOPPLER_TOKEN').flatMap(e => e.target || []));
+  const keepExisting = config === 'dev' || checkProdPromoted().promoted;
+  const targets = keepExisting ? allTargets.filter(t => !present.has(t)) : allTargets;
+  const kept = allTargets.filter(t => !targets.includes(t));
+  if (kept.length) {
+    result.alreadySet = kept.map(t => `DOPPLER_TOKEN (${t})`);
+    result.steps.push(`DOPPLER_TOKEN already set on ${kept.join(', ')}; left unchanged`);
+  }
+
+  let dopplerToken;
+  if (targets.length) {
+    try {
+      dopplerToken = createServiceToken(config, tokenName);
+      result.steps.push(`Issued Doppler service token (${tokenName}) for config=${config}`);
+    } catch (err) {
+      console.error(JSON.stringify({
+        success: false,
+        error: `Failed to create Doppler service token: ${err.message}`,
+      }));
+      process.exit(1);
+    }
   }
 
   // 2. Ensure REVALIDATE_TOKEN exists in Doppler. Generate one if absent so
@@ -1373,10 +1437,6 @@ async function runVercelEnvDoppler(opts = {}) {
   //      prd-scoped token. This intentionally overwrites the dev-scoped token
   //      that /deploy-to-dev left there earlier — production deploys must use
   //      prd Doppler config, not dev.
-  const targets = config === 'dev'
-    ? ['development', 'preview', 'production']
-    : ['production'];
-
   for (const target of targets) {
     const pushed = pushVercelEnvVar('DOPPLER_TOKEN', dopplerToken, target);
     if (pushed.ok) {
@@ -1477,36 +1537,36 @@ async function runVercelEnvDoppler(opts = {}) {
   console.log(JSON.stringify(result, null, 2));
 }
 
+// Every variable stored on the linked Vercel project: [{ key, target: [...] }].
+// Returns null when the list can't be read, so callers don't mistake a failed
+// lookup for "nothing is set".
+function listVercelEnv() {
+  const r = spawnSync('vercel', ['env', 'ls', '--json'], { cwd: ROOT_DIR, encoding: 'utf-8', timeout: 30000 });
+  if (r.status !== 0) return null;
+  try {
+    const out = r.stdout || '';
+    const { envs } = JSON.parse(out.slice(out.indexOf('{')));
+    return Array.isArray(envs) ? envs : null;
+  } catch {
+    return null;
+  }
+}
+
 // Helper: push a single value to Vercel env, replacing any existing one.
 function pushVercelEnvVar(key, value, vercelEnv) {
   try {
-    // Best-effort remove first so `add` doesn't error on duplicates. For preview the
-    // empty-string branch positional means "all preview branches" (CLI 52 requirement).
-    const rmArgs = vercelEnv === 'preview'
-      ? ['vercel', 'env', 'rm', key, vercelEnv, '', '--yes']
-      : ['vercel', 'env', 'rm', key, vercelEnv, '--yes'];
-    spawnSync('npx', rmArgs, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
-
-    let add;
-    if (vercelEnv === 'preview') {
-      // Vercel CLI 52+ requires an explicit branch positional even for "all preview branches"
-      // (empty string ""), and `--value`/`--yes` instead of stdin. The stdin form falls
-      // through to an interactive branch prompt and dies on EOF.
-      add = spawnSync('npx', ['vercel', 'env', 'add', key, vercelEnv, '', '--value', value, '--yes'], {
-        cwd: ROOT_DIR,
-        encoding: 'utf-8',
-        timeout: 30000,
-      });
-    } else {
-      // development / production: stdin form keeps the value out of argv (so it doesn't
-      // surface in `ps` or shell history).
-      add = spawnSync('npx', ['vercel', 'env', 'add', key, vercelEnv], {
-        cwd: ROOT_DIR,
-        input: value,
-        encoding: 'utf-8',
-        timeout: 30000,
-      });
-    }
+    // `--force` overwrites an existing variable in place. Do NOT remove first:
+    // Vercel CLI 66 refuses `env rm --yes` from an agent session (removals need a
+    // person's approval), which left the old variable there and made the add fail
+    // with "already been added" on every re-run. The value goes on stdin so it
+    // stays out of argv (`ps`, shell history); `--yes` accepts the default of all
+    // preview branches instead of prompting.
+    const add = spawnSync('vercel', ['env', 'add', key, '--environment', vercelEnv, '--force', '--yes'], {
+      cwd: ROOT_DIR,
+      input: value,
+      encoding: 'utf-8',
+      timeout: 30000,
+    });
     if (add.status !== 0) {
       return { ok: false, error: ((add.stderr || '') + (add.stdout || '')).trim().slice(0, 200) };
     }
@@ -1549,8 +1609,8 @@ function checkProdPromoted() {
   try {
     const tmp = path.join(os.tmpdir(), `vercel-prod-marker-${Date.now()}.env`);
     const r = spawnSync(
-      'npx',
-      ['vercel', 'env', 'pull', tmp, '--environment', 'production', '--yes'],
+      'vercel',
+      ['env', 'pull', tmp, '--environment', 'production', '--yes'],
       { cwd: ROOT_DIR, encoding: 'utf-8', timeout: 30000 }
     );
     if (r.status !== 0) return { promoted: false };
@@ -1586,7 +1646,7 @@ function emitProdPromotedGateError(promotedAt) {
       '    re-run with --force-overwrite-prod=true. This is destructive to production users.',
       'To clear the marker entirely after sunsetting the prod deployment:',
       '  Doppler mode: doppler secrets unset _PROD_PROMOTED_AT --config dev',
-      '  Legacy mode:  npx vercel env rm _PROD_PROMOTED_AT production --yes',
+      '  Legacy mode:  vercel env rm _PROD_PROMOTED_AT production --yes',
     ].join('\n'),
   }));
 }
@@ -1602,7 +1662,7 @@ async function runVercelDeploy() {
   };
 
   try {
-    const output = execSync('npx vercel deploy --prod', {
+    const output = execSync('vercel deploy --prod', {
       cwd: ROOT_DIR,
       encoding: 'utf-8',
       stdio: 'pipe',
@@ -1657,7 +1717,7 @@ async function runVercelDeploy() {
     if (result.url) {
       try {
         const inspectOut = execSync(
-          `npx vercel inspect ${result.url} --format json`,
+          `vercel inspect ${result.url} --format json`,
           { cwd: ROOT_DIR, encoding: 'utf-8', stdio: 'pipe', timeout: 30000 }
         );
         // Vercel CLI prints a "Fetching deployment..." line on stderr, but
@@ -1705,7 +1765,7 @@ async function runVercelDeploy() {
       }
 
       if (!result.productionUrl) {
-        result.steps.push('Warning: Could not determine production alias URL. Run: npx vercel inspect <deployment-url> --format json to view aliases.');
+        result.steps.push('Warning: Could not determine production alias URL. Run: vercel inspect <deployment-url> --format json to view aliases.');
       }
     }
   } catch (err) {
@@ -1944,7 +2004,7 @@ async function runUpdateVercelClerkKeys(args) {
 
   for (const [key, value] of Object.entries(envVars)) {
     try {
-      execFileSync('npx', ['vercel', 'env', 'add', key, 'production', '--force'], {
+      execFileSync('vercel', ['env', 'add', key, 'production', '--force'], {
         cwd: ROOT_DIR,
         input: value,
         stdio: 'pipe',
@@ -2015,7 +2075,7 @@ switch (command) {
   default:
     console.error(`Usage:
   node scripts/deploy.mjs check-tools
-  node scripts/deploy.mjs github-setup --repo-name="my-project"
+  node scripts/deploy.mjs github-setup --repo-name="my-project" [--owner=<user|org>] [--no-push]
   node scripts/deploy.mjs convex-deploy-key
   node scripts/deploy.mjs validate-keys --clerk-pk=... --clerk-sk=... [--deploy-key=prod:...|...] [--require-prod=true]
   node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...
