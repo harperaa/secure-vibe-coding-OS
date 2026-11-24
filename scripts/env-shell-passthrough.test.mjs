@@ -66,6 +66,8 @@ function makeSandbox(t, envLocal) {
   const binDir = path.join(root, 'bin');
   fs.mkdirSync(binDir);
   fs.writeFileSync(path.join(binDir, 'npx'), FAKE_NPX, { mode: 0o755 });
+  // The scripts call the globally installed `vercel` directly; log it as `vercel ...` too.
+  fs.writeFileSync(path.join(binDir, 'vercel'), FAKE_NPX.replace("const argv = process.argv.slice(2);", "const argv = ['vercel', ...process.argv.slice(2)];"), { mode: 0o755 });
 
   fs.writeFileSync(path.join(root, '.env.local'), envLocal);
 

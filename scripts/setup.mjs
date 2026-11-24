@@ -1453,15 +1453,13 @@ const KEEP_IN_CONVEX = new Set([
   'SECURITY_LOG_KEY',                     // Convex-mirrored (gates logSecurityViolation)
 ]);
 
-// Vercel is invoked via `npx vercel ...` everywhere in this repo (no global
-// install required). Probe with `npx vercel --version` — npx returns non-zero
-// if the package can't be resolved or the user has no internet to fetch it.
+// The Vercel CLI is a one-time global install (`npm i -g vercel`, run outside
+// the repo). It is not fetched with npx: the repo's strict-allow-scripts would
+// block the CLI's esbuild/fsevents install scripts, and pinning it as a
+// devDependency pulls in high-severity advisories that fail the audit gate.
 function vercelAvailable() {
-  const r = spawnSync('npx', ['--no-install', 'vercel', '--version'], { stdio: 'ignore' });
-  if (r.status === 0) return true;
-  // Fall back to letting npx resolve from cache or registry once.
-  const r2 = spawnSync('npx', ['vercel', '--version'], { stdio: 'ignore' });
-  return r2.status === 0;
+  const r = spawnSync('vercel', ['--version'], { stdio: 'ignore' });
+  return r.status === 0;
 }
 
 function readEnvFileAsMap(filePath) {
@@ -1519,14 +1517,14 @@ function readConvexEnvList() {
 // Returns { ok, byTarget: { production: {KEY:VAL}, preview: {...}, development: {...} } }
 function readVercelEnv() {
   if (!vercelAvailable()) {
-    return { ok: false, error: 'vercel CLI not resolvable via `npx vercel` (skipping Vercel migration)' };
+    return { ok: false, error: 'vercel CLI not installed — run `npm i -g vercel` outside this repo (skipping Vercel migration)' };
   }
   const byTarget = { production: {}, preview: {}, development: {} };
   for (const target of Object.keys(byTarget)) {
     const tmp = path.join(os.tmpdir(), `vercel-env-${target}-${Date.now()}.txt`);
     const result = spawnSync(
-      'npx',
-      ['vercel', 'env', 'pull', tmp, '--environment', target, '--yes'],
+      'vercel',
+      ['env', 'pull', tmp, '--environment', target, '--yes'],
       { encoding: 'utf-8' }
     );
     if (result.status !== 0) {
@@ -1786,7 +1784,7 @@ async function runMigrateToDoppler(args) {
         for (const key of Object.keys(targetMap)) {
           if (!allMigrated.has(key)) continue;
           if (PROTECTED_KEYS.has(key)) continue;
-          const r = spawnSync('npx', ['vercel', 'env', 'rm', key, target, '--yes'], { stdio: 'inherit' });
+          const r = spawnSync('vercel', ['env', 'rm', key, target, '--yes'], { stdio: 'inherit' });
           if (r.status === 0) result.removedFromVercel[target].push(key);
         }
       }
