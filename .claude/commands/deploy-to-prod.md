@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Read, Edit, Write
+allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(node scripts/setup.mjs doppler-create-ci-token*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(test -n *), Bash(printf *), Read, Edit, Write
 description: Full production deployment (Clerk prod + Convex prod + Vercel + Google OAuth + optional Stripe)
 ---
 
@@ -123,13 +123,26 @@ Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
     - "[directory basename]" (Recommended) — Uses current folder name
     - "[site name from .env.local]" — Uses your configured site name
   - Header: "Repo name"
-- Run: `node scripts/deploy.mjs github-setup --repo-name="<NAME>"`
+- Run: `node scripts/deploy.mjs github-setup --repo-name="<NAME>" --no-push`
+  (`--no-push`: Phase 2b sets the repo's Actions secrets and then makes the first push, so CI starts with them.)
 - Parse result and show new repo URL
 
 **If "No":**
 Display manual instructions and AskUserQuestion to confirm when done.
 
 **If origin is already a non-template repo:** show checkmark and proceed.
+
+## Phase 2b: GitHub Actions secrets (DOPPLER_TOKEN, CLAUDE_CODE_OAUTH_TOKEN)
+
+Users who skipped `/deploy-to-dev` get their GitHub repo in Phase 2 above, so its Actions secrets were never set. Read `.claude/commands/deploy-to-dev.md` and follow **Step 2.6** (2.6a and 2.6b) exactly, with these substitutions:
+
+- `<GH_REPO>` = `owner/repo` parsed from `git remote get-url origin`. If origin is still the template or missing (the user chose "No, I'll set it up myself" and hasn't finished), skip this phase and list both secrets under Remaining Setup in Phase 12.
+- "go to Step 3" means continue to Phase 3; "Next Steps in Step 8" means Remaining Setup in Phase 12.
+- `DOPPLER_TOKEN` in GitHub is the `dev`-scoped CI token on purpose (CI builds with dev config). Do not replace it with a `prd` token.
+
+If both secrets are already listed (typical when `/deploy-to-dev` ran first), show one checkmark ("GitHub Actions secrets already set") and continue without asking anything.
+
+**Finally, if Phase 2 created the repo** (it was run with `--no-push`), push now — even if the secrets step was skipped or failed: `git push -u origin main`.
 
 ## Phase 3: Clerk Production Instance + Keys
 
@@ -478,6 +491,8 @@ Build write-summary arguments from all collected data. Include google-oauth stat
 - If `<SKIP_STRIPE>` is false and `<STRIPE_STATUS>` is `"configured"` → pass `--stripe-status="configured"`, add "Stripe billing connected" to `--completed-steps`.
 - If `<SKIP_STRIPE>` is false and `<STRIPE_STATUS>` is `"deferred"` → pass `--stripe-status="deferred"`, add "Stripe billing (deferred)" to `--skipped-steps`.
 
+**GitHub Actions secrets (Phase 2b):** add "DOPPLER_TOKEN GitHub secret set" (Doppler mode) and "Claude Code GitHub token set (CLAUDE_CODE_OAUTH_TOKEN)" to `--completed-steps` for each one that was pushed or already present; add any that were skipped or failed to `--skipped-steps`.
+
 Run: `node scripts/deploy.mjs write-summary --deploy-type="prod" --vercel-url="<URL>" --repo-url="<URL>" --convex-prod-url="<URL>" --convex-site-url="<URL>" --frontend-api-url="<URL>" --site-name="<NAME>" --admin-email="<EMAIL>" --google-oauth="<configured|skipped>" --stripe-status="<configured|skipped|deferred>" --webhook-url="<URL>" --completed-steps="<STEPS>" --skipped-steps="<STEPS>" --vercel-vars="<VARS>" --convex-vars="<VARS>"`
 
 When `<stripe-status>` is `"skipped"` or `"deferred"`, `write-summary` injects an "Enable Stripe billing later" section into `docs/DEPLOYMENT-PROD.md` with the exact steps to connect Stripe + Clerk Billing post-deploy. No additional guidance is needed in the live chat — the doc is the source of truth.
@@ -489,6 +504,7 @@ Display:
 
 ### Automated Steps
 - [x] GitHub repository created / configured
+- [x] GitHub Actions secrets set (DOPPLER_TOKEN in Doppler mode, CLAUDE_CODE_OAUTH_TOKEN) — list only the ones Phase 2b set or found
 - [x] Clerk production instance created (with custom domain)
 - [x] Clerk production keys validated (pk_live_/sk_live_)
 - [x] JWT template created on production Clerk
@@ -523,6 +539,7 @@ Full record saved to: **docs/DEPLOYMENT-PROD.md**
 1. **Point your domain to Vercel**: Vercel Dashboard → Settings → Domains → Add <THEIR_DOMAIN>
 2. **Configure DNS**: Add the records shown by Vercel at your domain registrar
 3. **Update Clerk domain**: After DNS propagates, verify in Clerk Dashboard (Production) → Domains
+4. (Only if Phase 2b skipped or failed) **GitHub Actions secrets**: `node scripts/setup.mjs doppler-create-ci-token` (Doppler mode) and `claude setup-token` then `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R <GH_REPO>`
 
 ### Ongoing Deployments
 Future deployments happen automatically when you push to main:

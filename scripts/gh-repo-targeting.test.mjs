@@ -112,6 +112,21 @@ test("pushTokenToGithub passes -R with the origin repo to gh secret set", () => 
   assert.match(calls(), /^secret set DOPPLER_TOKEN -R acme\/product --body dp\.st\.synthetic$/m);
 });
 
+test("doppler-create-ci-token defers while origin is still the template", () => {
+  // Fresh clone: origin is the template. No Doppler token may be minted and
+  // nothing may be pushed to the template's secrets.
+  const clone = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "gh-clone-")));
+  execFileSync("git", ["init", "-q"], { cwd: clone });
+  execFileSync("git", ["remote", "add", "origin", "https://github.com/harperaa/secure-vibe-coding-OS.git"], { cwd: clone });
+  fs.writeFileSync(path.join(bin, "doppler"), `#!/bin/sh\necho "doppler $*" >> "${log}"\nexit 0\n`, { mode: 0o755 });
+  reset();
+  const r = spawnSync(process.execPath, [path.join(here, "setup.mjs"), "doppler-create-ci-token"], { cwd: clone, env: stubEnv(), encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout.slice(r.stdout.indexOf("{")));
+  assert.equal(out.deferred, true);
+  assert.equal(calls(), "");
+});
+
 test("github-setup points gh at the product once the template is upstream", () => {
   const src = fs.readFileSync(path.join(here, "deploy.mjs"), "utf8");
   assert.match(src, /tryExecResult\(`gh repo set-default \$\{productRepo\}`\)/);

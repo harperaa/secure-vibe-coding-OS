@@ -22,7 +22,7 @@
  *
  * Usage:
  *   node scripts/deploy.mjs check-tools
- *   node scripts/deploy.mjs github-setup --repo-name="my-project"
+ *   node scripts/deploy.mjs github-setup --repo-name="my-project" [--owner=<user|org>] [--no-push]
  *   node scripts/deploy.mjs convex-deploy-key
  *   node scripts/deploy.mjs validate-keys --clerk-pk=pk_live_... --clerk-sk=sk_live_... [--deploy-key=prod:...|...]
  *   node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...
@@ -46,18 +46,12 @@ import {
   setSecret,
   downloadSecrets,
 } from './lib/doppler.mjs';
-import { parseGithubRepo } from './lib/github-repo.mjs';
+import { parseGithubRepo, isTemplateRepo } from './lib/github-repo.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.join(__dirname, '..');
 const ENV_FILE = path.join(ROOT_DIR, '.env.local');
-
-// Template repo identifiers used to detect upstream origin
-const TEMPLATE_REPOS = [
-  'harperaa/secure-vibe-coding-OS',
-  'harperaa/secure-vibe-coding-os',
-];
 
 // ---------------------------------------------------------------------------
 // Argument Parsing (same pattern as setup.mjs)
@@ -217,9 +211,7 @@ async function runCheckTools() {
   result.gitRemote = remoteUrl;
 
   if (remoteUrl) {
-    result.isUpstreamTemplate = TEMPLATE_REPOS.some(
-      repo => remoteUrl.toLowerCase().includes(repo.toLowerCase())
-    );
+    result.isUpstreamTemplate = isTemplateRepo(remoteUrl);
   }
 
   result.needsRepo = result.isUpstreamTemplate || !remoteUrl;
@@ -302,6 +294,9 @@ async function runGithubSetup(args) {
   // personal account. Without OWNER/, `gh repo create REPO` always uses the
   // user's account, which has caused org-targeted deploys to land personally.
   const owner = args['owner'];
+  // Optional: --no-push creates the repo and remote without pushing, so the
+  // caller can set Actions secrets before the first push triggers CI.
+  const push = args['no-push'] !== 'true';
 
   if (!repoName) {
     console.error(JSON.stringify({
@@ -346,9 +341,7 @@ async function runGithubSetup(args) {
   // Check if origin points to template — rename to upstream
   const currentOrigin = tryExec('git remote get-url origin');
   if (currentOrigin) {
-    const isTemplate = TEMPLATE_REPOS.some(
-      repo => currentOrigin.toLowerCase().includes(repo.toLowerCase())
-    );
+    const isTemplate = isTemplateRepo(currentOrigin);
 
     if (isTemplate) {
       // Check if upstream already exists
@@ -380,7 +373,7 @@ async function runGithubSetup(args) {
   // to the authenticated user's personal account.
   const repoArg = owner ? `${owner}/${repoName}` : repoName;
   const createResult = tryExecResult(
-    `gh repo create "${repoArg}" --private --source=. --remote=origin --push`,
+    `gh repo create "${repoArg}" --private --source=. --remote=origin${push ? ' --push' : ''}`,
     { timeout: 60000 }
   );
 
@@ -2015,7 +2008,7 @@ switch (command) {
   default:
     console.error(`Usage:
   node scripts/deploy.mjs check-tools
-  node scripts/deploy.mjs github-setup --repo-name="my-project"
+  node scripts/deploy.mjs github-setup --repo-name="my-project" [--owner=<user|org>] [--no-push]
   node scripts/deploy.mjs convex-deploy-key
   node scripts/deploy.mjs validate-keys --clerk-pk=... --clerk-sk=... [--deploy-key=prod:...|...] [--require-prod=true]
   node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...

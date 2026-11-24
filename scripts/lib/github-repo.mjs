@@ -8,6 +8,18 @@
 
 import { spawnSync } from 'node:child_process';
 
+/** The template this product was cloned from. Never a target for product secrets. */
+export const TEMPLATE_REPOS = [
+  'harperaa/secure-vibe-coding-OS',
+  'harperaa/secure-vibe-coding-os',
+];
+
+/** True when "owner/repo" (or a URL containing it) is the template repository. */
+export function isTemplateRepo(repoOrUrl) {
+  const s = (repoOrUrl || '').toLowerCase();
+  return TEMPLATE_REPOS.some(repo => s.includes(repo.toLowerCase()));
+}
+
 /** "owner/repo" for a github.com remote URL, or null for anything else. */
 export function parseGithubRepo(remoteUrl) {
   const m = /^(?:https:\/\/|ssh:\/\/git@|git@)github\.com[:/]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(
