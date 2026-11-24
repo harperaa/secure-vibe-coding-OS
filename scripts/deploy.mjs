@@ -197,7 +197,7 @@ async function runCheckTools() {
   }
 
   // Vercel CLI
-  const vercelVersion = tryExec('npx vercel --version');
+  const vercelVersion = tryExec('vercel --version');
   if (vercelVersion) {
     const match = vercelVersion.match(/(\d+\.\d+\.\d+)/);
     result.tools.vercel = match ? match[1] : vercelVersion;
@@ -1104,7 +1104,7 @@ async function runVercelEnvDev() {
 
   for (const [key, value] of Object.entries(envVars)) {
     try {
-      execFileSync('npx', ['vercel', 'env', 'add', key, 'production', '--force'], {
+      execFileSync('vercel', ['env', 'add', key, 'production', '--force'], {
         cwd: ROOT_DIR,
         input: value,
         stdio: 'pipe',
@@ -1200,7 +1200,7 @@ async function runVercelEnv(args) {
   for (const [key, value] of Object.entries(envVars)) {
     try {
       // Value goes on stdin with no shell involved, so it arrives verbatim
-      execFileSync('npx', ['vercel', 'env', 'add', key, 'production', '--force'], {
+      execFileSync('vercel', ['env', 'add', key, 'production', '--force'], {
         cwd: ROOT_DIR,
         input: value,
         stdio: 'pipe',
@@ -1476,16 +1476,16 @@ function pushVercelEnvVar(key, value, vercelEnv) {
     // Best-effort remove first so `add` doesn't error on duplicates. For preview the
     // empty-string branch positional means "all preview branches" (CLI 52 requirement).
     const rmArgs = vercelEnv === 'preview'
-      ? ['vercel', 'env', 'rm', key, vercelEnv, '', '--yes']
-      : ['vercel', 'env', 'rm', key, vercelEnv, '--yes'];
-    spawnSync('npx', rmArgs, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
+      ? ['env', 'rm', key, vercelEnv, '', '--yes']
+      : ['env', 'rm', key, vercelEnv, '--yes'];
+    spawnSync('vercel', rmArgs, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
 
     let add;
     if (vercelEnv === 'preview') {
       // Vercel CLI 52+ requires an explicit branch positional even for "all preview branches"
       // (empty string ""), and `--value`/`--yes` instead of stdin. The stdin form falls
       // through to an interactive branch prompt and dies on EOF.
-      add = spawnSync('npx', ['vercel', 'env', 'add', key, vercelEnv, '', '--value', value, '--yes'], {
+      add = spawnSync('vercel', ['env', 'add', key, vercelEnv, '', '--value', value, '--yes'], {
         cwd: ROOT_DIR,
         encoding: 'utf-8',
         timeout: 30000,
@@ -1493,7 +1493,7 @@ function pushVercelEnvVar(key, value, vercelEnv) {
     } else {
       // development / production: stdin form keeps the value out of argv (so it doesn't
       // surface in `ps` or shell history).
-      add = spawnSync('npx', ['vercel', 'env', 'add', key, vercelEnv], {
+      add = spawnSync('vercel', ['env', 'add', key, vercelEnv], {
         cwd: ROOT_DIR,
         input: value,
         encoding: 'utf-8',
@@ -1542,8 +1542,8 @@ function checkProdPromoted() {
   try {
     const tmp = path.join(os.tmpdir(), `vercel-prod-marker-${Date.now()}.env`);
     const r = spawnSync(
-      'npx',
-      ['vercel', 'env', 'pull', tmp, '--environment', 'production', '--yes'],
+      'vercel',
+      ['env', 'pull', tmp, '--environment', 'production', '--yes'],
       { cwd: ROOT_DIR, encoding: 'utf-8', timeout: 30000 }
     );
     if (r.status !== 0) return { promoted: false };
@@ -1579,7 +1579,7 @@ function emitProdPromotedGateError(promotedAt) {
       '    re-run with --force-overwrite-prod=true. This is destructive to production users.',
       'To clear the marker entirely after sunsetting the prod deployment:',
       '  Doppler mode: doppler secrets unset _PROD_PROMOTED_AT --config dev',
-      '  Legacy mode:  npx vercel env rm _PROD_PROMOTED_AT production --yes',
+      '  Legacy mode:  vercel env rm _PROD_PROMOTED_AT production --yes',
     ].join('\n'),
   }));
 }
@@ -1595,7 +1595,7 @@ async function runVercelDeploy() {
   };
 
   try {
-    const output = execSync('npx vercel deploy --prod', {
+    const output = execSync('vercel deploy --prod', {
       cwd: ROOT_DIR,
       encoding: 'utf-8',
       stdio: 'pipe',
@@ -1650,7 +1650,7 @@ async function runVercelDeploy() {
     if (result.url) {
       try {
         const inspectOut = execSync(
-          `npx vercel inspect ${result.url} --format json`,
+          `vercel inspect ${result.url} --format json`,
           { cwd: ROOT_DIR, encoding: 'utf-8', stdio: 'pipe', timeout: 30000 }
         );
         // Vercel CLI prints a "Fetching deployment..." line on stderr, but
@@ -1698,7 +1698,7 @@ async function runVercelDeploy() {
       }
 
       if (!result.productionUrl) {
-        result.steps.push('Warning: Could not determine production alias URL. Run: npx vercel inspect <deployment-url> --format json to view aliases.');
+        result.steps.push('Warning: Could not determine production alias URL. Run: vercel inspect <deployment-url> --format json to view aliases.');
       }
     }
   } catch (err) {
@@ -1937,7 +1937,7 @@ async function runUpdateVercelClerkKeys(args) {
 
   for (const [key, value] of Object.entries(envVars)) {
     try {
-      execFileSync('npx', ['vercel', 'env', 'add', key, 'production', '--force'], {
+      execFileSync('vercel', ['env', 'add', key, 'production', '--force'], {
         cwd: ROOT_DIR,
         input: value,
         stdio: 'pipe',
