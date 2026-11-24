@@ -1010,7 +1010,7 @@ git push origin main
 3. Action: **Rate limit**, keyed by IP, with a window that matches your tolerance (for example 60 requests per minute). Start in log-only mode, read the Firewall logs for a day, then switch to deny.
 4. Keep `withRateLimit` in place: it still covers local and non-Vercel deployments and still writes the `rate_limit_exceeded` rows the security dashboard shows.
 
-Convex mutations never pass through Vercel, so neither control applies to them. Authenticated mutations should carry their own bound, as `convex/jobs.ts` does with its per-user active-job cap, and public ones should be gated the way `logSecurityViolation` is.
+Convex mutations never pass through Vercel, so neither control applies to them. Authenticated mutations should carry their own bound (for example a per-user cap enforced in the mutation), and public ones should be gated the way `logSecurityViolation` is.
 
 ## Monitoring and Observability
 

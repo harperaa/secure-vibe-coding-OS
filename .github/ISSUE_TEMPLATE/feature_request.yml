@@ -47,7 +47,7 @@ body:
         - Backend / database (Convex)
         - Payments / billing (Clerk Billing, Stripe)
         - Security runtime (CSRF, rate limiting, security headers, security logging)
-        - Content modules (homepage-content, blog, dashboard-sample, pricing, background-job)
+        - Content modules (homepage-content, blog, dashboard-sample, pricing)
         - Security skills / security assessment agents
         - Claude Code commands and skills (git workflow, lessons, site building)
         - CI/CD / GitHub workflows / branch protection
