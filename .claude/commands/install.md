@@ -134,20 +134,33 @@ Read `legacy` from the JSON output:
     - "Cancel" — "Stop the install without changing anything."
 
   Then:
-  - **Migrate:** install the content modules below if any were selected, then follow `.claude/commands/migrate-to-doppler.md` from Phase 0 through Phase 7 exactly as written (it runs `doppler-bootstrap` itself — pass `--project-name="<SITE_NAME>"` — and it has its own confirmation and HARD STOP before any cleanup; honour both). When it finishes, SKIP the "Doppler bootstrap" section below and continue at Phase 3. `init` then finds the migrated Clerk keys and secrets in Doppler `dev` and reuses them (`reusedClerk: true`), so nothing is regenerated.
+  - **Migrate:** apply the module selection below, then follow `.claude/commands/migrate-to-doppler.md` from Phase 0 through Phase 7 exactly as written (it runs `doppler-bootstrap` itself — pass `--project-name="<SITE_NAME>"` — and it has its own confirmation and HARD STOP before any cleanup; honour both). When it finishes, SKIP the "Doppler bootstrap" section below and continue at Phase 3. `init` then finds the migrated Clerk keys and secrets in Doppler `dev` and reuses them (`reusedClerk: true`), so nothing is regenerated.
   - **Stay on legacy:** set `<USE_DOPPLER>` = `false` and continue; skip every Doppler-only step.
   - **Cancel:** STOP.
 
-### Install content modules (only if `<MODULES>` is non-empty)
+### Apply the module selection (always — including "Minimal shell")
 
-Before Phase 3, copy the selected modules into the repo. This is a fresh template, so the deterministic anchor edits are safe:
+The repository itself ships with every module installed (its `main` branch is the reference website). The user's choice above is what THEIR site gets, regardless of what the repo has installed: `set` rebuilds the site for the selection from the minimal base, adding the chosen modules and removing the others.
+
+Before Phase 3, look at the plan first (changes nothing):
 
 ```bash
-node scripts/modules.mjs install <MODULES as space-separated names> --apply-edits
+node scripts/modules.mjs set <MODULES as space-separated names> --dry-run --json
 ```
 
-- The script installs in the correct order automatically and reports every file copied and edit applied — show a one-line checkmark per module.
-- On a fresh clone there should be NO conflicts and NO "anchor not found" edit skips ("module X not installed" and "already applied" skips are normal). If conflicts or missing anchors appear, something is wrong with the working tree — show the output and STOP.
+For "Minimal shell" (`<MODULES>` empty) use `set --minimal` in place of the names. Read the JSON:
+
+- **`changes` is empty** — the site already matches the selection. Show a checkmark and continue.
+- **`error: "customized_files"`** — the files in `customized` were edited by hand and would be overwritten or removed. Show the list and call AskUserQuestion (Header: "Edited files"): "Keep my current modules (Recommended)" — set `<MODULES>` to the `current` list, recompute `<SKIPPED_MODULES>`, and continue without changing anything; or "Replace them anyway" — add `--force` to the command below.
+- **`toRemove` is non-empty AND `docs/INSTALL.md` already exists** (this project was installed before, so this is a re-run) — confirm before removing: AskUserQuestion (Header: "Remove modules") "This will remove <toRemove> from your site. Continue?" with "Keep my current modules (Recommended)" / "Yes, remove them". On a first install (no `docs/INSTALL.md`) do NOT ask: choosing a smaller selection is the instruction to remove the rest.
+
+Then apply it (same command without `--dry-run`, plus `--force` only if the user chose to replace edited files):
+
+```bash
+node scripts/modules.mjs set <MODULES as space-separated names>     # or: set --minimal
+```
+
+Show one checkmark line per module added or removed. Exit code 2 means nothing was changed (edited files); any other failure: show the output and STOP.
 
 ### Doppler bootstrap (only if `<USE_DOPPLER>` is true)
 

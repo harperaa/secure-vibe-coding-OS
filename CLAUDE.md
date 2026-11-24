@@ -129,11 +129,13 @@ This project supports two flows for environment variables:
 
 ## Content Modules
 
-Optional page/content modules live in `templates/modules/<name>/` (homepage-content, blog, dashboard-sample, pricing). The default site is minimal — login homepage + blank dashboard. `/install` asks which modules to copy in; `/add-module` installs any of them later; `node scripts/modules.mjs install <name...> --apply-edits` does it headlessly. Modules only add pages and content — the security backend (convex/, lib/, proxy.ts, app/api/) is always installed and never gated.
+Optional page/content modules live in `templates/modules/<name>/` (homepage-content, blog, dashboard-sample, pricing). The template's `main` is the reference website and has every module installed; that is not what users are given. `/install` asks which modules their site should have (default: minimal — login homepage + blank dashboard) and applies the choice with `node scripts/modules.mjs set <name...>|--minimal|--all`, which rebuilds the site from `templates/base/files/` (the minimal versions of the files modules overwrite or edit) plus the chosen modules, removing the rest. `/add-module` installs any of them later; `node scripts/modules.mjs install <name...> --apply-edits` does that headlessly. Modules only add pages and content — the security backend (convex/, lib/, proxy.ts, app/api/) is always installed and never gated.
 
 The runtime security code (secrets loading, CSRF, rate limiting, security log schema/logger/counters/redaction) lives in `packages/secure-vibe-runtime` and is consumed as the npm dependency `secure-vibe-runtime`. `lib/csrf.ts`, `lib/secrets.ts`, `lib/withCsrf.ts`, `lib/withRateLimit.ts` and `convex/lib/*.ts` are re-export shims: edit the package source, rebuild (`npm run build:runtime`), and bump both versions together at release.
 
 Conventions (do not break these):
+- The installed pages on `main` must equal a clean build of all modules (`node scripts/modules.mjs set --all --dry-run` reports no changes; CI checks this). Fix a module page in `templates/modules/<name>/files/` AND its installed copy, and change a base file in `templates/base/files/` AND its installed copy.
+- `docs/INSTALL.md` and `docs/DEPLOYMENT-DEV.md` are per-install records written by `/install` and `/deploy-to-dev`; they are gitignored and must never be committed to the template.
 - `templates/modules/**/files/` mirrors the repo root and is type-checked/linted in place. Imports between two files of the SAME module must use **relative paths** (depth is identical before/after copy); `@/` imports are only allowed for always-installed targets.
 - Anchor comments mark deterministic insertion points for module edits — preserve them when editing the default files: `// modules:nav` (header menuItems + sidebar navMain), `// modules:imports` and `{/* modules:sections */}` (homepage), `{/* modules:footer */}` (blog layout).
 
