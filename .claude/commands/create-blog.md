@@ -175,12 +175,12 @@ node scripts/generate-image.js "[Image prompt based on blog topic]" "public/blog
 If the script exits non-zero with `ERROR: GEMINI_API_KEY is not set.`, do NOT skip the image step silently. The script's stderr already prints the obtain-a-key instructions verbatim — surface them to the user, then offer two clear paths via `AskUserQuestion`:
 
 1. **"I'll add the key myself"** — instruct the user: open https://aistudio.google.com/app/apikey, create a key, then add it to the right place for the project's mode:
-   - Doppler mode: `doppler secrets set GEMINI_API_KEY=<key> --config dev`
+   - Doppler mode: run `doppler secrets set GEMINI_API_KEY --config dev` and paste the key at Doppler's interactive prompt (or set it in the Doppler dashboard). Do not put the key on the command line.
    - Legacy mode: append `GEMINI_API_KEY=<key>` to `.env.local` (one line, no quotes, no spaces around `=`)
    Tell them to reply when done; on their next message, retry the same `node scripts/generate-image.js ...` (or `doppler run --` wrapped variant) command and continue Step 4.
 
 2. **"I'll paste the key here, you handle it"** — collect the key via `AskUserQuestion` with a single "Enter below" option (the user types it into "Other"). Validate the input: must start with `AIza` and be ≥ 35 characters; if not, re-ask. Then write it to the appropriate place WITHOUT echoing it back in chat:
-   - Doppler mode: `doppler secrets set GEMINI_API_KEY=<key> --config dev` (single bash call; do not print the key in updates)
+   - Doppler mode: `printf '%s' '<key>' | doppler secrets set GEMINI_API_KEY --config dev`, replacing `<key>` with the validated key (single bash call; `printf` is a shell builtin, so the key goes to Doppler on stdin and never appears in a process argument list; do not print the key in updates)
    - Legacy mode: append `GEMINI_API_KEY=<key>` as a new line to `.env.local`. If the file already has a `GEMINI_API_KEY=` line, use Edit to replace that exact line in place rather than duplicating it.
    Confirm the key was stored, then retry the image generation. Never paste the key back into a user-visible message; refer to it as "the key you provided".
 

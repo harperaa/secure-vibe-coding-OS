@@ -85,7 +85,7 @@ Or, if a redeploy is undesirable and the app exposes the revalidate endpoint:
 ```bash
 REVALIDATE_TOKEN=$(doppler secrets get REVALIDATE_TOKEN --plain --config <DOPPLER_CONFIG>)
 APP_URL="https://<your-app>"   # ask the user to confirm
-curl -X POST "$APP_URL/api/revalidate-secrets" -H "Authorization: Bearer $REVALIDATE_TOKEN"
+printf 'Authorization: Bearer %s\n' "$REVALIDATE_TOKEN" | curl -X POST "$APP_URL/api/revalidate-secrets" -H @-
 ```
 
 Show: ":white_check_mark: Runtime secrets cache invalidated"
@@ -104,11 +104,12 @@ For each, display the rotation steps and AskUserQuestion to confirm completion b
 3. Copy the new sk_live_... (or sk_test_... for dev)
 ```
 
-After paste:
+After the user has the new key: run Doppler's interactive prompt (or have them set it in the Doppler dashboard). Do not put the value on the command line:
 ```bash
-doppler secrets set CLERK_SECRET_KEY="<NEW_SK>" \
+doppler secrets set CLERK_SECRET_KEY \
   --config <DOPPLER_CONFIG>
 ```
+Have the user paste `<NEW_SK>` at the interactive prompt, then confirm when done.
 
 ### 3.2 CLERK_WEBHOOK_SECRET (Svix)
 
@@ -118,16 +119,18 @@ doppler secrets set CLERK_SECRET_KEY="<NEW_SK>" \
 3. Copy the new whsec_...
 ```
 
+Run Doppler's interactive prompt (or the dashboard). Do not put the value on the command line:
 ```bash
-doppler secrets set CLERK_WEBHOOK_SECRET="<NEW_WHSEC>" \
+doppler secrets set CLERK_WEBHOOK_SECRET \
   --config <DOPPLER_CONFIG>
 ```
+Have the user paste `<NEW_WHSEC>` at the interactive prompt, then confirm when done.
 
 ### 3.3 SESSION_SECRET (only if `<ROTATE_SESSIONS>` is "Yes")
 
 ```bash
 NEW=$(node -p "require('crypto').randomBytes(32).toString('base64url')")
-doppler secrets set SESSION_SECRET="$NEW" --config <DOPPLER_CONFIG>
+printf '%s' "$NEW" | doppler secrets set SESSION_SECRET --config <DOPPLER_CONFIG>
 ```
 
 Warn the user: every active user is now logged out and must sign back in.
@@ -136,14 +139,14 @@ Warn the user: every active user is now logged out and must sign back in.
 
 ```bash
 NEW=$(node -p "require('crypto').randomBytes(32).toString('base64url')")
-doppler secrets set CSRF_SECRET="$NEW" --config <DOPPLER_CONFIG>
+printf '%s' "$NEW" | doppler secrets set CSRF_SECRET --config <DOPPLER_CONFIG>
 ```
 
 ### 3.4b SECURITY_LOG_KEY
 
 ```bash
 NEW=$(node -p "require('crypto').randomBytes(32).toString('base64url')")
-doppler secrets set SECURITY_LOG_KEY="$NEW" --config <DOPPLER_CONFIG>
+printf '%s' "$NEW" | doppler secrets set SECURITY_LOG_KEY --config <DOPPLER_CONFIG>
 ```
 
 This key gates writes to the Convex security log, so it must reach Convex too. Step 4 (`sync-convex-env.mjs`) mirrors it; until both Step 4 and Step 5 have run, security-log writes fail closed and the app logs `Invalid SECURITY_LOG_KEY` to the server console. Requests are unaffected.
@@ -156,9 +159,11 @@ This key gates writes to the Convex security log, so it must reach Convex too. S
 3. Copy the prod:...|... value
 ```
 
+Run Doppler's interactive prompt (or the dashboard). Do not put the value on the command line:
 ```bash
-doppler secrets set CONVEX_DEPLOY_KEY="<NEW>" --config prd
+doppler secrets set CONVEX_DEPLOY_KEY --config prd
 ```
+Have the user paste `<NEW>` at the interactive prompt, then confirm when done.
 
 ### 3.6 GEMINI_API_KEY (if used)
 
@@ -166,9 +171,11 @@ doppler secrets set CONVEX_DEPLOY_KEY="<NEW>" --config prd
 1. https://aistudio.google.com/app/api-keys → revoke + create new
 ```
 
+Run Doppler's interactive prompt (or the dashboard). Do not put the value on the command line:
 ```bash
-doppler secrets set GEMINI_API_KEY="<NEW>" --config <DOPPLER_CONFIG>
+doppler secrets set GEMINI_API_KEY --config <DOPPLER_CONFIG>
 ```
+Have the user paste `<NEW>` at the interactive prompt, then confirm when done.
 
 ### 3.7 Any other secret in scope
 
@@ -190,7 +197,7 @@ After all rotations, force the app to drop any cached server secrets again so wa
 
 ```bash
 REVALIDATE_TOKEN=$(doppler secrets get REVALIDATE_TOKEN --plain --config <DOPPLER_CONFIG>)
-curl -X POST "https://<your-app>/api/revalidate-secrets" -H "Authorization: Bearer $REVALIDATE_TOKEN"
+printf 'Authorization: Bearer %s\n' "$REVALIDATE_TOKEN" | curl -X POST "https://<your-app>/api/revalidate-secrets" -H @-
 ```
 
 ## Step 6: Audit and verify

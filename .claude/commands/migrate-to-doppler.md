@@ -149,12 +149,12 @@ Detect promotion state:
 PROD_PROMOTED=$(doppler secrets get _PROD_PROMOTED_AT --config dev --plain 2>/dev/null && echo "yes" || echo "no")
 ```
 
-If MISSING, create a dev-scoped token. Use the `--value <v> --yes` non-interactive form for all three targets — and for **preview**, you MUST pass an empty string `""` as the third positional argument (Vercel CLI 52+ requires the branch positional even for "all preview branches"; the `--yes` flag alone does not skip the prompt):
+If MISSING, create a dev-scoped token. Pass the token value on standard input (not `--value`) for all three targets. `--force` overwrites an existing value in place and `--yes` accepts the default of all preview branches (the same form `scripts/deploy.mjs` uses):
 
 ```bash
 DEV_TOKEN=$(doppler configs tokens create vercel-runtime-dev --plain --config dev)
-vercel env add DOPPLER_TOKEN development --value "$DEV_TOKEN" --yes
-vercel env add DOPPLER_TOKEN preview "" --value "$DEV_TOKEN" --yes
+printf '%s' "$DEV_TOKEN" | vercel env add DOPPLER_TOKEN --environment development --force --yes
+printf '%s' "$DEV_TOKEN" | vercel env add DOPPLER_TOKEN --environment preview --force --yes
 ```
 
 Production target — branch on the promotion state:
@@ -162,14 +162,14 @@ Production target — branch on the promotion state:
 ```bash
 if [ "$PROD_PROMOTED" = "yes" ]; then
   PRD_TOKEN=$(doppler configs tokens create vercel-runtime-prd --plain --config prd)
-  vercel env add DOPPLER_TOKEN production --value "$PRD_TOKEN" --yes
+  printf '%s' "$PRD_TOKEN" | vercel env add DOPPLER_TOKEN --environment production --force --yes
 else
   # Use the same dev-scoped token; /deploy-to-prod will replace it later.
-  vercel env add DOPPLER_TOKEN production --value "$DEV_TOKEN" --yes
+  printf '%s' "$DEV_TOKEN" | vercel env add DOPPLER_TOKEN --environment production --force --yes
 fi
 ```
 
-(The token is passed via `--value` — momentarily visible in `ps`/shell history, but acceptable for a one-time service-token bootstrap. Stdin form was deprecated by Vercel CLI 52 for env-add when combined with `--yes`.)
+(The token value is passed on standard input so it does not appear on the command line.)
 
 If `gh` is available and the GitHub Actions secret isn't set, run the existing helper:
 
