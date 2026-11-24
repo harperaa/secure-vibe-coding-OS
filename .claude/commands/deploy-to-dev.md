@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(node scripts/setup.mjs doppler-create-ci-token*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(basename *), Bash(test -n *), Bash(printf *), Read, Write
+allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(node scripts/setup.mjs doppler-create-ci-token*), Bash(vercel *), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(basename *), Bash(test -n *), Bash(printf *), Read, Write
 description: Deploy to Vercel using dev keys (fully automated)
 ---
 
@@ -44,7 +44,7 @@ Run these checks. If ANY fail, display the error with fix instructions and STOP.
 Parse the check-tools result:
 - If `gh` is missing: STOP. Display: "GitHub CLI is required. Install it: `brew install gh` (macOS) or see https://cli.github.com"
 - If `ghAuth` is false: STOP. Display: "GitHub CLI is not authenticated. Run `gh auth login` in your terminal, then re-run `/deploy-to-dev`."
-- If `vercel` tool check fails, that's OK — npx will handle it.
+- If `vercel` is in `missing`: STOP. Display: "Vercel CLI is required. Install it once, from OUTSIDE this repo (the repo's strict install-script setting blocks it here): `cd ~ && npm i -g vercel`, then `vercel login`, then re-run `/deploy-to-dev`."
 
 4. **If Doppler mode is active** (`.doppler.yaml` exists in repo root):
    - Run `doppler me --json` to verify the developer is logged in. If not: STOP. Display: "Doppler login required. Run `doppler login`, then re-run `/deploy-to-dev`."
@@ -320,24 +320,24 @@ Derive the Vercel project name from the GitHub repo name (NOT the directory name
    non-interactive run and every subsequent command fails with
    `Multiple teams found. Teams are never auto-selected when the CLI runs without an
    interactive terminal.`
-   Run: `npx vercel teams ls`
+   Run: `vercel teams ls`
    - Exactly one team → use its id as `<SCOPE>`.
    - More than one → ask the user which team to deploy into using AskUserQuestion,
      then use the id of their choice as `<SCOPE>`.
 
-3. Run: `npx vercel project add <REPO_NAME> --scope=<SCOPE> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
-4. Run: `npx vercel link --yes --project=<REPO_NAME> --scope=<SCOPE>`
+3. Run: `vercel project add <REPO_NAME> --scope=<SCOPE> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
+4. Run: `vercel link --yes --project=<REPO_NAME> --scope=<SCOPE>`
 
 If this fails (auth error):
-- STOP. Display: "Vercel CLI is not authenticated. Run `npx vercel login` in your terminal, then re-run `/deploy-to-dev`."
+- STOP. Display: "Vercel CLI is not authenticated. Run `vercel login` in your terminal, then re-run `/deploy-to-dev`."
 
 Show checkmark: "Vercel project linked (<REPO_NAME>)"
 
 5. Connect the GitHub repo for automatic deployments on push.
    ALWAYS pass the origin URL explicitly:
-   Run: `npx vercel git connect "$(git remote get-url origin)" --yes --scope=<SCOPE>`
+   Run: `vercel git connect "$(git remote get-url origin)" --yes --scope=<SCOPE>`
    - This enables Vercel to auto-rebuild and redeploy when you `git push origin main`
-   - Without this step, only manual CLI deploys (`npx vercel deploy`) would work
+   - Without this step, only manual CLI deploys (`vercel deploy`) would work
    - The explicit URL is REQUIRED, not cosmetic. Step 2 renames the template remote to
      `upstream` and adds the user's new repo as `origin`, so the repo has TWO remotes.
      A bare `vercel git connect --yes` can pick `upstream` and silently wire this
@@ -345,10 +345,10 @@ Show checkmark: "Vercel project linked (<REPO_NAME>)"
      deploy nothing, while the template's code deploys into their project.
 
    After connecting, VERIFY it bound the right repo before continuing:
-   Run: `npx vercel project inspect <REPO_NAME> --scope=<SCOPE>`
+   Run: `vercel project inspect <REPO_NAME> --scope=<SCOPE>`
    - Confirm the connected repository matches the `origin` basename from step 1.
    - If it shows the template repo, run
-     `npx vercel git disconnect --yes --scope=<SCOPE>` and redo the connect above.
+     `vercel git disconnect --yes --scope=<SCOPE>` and redo the connect above.
 
 If this fails, show warning but continue (the initial CLI deploy in Step 7 will still work):
 "Warning: Could not auto-connect GitHub repo. You can connect it manually in Vercel Dashboard → Settings → Git."

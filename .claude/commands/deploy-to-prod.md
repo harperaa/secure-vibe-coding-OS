@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(node scripts/setup.mjs doppler-create-ci-token*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(test -n *), Bash(printf *), Read, Edit, Write
+allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(node scripts/setup.mjs doppler-create-ci-token*), Bash(vercel *), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(test -n *), Bash(printf *), Read, Edit, Write
 description: Full production deployment (Clerk prod + Convex prod + Vercel + Google OAuth + optional Stripe)
 ---
 
@@ -36,6 +36,7 @@ The legacy mode (`.env.local` → `vercel env add` → secrets stored in Vercel)
    - If not: run `npm install`
 3. Run `node scripts/deploy.mjs check-tools`
 4. Parse the JSON result and display tool status with checkmarks
+   - If `vercel` is in `missing`: STOP. Display: "Vercel CLI is required. Install it once, from OUTSIDE this repo (the repo's strict install-script setting blocks it here): `cd ~ && npm i -g vercel`, then `vercel login`, then re-run `/deploy-to-prod`."
 
 5. Read `.env.local` and verify it has been configured by `/install`:
    - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
@@ -396,24 +397,24 @@ Derive the Vercel project name from the GitHub repo name (NOT the directory name
    team, Vercel never auto-selects in a non-interactive run and the commands below fail with
    `Multiple teams found. Teams are never auto-selected when the CLI runs without an
    interactive terminal.`
-   Run: `npx vercel teams ls`
+   Run: `vercel teams ls`
    - Exactly one team → use its id as `<SCOPE>`.
    - More than one → ask the user which team with AskUserQuestion, then use that id.
-3. Run: `npx vercel project add <REPO_NAME> --scope=<SCOPE> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
-4. Run: `npx vercel link --yes --project=<REPO_NAME> --scope=<SCOPE>`
-If auth error: tell user to run `npx vercel login`, AskUserQuestion to confirm, retry.
+3. Run: `vercel project add <REPO_NAME> --scope=<SCOPE> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
+4. Run: `vercel link --yes --project=<REPO_NAME> --scope=<SCOPE>`
+If auth error: tell user to run `vercel login`, AskUserQuestion to confirm, retry.
 5. Connect the GitHub repo for automatic deployments on push.
    ALWAYS pass the origin URL explicitly:
-   Run: `npx vercel git connect "$(git remote get-url origin)" --yes --scope=<SCOPE>`
+   Run: `vercel git connect "$(git remote get-url origin)" --yes --scope=<SCOPE>`
    This enables Vercel to auto-rebuild and redeploy when you `git push origin main`.
    The explicit URL is REQUIRED: this repo may carry both an `origin` (the user's repo) and
    an `upstream` (the template). A bare `vercel git connect --yes` can bind the PRODUCTION
    project to the template repository — shipping template code to a live site.
 
    Then VERIFY before continuing:
-   Run: `npx vercel project inspect <REPO_NAME> --scope=<SCOPE>` and confirm the connected
+   Run: `vercel project inspect <REPO_NAME> --scope=<SCOPE>` and confirm the connected
    repo matches the `origin` basename. If it shows the template, run
-   `npx vercel git disconnect --yes --scope=<SCOPE>` and redo the connect.
+   `vercel git disconnect --yes --scope=<SCOPE>` and redo the connect.
 
    If the connect itself fails, show a warning but continue — the CLI deploy will still work. User can connect manually in Vercel Dashboard → Settings → Git.
 
@@ -473,7 +474,7 @@ Use the production Convex URL from Phase 8 (`prodUrl`). This is required — ser
 
 Parse and show each variable set.
 
-**Doppler mode verification:** After this step, `npx vercel env ls production` should show ONLY `DOPPLER_TOKEN`. App values are NOT in Vercel — they're fetched from Doppler at build time (via `scripts/vercel-prebuild.mjs`) and runtime (via `lib/secrets.ts`).
+**Doppler mode verification:** After this step, `vercel env ls production` should show ONLY `DOPPLER_TOKEN`. App values are NOT in Vercel — they're fetched from Doppler at build time (via `scripts/vercel-prebuild.mjs`) and runtime (via `lib/secrets.ts`).
 
 ## Phase 11: Production Deployment
 
