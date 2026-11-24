@@ -164,6 +164,7 @@ async function runCheckTools() {
     gitRemote: null,
     isUpstreamTemplate: false,
     isTemplateMaintainer: false,
+    originAccessUnknown: false,
     needsRepo: false,
   };
 
@@ -222,9 +223,15 @@ async function runCheckTools() {
   if (result.isUpstreamTemplate && originRepo && result.tools.ghAuth) {
     const perm = tryExec(`gh repo view ${originRepo} --json viewerPermission -q .viewerPermission`);
     result.isTemplateMaintainer = ['ADMIN', 'MAINTAIN', 'WRITE'].includes(perm);
+    // A failed lookup is not "no push access". Report it so the caller stops
+    // before github-setup renames origin on a maintainer's working copy.
+    result.originAccessUnknown = !perm;
+  } else if (result.isUpstreamTemplate) {
+    result.originAccessUnknown = true; // gh missing/unauthenticated: could not check
   }
 
-  result.needsRepo = (result.isUpstreamTemplate && !result.isTemplateMaintainer) || !remoteUrl;
+  result.needsRepo =
+    (result.isUpstreamTemplate && !result.isTemplateMaintainer && !result.originAccessUnknown) || !remoteUrl;
 
   console.log(JSON.stringify(result, null, 2));
 }

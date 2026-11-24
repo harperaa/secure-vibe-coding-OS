@@ -20,7 +20,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const PK = "pk_test_" + Buffer.from("example-app-00.clerk.accounts.dev$").toString("base64");
 const SK = "sk_test_synthetic";
 
-function runInit(envLocal) {
+function runInit(envLocal, priorSummary = null) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "init-idem-"));
   fs.mkdirSync(path.join(root, "scripts", "lib"), { recursive: true });
   for (const f of ["setup.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs")]) {
@@ -48,6 +48,10 @@ export function createClerkClient() {
   fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "my-product" }));
   fs.writeFileSync(path.join(root, ".env.example"), "");
   if (envLocal !== null) fs.writeFileSync(path.join(root, ".env.local"), envLocal);
+  if (priorSummary !== null) {
+    fs.mkdirSync(path.join(root, "docs"));
+    fs.writeFileSync(path.join(root, "docs", "INSTALL.md"), priorSummary);
+  }
   const r = spawnSync(process.execPath, [path.join(root, "scripts", "setup.mjs"), "init", "--site-name=My Site", "--admin-email=owner@my-site.test"], { cwd: root, encoding: "utf8" });
   const env = fs.readFileSync(path.join(root, ".env.local"), "utf8");
   const get = (k) => (env.match(new RegExp(`^${k}=(.*)$`, "m")) || [])[1];
@@ -65,6 +69,14 @@ test("re-run reuses the configured Clerk app and secrets", () => {
   assert.equal(get("SESSION_SECRET"), "session-keep");
   assert.equal(get("SECURITY_LOG_KEY"), "log-keep");
   assert.match(r.stdout, /"reusedClerk": true/);
+});
+
+test("re-run keeps the claim link from the previous install summary", () => {
+  const env = `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${PK}\nCLERK_SECRET_KEY=${SK}\n`;
+  const withLink = runInit(env, "## Claim\n\nVisit: https://example.invalid/claim-old\n");
+  assert.equal(JSON.parse(withLink.r.stdout.slice(withLink.r.stdout.indexOf("{"))).claimUrl, "https://example.invalid/claim-old");
+  const without = runInit(env);
+  assert.equal(JSON.parse(without.r.stdout.slice(without.r.stdout.indexOf("{"))).claimUrl, null);
 });
 
 test("fresh install still creates an accountless Clerk app and new secrets", () => {

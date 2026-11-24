@@ -186,10 +186,20 @@ async function runInit(args) {
   // install has none, so everything is generated as before.
   let storedValues = {};
   if (dopplerMode) {
+    // A failed read is NOT an empty config. Generating a new Clerk app and new
+    // secrets on a transient Doppler error would overwrite the working ones
+    // as soon as Doppler recovers, so stop instead. (A fresh, empty config
+    // downloads fine and yields no app values.)
     try {
       storedValues = dopplerDownloadSecrets('dev');
-    } catch {
-      storedValues = {}; // empty or unreachable config: treat as a fresh install
+    } catch (err) {
+      console.error(JSON.stringify({
+        success: false,
+        step: 'read-existing',
+        error: `Could not read the Doppler dev config, so existing values cannot be checked: ${err.message}`,
+        hint: 'Nothing was changed. Check `doppler me` and your network, then re-run.',
+      }));
+      process.exit(1);
     }
   }
   function existingValue(key) {
@@ -256,6 +266,13 @@ async function runInit(args) {
     reusedClerk = true;
     result.reusedClerk = true;
     result.steps.push('Reused existing Clerk application (keys already configured)');
+    // Reusing the keys doesn't mean the app was claimed. Carry the claim link
+    // from the previous install summary forward so a re-run can't lose it.
+    const summaryPath = path.join(ROOT_DIR, 'docs', 'INSTALL.md');
+    if (fs.existsSync(summaryPath)) {
+      const prior = fs.readFileSync(summaryPath, 'utf-8').match(/^Visit: (https:\/\/\S+)$/m);
+      if (prior) result.claimUrl = prior[1];
+    }
   }
   if (!clerkPk || !clerkSk) {
     console.log('No Clerk keys provided, creating accountless application...');
