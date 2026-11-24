@@ -150,13 +150,13 @@ Detect promotion state:
 PROD_PROMOTED=$(doppler secrets get _PROD_PROMOTED_AT --project $(node -e "console.log(require('./.doppler.yaml').toString().match(/project:\s*(\S+)/)?.[1] || require('./package.json').name)") --config dev --plain 2>/dev/null && echo "yes" || echo "no")
 ```
 
-If MISSING, create a dev-scoped token. Use the `--value <v> --yes` non-interactive form for all three targets — and for **preview**, you MUST pass an empty string `""` as the third positional argument (Vercel CLI 52+ requires the branch positional even for "all preview branches"; the `--yes` flag alone does not skip the prompt):
+If MISSING, create a dev-scoped token. Pass the token value on standard input (not `--value`) for all three targets — and for **preview**, you MUST pass an empty string `""` as the third positional argument plus `--yes` (Vercel CLI 52+ requires the branch positional even for "all preview branches"; the `--yes` flag alone does not skip the prompt):
 
 ```bash
 PROJECT=$(node -e "const m=require('fs').readFileSync('.doppler.yaml','utf-8').match(/project:\s*(\S+)/); console.log(m ? m[1] : require('./package.json').name)")
 DEV_TOKEN=$(doppler configs tokens create vercel-runtime-dev --plain --project "$PROJECT" --config dev)
-npx vercel env add DOPPLER_TOKEN development --value "$DEV_TOKEN" --yes
-npx vercel env add DOPPLER_TOKEN preview "" --value "$DEV_TOKEN" --yes
+printf '%s' "$DEV_TOKEN" | npx vercel env add DOPPLER_TOKEN development
+printf '%s' "$DEV_TOKEN" | npx vercel env add DOPPLER_TOKEN preview "" --yes
 ```
 
 Production target — branch on the promotion state:
@@ -164,14 +164,14 @@ Production target — branch on the promotion state:
 ```bash
 if [ "$PROD_PROMOTED" = "yes" ]; then
   PRD_TOKEN=$(doppler configs tokens create vercel-runtime-prd --plain --project "$PROJECT" --config prd)
-  npx vercel env add DOPPLER_TOKEN production --value "$PRD_TOKEN" --yes
+  printf '%s' "$PRD_TOKEN" | npx vercel env add DOPPLER_TOKEN production
 else
   # Use the same dev-scoped token; /deploy-to-prod will replace it later.
-  npx vercel env add DOPPLER_TOKEN production --value "$DEV_TOKEN" --yes
+  printf '%s' "$DEV_TOKEN" | npx vercel env add DOPPLER_TOKEN production
 fi
 ```
 
-(The token is passed via `--value` — momentarily visible in `ps`/shell history, but acceptable for a one-time service-token bootstrap. Stdin form was deprecated by Vercel CLI 52 for env-add when combined with `--yes`.)
+(The token value is passed on standard input so it does not appear on the command line.)
 
 If `gh` is available and the GitHub Actions secret isn't set, run the existing helper:
 
