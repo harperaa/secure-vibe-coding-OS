@@ -20,6 +20,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const DOPPLER_MARKER = path.join(ROOT_DIR, '.doppler.yaml');
+// package.json name of the template itself; never a valid Doppler fallback.
+export const TEMPLATE_PACKAGE_NAME = 'secure-vibe-coding-os';
 
 // ---------------------------------------------------------------------------
 // Project identity
@@ -45,10 +47,20 @@ export function getProjectName() {
 
   const pkgPath = path.join(ROOT_DIR, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-  _projectName = pkg.name;
-  if (!_projectName) {
+  if (!pkg.name) {
     throw new Error('package.json has no "name" field — cannot derive Doppler project name.');
   }
+  // A fresh clone still carries the template's package name. Falling back to
+  // it would read and write the TEMPLATE's Doppler project (which exists in
+  // the maintainer's account), leaking one app's values into another. Refuse.
+  if (pkg.name === TEMPLATE_PACKAGE_NAME) {
+    throw new Error(
+      `No .doppler.yaml in this repo, and package.json still has the template name "${TEMPLATE_PACKAGE_NAME}". ` +
+      'Refusing to use the template\'s Doppler project. Run ' +
+      '`node scripts/setup.mjs doppler-bootstrap --project-name="<Your Site Name>"` first.'
+    );
+  }
+  _projectName = pkg.name;
   return _projectName;
 }
 
