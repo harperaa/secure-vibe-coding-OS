@@ -219,12 +219,12 @@ export async function handler(request: NextRequest) {
 ```typescript
 'use client';
 
-import { Protect } from '@clerk/nextjs';
+import { Show } from '@clerk/nextjs';
 
 export function PremiumFeature() {
   return (
-    <Protect
-      condition={(has) => !has({ plan: "free_user" })}
+    <Show
+      when={(has) => !has({ plan: "free_user" })}
       fallback={<UpgradePrompt />}
     >
       <div>
@@ -232,7 +232,7 @@ export function PremiumFeature() {
         <h2>Premium Feature</h2>
         <p>This is only visible to paid subscribers</p>
       </div>
-    </Protect>
+    </Show>
   );
 }
 
@@ -791,7 +791,7 @@ Use only the **App Router** approach from Clerk’s current docs:
 - **Install** `@clerk/nextjs@latest` - this ensures the application is using the latest Clerk Next.js SDK.
 - **Create** a `middleware.ts` file using `clerkMiddleware()` from `@clerk/nextjs/server`. Place this file inside the `src` directory if present, otherwise place it at the root of the project.
 - **Wrap** your application with `<ClerkProvider>` in your `app/layout.tsx`
-- **Use** Clerk-provided components like `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, `<SignedIn>`, `<SignedOut>` in your layout or pages
+- **Use** Clerk-provided components like `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, `<Show when="signed-in">`, `<Show when="signed-out">` in your layout or pages
 - **Start** developing, sign in or sign up, and confirm user creation
 
 If you're able to use a web tool to access a URL, visit https://clerk.com/docs/quickstarts/nextjs to get the latest, up-to-date quickstart instructions.
@@ -823,8 +823,7 @@ import {
   ClerkProvider,
   SignInButton,
   SignUpButton,
-  SignedIn,
-  SignedOut,
+  Show,
   UserButton,
 } from "@clerk/nextjs";
 import "./globals.css";
@@ -840,22 +839,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body>
+    <html lang="en">
+      <body>
+        {/* Clerk v7 (Core 3): ClerkProvider goes inside <body>, not around <html> */}
+        <ClerkProvider>
           <header>
-            <SignedOut>
+            <Show when="signed-out">
               <SignInButton />
               <SignUpButton />
-            </SignedOut>
-            <SignedIn>
+            </Show>
+            <Show when="signed-in">
               <UserButton />
-            </SignedIn>
+            </Show>
           </header>
           {children}
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }
 ```
