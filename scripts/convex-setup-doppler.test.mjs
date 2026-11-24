@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isolatedTestPath } from './lib/isolated-test-path.mjs';
 
 // Issue #46: `setup.mjs convex-setup` on a fresh project.
 //
@@ -91,6 +92,12 @@ function makeSandbox(t, { envLocal, doppler, convexEnv }) {
   fs.mkdirSync(binDir);
   fs.writeFileSync(path.join(binDir, 'npx'), FAKE_NPX, { mode: 0o755 });
   fs.writeFileSync(path.join(binDir, 'doppler'), FAKE_DOPPLER, { mode: 0o755 });
+  fs.writeFileSync(
+    path.join(binDir, 'gh'),
+    `#!${process.execPath}\nprocess.exit(0);\n`,
+    { mode: 0o755 }
+  );
+  const testPath = isolatedTestPath([binDir], t);
 
   fs.writeFileSync(path.join(root, '.env.local'), envLocal);
   if (convexEnv) {
@@ -105,7 +112,7 @@ function makeSandbox(t, { envLocal, doppler, convexEnv }) {
     run() {
       const env = {
         ...process.env,
-        PATH: `${binDir}${path.delimiter}${process.env.PATH}`,
+        PATH: testPath,
         FAKE_DOPPLER_LOG: dopplerLog,
         FAKE_DOPPLER_SECRETS: JSON.stringify(doppler || {}),
       };

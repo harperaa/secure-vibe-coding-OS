@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isolatedTestPath } from './lib/isolated-test-path.mjs';
 
 // Secret values handed to CLIs must arrive on stdin (or env), never as argv.
 // Fake CLIs on PATH record argv + stdin so these assertions fail on the old form.
@@ -19,6 +20,7 @@ function makeBin(t) {
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin);
   const log = path.join(root, 'calls.jsonl');
+  const testPath = isolatedTestPath([bin], t);
 
   const recorder = `#!${process.execPath}
 const fs = require('node:fs');
@@ -55,7 +57,7 @@ process.exit(0);
   const envFor = (cliName) => {
     const env = {
       ...process.env,
-      PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+      PATH: testPath,
       FAKE_CLI_LOG: log,
       FAKE_CLI_NAME: cliName,
     };
@@ -63,7 +65,7 @@ process.exit(0);
     return env;
   };
 
-  return { root, log, readCalls, envFor, reset: () => fs.rmSync(log, { force: true }) };
+  return { root, bin, log, readCalls, envFor, reset: () => fs.rmSync(log, { force: true }) };
 }
 
 test('pushTokenToGithub sends the token on stdin and omits --body', (t) => {

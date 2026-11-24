@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseGithubRepo, resolveGithubRepo } from "./lib/github-repo.mjs";
+import { isolatedTestPath } from "./lib/isolated-test-path.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -41,8 +42,10 @@ process.exit(0);
 `,
   { mode: 0o755 }
 );
+// Module-level PATH for this file's stubbed gh (cleaned up when the process exits).
+const testPath = isolatedTestPath([bin]);
 const stubEnv = (extra = {}) => {
-  const env = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, ...extra };
+  const env = { ...process.env, PATH: testPath, ...extra };
   if (!("GH_REPO" in extra)) delete env.GH_REPO;
   return env;
 };

@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isolatedTestPath } from './lib/isolated-test-path.mjs';
 
 // Issue #39: deploy.mjs and setup.mjs must hand env var values to the Convex
 // and Vercel CLIs verbatim, never through a shell.
@@ -80,13 +81,22 @@ function makeSandbox(t, envLocal) {
   );
   // The globally installed `vercel` binary, recorded as `vercel ...`.
   fs.writeFileSync(path.join(binDir, 'vercel'), FAKE_NPX.replace("const argv = process.argv.slice(2);", "const argv = ['vercel', ...process.argv.slice(2)];"), { mode: 0o755 });
+  // Stub doppler/gh too so a stray call cannot resolve a real CLI.
+  for (const name of ['doppler', 'gh']) {
+    fs.writeFileSync(
+      path.join(binDir, name),
+      `#!${process.execPath}\nprocess.exit(0);\n`,
+      { mode: 0o755 }
+    );
+  }
+  const testPath = isolatedTestPath([binDir], t);
 
   fs.writeFileSync(path.join(root, '.env.local'), envLocal);
 
   const log = path.join(root, 'npx-calls.jsonl');
   return {
     run(script, args) {
-      const env = { ...process.env, FAKE_NPX_LOG: log, PATH: `${binDir}${path.delimiter}${process.env.PATH}` };
+      const env = { ...process.env, FAKE_NPX_LOG: log, PATH: testPath };
       delete env.CLERK_SECRET_KEY;
       const r = spawnSync(process.execPath, [path.join(root, 'scripts', script), ...args], {
         cwd: root,
