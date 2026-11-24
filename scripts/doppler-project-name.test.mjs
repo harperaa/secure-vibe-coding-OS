@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,7 +26,8 @@ function projectNameIn({ pkgName, dopplerYaml }) {
   fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: pkgName }));
   if (dopplerYaml) fs.writeFileSync(path.join(root, ".doppler.yaml"), dopplerYaml);
   const lib = path.join(root, "scripts", "lib", "doppler.mjs");
-  const script = `import { getProjectName } from ${JSON.stringify(lib)}; try { console.log("OK " + getProjectName()); } catch (e) { console.log("ERR " + e.message); }`;
+  // Import by file URL: a bare Windows path (C:\\...) is not a valid ESM specifier.
+  const script = `import { getProjectName } from ${JSON.stringify(pathToFileURL(lib).href)}; try { console.log("OK " + getProjectName()); } catch (e) { console.log("ERR " + e.message); }`;
   const r = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: root, encoding: "utf8" });
   return r.stdout.trim();
 }
