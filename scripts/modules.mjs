@@ -221,7 +221,7 @@ function runList(flags) {
 function runStatus(flags) {
   const manifests = loadManifests();
   const status = {
-    installed: manifests.filter(isInstalled).map((m) => m.name),
+    installed: manifests.filter((m) => isInstalled(m)).map((m) => m.name),
     available: manifests.filter((m) => !isInstalled(m)).map((m) => m.name),
   };
   if (flags.json) {

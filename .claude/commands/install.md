@@ -152,9 +152,9 @@ For "Minimal shell" (`<MODULES>` empty) use `set --minimal` in place of the name
 
 - **`changes` is empty** — the site already matches the selection. Show a checkmark and continue.
 - **`error: "customized_files"`** — the files in `customized` were edited by hand and would be overwritten or removed. Show the list and call AskUserQuestion (Header: "Edited files"): "Keep my current modules (Recommended)" — set `<MODULES>` to the `current` list, recompute `<SKIPPED_MODULES>`, and continue without changing anything; or "Replace them anyway" — add `--force` to the command below.
-- **`toRemove` is non-empty AND `docs/INSTALL.md` already exists** (this project was installed before, so this is a re-run) — confirm before removing: AskUserQuestion (Header: "Remove modules") "This will remove <toRemove> from your site. Continue?" with "Keep my current modules (Recommended)" / "Yes, remove them". On a first install (no `docs/INSTALL.md`) do NOT ask: choosing a smaller selection is the instruction to remove the rest.
+- **`toRemove` is non-empty AND `docs/INSTALL.md` already exists** (this project was installed before, so this is a re-run) — confirm before removing: AskUserQuestion (Header: "Remove modules") "This will remove <toRemove> from your site. Continue?" with "Keep my current modules (Recommended)" / "Yes, remove them". On "Keep my current modules": set `<MODULES>` to the `current` list, recompute `<SKIPPED_MODULES>`, and continue without running the apply command below. On a first install (no `docs/INSTALL.md`) do NOT ask: choosing a smaller selection is the instruction to remove the rest.
 
-Then apply it (same command without `--dry-run`, plus `--force` only if the user chose to replace edited files):
+Then, unless the user chose "Keep my current modules" above, apply it (same command without `--dry-run`, plus `--force` only if the user chose to replace edited files):
 
 ```bash
 node scripts/modules.mjs set <MODULES as space-separated names>     # or: set --minimal

@@ -107,6 +107,16 @@ test("hand-edited files are not overwritten or removed without --force", () => {
   assert.equal(exists(root, "alpha/page.txt"), false);
 });
 
+test("status still lists installed and available modules", () => {
+  const root = makeRepo();
+  set(root, "alpha");
+  const r = spawnSync(process.execPath, [path.join(root, "scripts", "modules.mjs"), "status", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.deepEqual(out.installed, ["alpha"]);
+  assert.deepEqual(out.available, ["beta"]);
+});
+
 test("--dry-run reports the plan and changes nothing", () => {
   const root = makeRepo();
   set(root, "--all");
