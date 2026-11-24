@@ -366,6 +366,8 @@ Run: `node scripts/deploy.mjs vercel-env-dev`
 Parse JSON output:
 - Show each variable set with checkmark — expect three `DOPPLER_TOKEN` entries (one per Vercel target) across `varsSet` and `alreadySet`. On a re-run, targets that already have the token are listed in `alreadySet` and left unchanged (no new token is minted and none is revoked; use `/rotate` to replace credentials).
 - If `mode: "doppler"`, confirm only `DOPPLER_TOKEN` (no app values) is in `varsSet`
+- **If `error: "vercel_has_app_env"`**: STOP. Display the `message`, the `keys` list and the `hint` verbatim. This Vercel project still stores its own app variables (a legacy-mode deploy), and adding `DOPPLER_TOKEN` on top would mix two sources and can break sign-in on the live site. Nothing was changed. The fix is `/migrate-to-doppler`, which copies the Vercel values into Doppler and removes them from Vercel first. Do NOT remove variables or add the token by hand to get past this.
+- **If `error: "vercel_env_unreadable"`**: STOP. Display the `message` and `hint`. Nothing was changed.
 - **If `error: "production_already_promoted"`**: STOP. Display the `message` and `hint` fields verbatim — `/deploy-to-prod` has been run for this Vercel project, and proceeding would replace the prd-scoped DOPPLER_TOKEN on the production target with a dev-scoped one (real users would start seeing a dev build). Recommend the user instead push a feature branch (preview deploys are dev-scoped automatically and don't conflict), or set up a separate Vercel project for ongoing dev work. Do NOT auto-pass `--force-overwrite-prod=true` — that's a manual operator decision.
 - If any other failure, show the error
 

@@ -30,13 +30,16 @@ if (${JSON.stringify(name)} === 'vercel' && sub.startsWith('env add')) stdin = f
 fs.appendFileSync(process.env.STUB_LOG, JSON.stringify({ bin: ${JSON.stringify(name)}, argv, stdin }) + '\\n');
 if (${JSON.stringify(name)} === 'doppler') {
   if (sub.startsWith('configs tokens create')) console.log(${JSON.stringify(TOKEN)});
-  else if (sub.startsWith('secrets download')) console.log(JSON.stringify({ REVALIDATE_TOKEN: 'r'.repeat(40) }));
+  else if (sub.startsWith('secrets download')) console.log(JSON.stringify({ REVALIDATE_TOKEN: 'r'.repeat(40), CLERK_SECRET_KEY: 'sk_test_synthetic' }));
 }
-if (${JSON.stringify(name)} === 'vercel' && sub.startsWith('env ls')) console.log(process.env.STUB_VERCEL_ENVS);
+if (${JSON.stringify(name)} === 'vercel' && sub.startsWith('env ls')) {
+  if (process.env.STUB_VERCEL_LS_FAIL) process.exit(1);
+  console.log(process.env.STUB_VERCEL_ENVS);
+}
 process.exit(0);
 `;
 
-function run(existingTargets) {
+function run(existingTargets, { extraEnvs = [], lsFail = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "vercel-env-doppler-"));
   fs.mkdirSync(path.join(root, "scripts", "lib"), { recursive: true });
   for (const f of ["deploy.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs")]) {
@@ -54,12 +57,12 @@ function run(existingTargets) {
   for (const name of ["doppler", "vercel", "npx"]) fs.writeFileSync(path.join(bin, name), STUB(name), { mode: 0o755 });
 
   const log = path.join(root, "calls.jsonl");
-  const envs = existingTargets.map((t) => ({ key: "DOPPLER_TOKEN", target: [t] }));
+  const envs = [...existingTargets.map((t) => ({ key: "DOPPLER_TOKEN", target: [t] })), ...extraEnvs];
   const r = spawnSync(process.execPath, [path.join(root, "scripts", "deploy.mjs"), "vercel-env-dev"], {
     cwd: root,
     encoding: "utf8",
     timeout: 60000,
-    env: { ...process.env, STUB_LOG: log, STUB_VERCEL_ENVS: JSON.stringify({ envs }), PATH: `${bin}${path.delimiter}${process.env.PATH}` },
+    env: { ...process.env, STUB_LOG: log, STUB_VERCEL_ENVS: JSON.stringify({ envs }), ...(lsFail ? { STUB_VERCEL_LS_FAIL: "1" } : {}), PATH: `${bin}${path.delimiter}${process.env.PATH}` },
   });
   const calls = fs.readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   const out = JSON.parse(r.stdout.slice(r.stdout.indexOf("{")));
@@ -97,4 +100,29 @@ test("a target missing the token gets one; the others are untouched", () => {
   assert.equal(minted.length, 1);
   assert.deepEqual(adds.map((c) => c.argv[4]), ["preview"]);
   assert.equal(revoked.length, 0);
+});
+
+test("refuses to add DOPPLER_TOKEN when Vercel already stores app values Doppler provides", () => {
+  // A legacy-mode project: its own Clerk key lives in Vercel. Adding the token would
+  // mix Vercel's build-time values with Doppler's runtime values and break sign-in.
+  const { out, adds, minted } = run([], { extraEnvs: [{ key: "CLERK_SECRET_KEY", target: ["production"] }] });
+  assert.equal(out.success, false);
+  assert.equal(out.error, "vercel_has_app_env");
+  assert.deepEqual(out.keys, ["CLERK_SECRET_KEY"]);
+  assert.match(out.hint, /migrate-to-doppler/);
+  assert.equal(minted.length, 0);
+  assert.equal(adds.length, 0);
+});
+
+test("variables Doppler does not provide are not a conflict", () => {
+  const { out, adds } = run([], { extraEnvs: [{ key: "SOME_VERCEL_ONLY_FLAG", target: ["production"] }] });
+  assert.equal(out.error, undefined);
+  assert.equal(adds.length, 3);
+});
+
+test("stops without changing anything when the Vercel variables can't be listed", () => {
+  const { out, adds, minted } = run([], { lsFail: true });
+  assert.equal(out.error, "vercel_env_unreadable");
+  assert.equal(minted.length, 0);
+  assert.equal(adds.length, 0);
 });
