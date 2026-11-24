@@ -42,7 +42,6 @@ import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import {
   isDopplerEnabled,
   createServiceToken,
-  revokeServiceToken,
   setSecret,
   downloadSecrets,
 } from './lib/doppler.mjs';
@@ -1347,19 +1346,40 @@ async function runVercelEnvDoppler(opts = {}) {
   // 1. Issue a fresh service token for this Vercel environment.
   //    Token name encodes config so dev/prd tokens never collide.
   const tokenName = `vercel-runtime-${config}`;
-  // Revoke any existing token with the same name (idempotent — ignores absence)
-  // so re-running this command always produces a freshly-scoped credential.
-  revokeServiceToken(config, tokenName);
+  // Idempotent: a target that already has DOPPLER_TOKEN keeps it. Minting a
+  // new token on every run piled up credentials, and nothing here revokes one:
+  // the live deployment keeps reading the token it was built with, and
+  // retiring credentials is /rotate's job, not a deploy re-run's.
+  //   - dev: mint only for targets that have no DOPPLER_TOKEN yet.
+  //   - prd: production must swap the dev-scoped token for a prd-scoped one the
+  //     first time, so "already set" only counts once production was promoted.
+  const allTargets = config === 'dev'
+    ? ['development', 'preview', 'production']
+    : ['production'];
+  const present = vercelTargetsWithVar('DOPPLER_TOKEN');
+  const keepExisting = present !== null && (config === 'dev' || checkProdPromoted().promoted);
+  const targets = keepExisting ? allTargets.filter(t => !present.has(t)) : allTargets;
+  if (present === null) {
+    result.steps.push('Could not list Vercel env vars; setting DOPPLER_TOKEN on every target');
+  }
+  const kept = allTargets.filter(t => !targets.includes(t));
+  if (kept.length) {
+    result.alreadySet = kept.map(t => `DOPPLER_TOKEN (${t})`);
+    result.steps.push(`DOPPLER_TOKEN already set on ${kept.join(', ')}; left unchanged`);
+  }
+
   let dopplerToken;
-  try {
-    dopplerToken = createServiceToken(config, tokenName);
-    result.steps.push(`Issued Doppler service token (${tokenName}) for config=${config}`);
-  } catch (err) {
-    console.error(JSON.stringify({
-      success: false,
-      error: `Failed to create Doppler service token: ${err.message}`,
-    }));
-    process.exit(1);
+  if (targets.length) {
+    try {
+      dopplerToken = createServiceToken(config, tokenName);
+      result.steps.push(`Issued Doppler service token (${tokenName}) for config=${config}`);
+    } catch (err) {
+      console.error(JSON.stringify({
+        success: false,
+        error: `Failed to create Doppler service token: ${err.message}`,
+      }));
+      process.exit(1);
+    }
   }
 
   // 2. Ensure REVALIDATE_TOKEN exists in Doppler. Generate one if absent so
@@ -1383,10 +1403,6 @@ async function runVercelEnvDoppler(opts = {}) {
   //      prd-scoped token. This intentionally overwrites the dev-scoped token
   //      that /deploy-to-dev left there earlier — production deploys must use
   //      prd Doppler config, not dev.
-  const targets = config === 'dev'
-    ? ['development', 'preview', 'production']
-    : ['production'];
-
   for (const target of targets) {
     const pushed = pushVercelEnvVar('DOPPLER_TOKEN', dopplerToken, target);
     if (pushed.ok) {
@@ -1487,36 +1503,36 @@ async function runVercelEnvDoppler(opts = {}) {
   console.log(JSON.stringify(result, null, 2));
 }
 
+// Which Vercel targets (development/preview/production) already have `key`.
+// Returns null when the list can't be read, so callers don't mistake a failed
+// lookup for "not set anywhere".
+function vercelTargetsWithVar(key) {
+  const r = spawnSync('vercel', ['env', 'ls', '--json'], { cwd: ROOT_DIR, encoding: 'utf-8', timeout: 30000 });
+  if (r.status !== 0) return null;
+  try {
+    const out = r.stdout || '';
+    const { envs } = JSON.parse(out.slice(out.indexOf('{')));
+    return new Set(envs.filter(e => e.key === key).flatMap(e => e.target || []));
+  } catch {
+    return null;
+  }
+}
+
 // Helper: push a single value to Vercel env, replacing any existing one.
 function pushVercelEnvVar(key, value, vercelEnv) {
   try {
-    // Best-effort remove first so `add` doesn't error on duplicates. For preview the
-    // empty-string branch positional means "all preview branches" (CLI 52 requirement).
-    const rmArgs = vercelEnv === 'preview'
-      ? ['env', 'rm', key, vercelEnv, '', '--yes']
-      : ['env', 'rm', key, vercelEnv, '--yes'];
-    spawnSync('vercel', rmArgs, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
-
-    let add;
-    if (vercelEnv === 'preview') {
-      // Vercel CLI 52+ requires an explicit branch positional even for "all preview branches"
-      // (empty string ""), and `--value`/`--yes` instead of stdin. The stdin form falls
-      // through to an interactive branch prompt and dies on EOF.
-      add = spawnSync('vercel', ['env', 'add', key, vercelEnv, '', '--value', value, '--yes'], {
-        cwd: ROOT_DIR,
-        encoding: 'utf-8',
-        timeout: 30000,
-      });
-    } else {
-      // development / production: stdin form keeps the value out of argv (so it doesn't
-      // surface in `ps` or shell history).
-      add = spawnSync('vercel', ['env', 'add', key, vercelEnv], {
-        cwd: ROOT_DIR,
-        input: value,
-        encoding: 'utf-8',
-        timeout: 30000,
-      });
-    }
+    // `--force` overwrites an existing variable in place. Do NOT remove first:
+    // Vercel CLI 66 refuses `env rm --yes` from an agent session (removals need a
+    // person's approval), which left the old variable there and made the add fail
+    // with "already been added" on every re-run. The value goes on stdin so it
+    // stays out of argv (`ps`, shell history); `--yes` accepts the default of all
+    // preview branches instead of prompting.
+    const add = spawnSync('vercel', ['env', 'add', key, '--environment', vercelEnv, '--force', '--yes'], {
+      cwd: ROOT_DIR,
+      input: value,
+      encoding: 'utf-8',
+      timeout: 30000,
+    });
     if (add.status !== 0) {
       return { ok: false, error: ((add.stderr || '') + (add.stdout || '')).trim().slice(0, 200) };
     }

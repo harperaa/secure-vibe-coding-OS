@@ -1366,7 +1366,10 @@ async function runDopplerSyncEnvLocal() {
       if (hashIdx !== -1) value = value.slice(0, hashIdx).trimEnd();
     }
     if (!key) continue;
-    if (!value || value.includes('your_') || value.includes('<')) {
+    // VERCEL_* (e.g. VERCEL_OIDC_TOKEN) is written into .env.local by the Vercel
+    // CLI on `vercel link` / `env pull`. Those are short-lived Vercel credentials,
+    // not app config: never copy them into Doppler.
+    if (key.startsWith('VERCEL_') || !value || value.includes('your_') || value.includes('<')) {
       result.skipped.push(key);
       continue;
     }
@@ -1412,6 +1415,27 @@ async function runDopplerCreateCiToken() {
     return;
   }
 
+  // Idempotent: if the repo already has DOPPLER_TOKEN, leave it. Minting a new
+  // token on every run piled up credentials; nothing here revokes one (that is
+  // /rotate's job). A failed lookup is not "missing": stop rather than guess.
+  const listed = spawnSync('gh', ['secret', 'list', '-R', repo, '--json', 'name', '-q', '.[].name'], { encoding: 'utf-8' });
+  if (listed.status !== 0) {
+    console.error(JSON.stringify({
+      success: false,
+      step: 'gh-secret-list',
+      error: `Could not list GitHub secrets for ${repo}: ${(listed.stderr || '').trim().slice(0, 200)}`,
+      hint: 'Nothing was changed. Check `gh auth status`, then re-run.',
+    }));
+    process.exit(1);
+  }
+  if (listed.stdout.split('\n').includes('DOPPLER_TOKEN')) {
+    console.log(JSON.stringify({
+      success: true,
+      alreadySet: true,
+      steps: [`DOPPLER_TOKEN already set on ${repo}; left unchanged`],
+    }, null, 2));
+    return;
+  }
   let token;
   try {
     token = dopplerCreateServiceToken('dev', tokenName);
