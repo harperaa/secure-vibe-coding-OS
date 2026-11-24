@@ -962,7 +962,7 @@ async function runProdWebhook(args) {
     const secret = await svix.endpoint.getSecret(appId, endpointId);
     result.webhookSecret = secret.key;
     result.success = true;
-    result.steps.push(`Retrieved webhook signing secret: ${result.webhookSecret.substring(0, 10)}...`);
+    result.steps.push('Retrieved webhook signing secret');
   } catch (err) {
     result.steps.push(`Webhook creation failed: ${err.message}`);
     result.manualSteps = [
@@ -1021,8 +1021,9 @@ async function runConvexProdEnv(args) {
 
   for (const [key, value] of Object.entries(envVars)) {
     try {
-      execFileSync('npx', ['convex', 'env', 'set', key, value], {
+      execFileSync('npx', ['convex', 'env', 'set', key], {
         cwd: ROOT_DIR,
+        input: String(value),
         stdio: 'pipe',
         timeout: 30000,
         env: {

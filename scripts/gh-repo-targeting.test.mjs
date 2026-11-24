@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseGithubRepo, resolveGithubRepo } from "./lib/github-repo.mjs";
+import { isolatedTestPath } from "./lib/isolated-test-path.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,21 +23,37 @@ execFileSync("git", ["init", "-q"], { cwd: repo });
 execFileSync("git", ["remote", "add", "origin", "git@github.com:acme/product.git"], { cwd: repo });
 execFileSync("git", ["remote", "add", "upstream", "https://github.com/harperaa/secure-vibe-coding-OS.git"], { cwd: repo });
 
-// Stub gh: logs every call, and answers `repo view` the way real gh does with
-// these remotes and no default set, i.e. with the template.
+// Stub gh: logs every call (argv + stdin), and answers `repo view` the way real
+// gh does with these remotes and no default set, i.e. with the template.
 const bin = fs.mkdtempSync(path.join(os.tmpdir(), "gh-stub-"));
 const log = path.join(bin, "calls.log");
 fs.writeFileSync(
   path.join(bin, "gh"),
-  `#!/bin/sh\necho "$*" >> "${log}"\nif [ "$1 $2" = "repo view" ]; then echo "harperaa/secure-vibe-coding-OS"; fi\nexit 0\n`,
+  `#!${process.execPath}
+const fs = require("node:fs");
+const argv = process.argv.slice(2);
+let stdin = null;
+if (!process.stdin.isTTY) {
+  try { stdin = fs.readFileSync(0, "utf8"); } catch { stdin = null; }
+}
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ argv, stdin }) + "\\n");
+if (argv[0] === "repo" && argv[1] === "view") console.log("harperaa/secure-vibe-coding-OS");
+process.exit(0);
+`,
   { mode: 0o755 }
 );
+// Module-level PATH for this file's stubbed gh (cleaned up when the process exits).
+const testPath = isolatedTestPath([bin]);
 const stubEnv = (extra = {}) => {
-  const env = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, ...extra };
+  const env = { ...process.env, PATH: testPath, ...extra };
   if (!("GH_REPO" in extra)) delete env.GH_REPO;
   return env;
 };
-const calls = () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "");
+const callRecords = () =>
+  fs.existsSync(log)
+    ? fs.readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l))
+    : [];
+const calls = () => callRecords().map((c) => c.argv.join(" ")).join("\n");
 const reset = () => fs.rmSync(log, { force: true });
 
 test("parseGithubRepo reads owner/repo from github.com remotes only", () => {
@@ -106,10 +123,16 @@ test("lockdown-main.sh honours GH_REPO, with or without a host prefix", () => {
 test("pushTokenToGithub passes -R with the origin repo to gh secret set", () => {
   reset();
   // doppler.mjs resolves the repo from the working directory, so run it there.
-  const script = `import { pushTokenToGithub } from ${JSON.stringify(path.join(here, "lib", "doppler.mjs"))}; pushTokenToGithub("dp.st.synthetic", "DOPPLER_TOKEN");`;
+  const token = 'dp.st.syn$thetic "with spaces';
+  const script = `import { pushTokenToGithub } from ${JSON.stringify(path.join(here, "lib", "doppler.mjs"))}; pushTokenToGithub(${JSON.stringify(token)}, "DOPPLER_TOKEN");`;
   const r = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: repo, env: stubEnv(), encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(calls(), /^secret set DOPPLER_TOKEN -R acme\/product --body dp\.st\.synthetic$/m);
+  const secretCalls = callRecords().filter((c) => c.argv[0] === "secret" && c.argv[1] === "set");
+  assert.equal(secretCalls.length, 1);
+  assert.deepEqual(secretCalls[0].argv, ["secret", "set", "DOPPLER_TOKEN", "-R", "acme/product"]);
+  assert.equal(secretCalls[0].stdin, token);
+  assert.ok(!secretCalls[0].argv.includes(token));
+  assert.ok(!secretCalls[0].argv.includes("--body"));
 });
 
 test("doppler-create-ci-token defers while origin is still the template", () => {
@@ -118,13 +141,27 @@ test("doppler-create-ci-token defers while origin is still the template", () => 
   const clone = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "gh-clone-")));
   execFileSync("git", ["init", "-q"], { cwd: clone });
   execFileSync("git", ["remote", "add", "origin", "https://github.com/harperaa/secure-vibe-coding-OS.git"], { cwd: clone });
-  fs.writeFileSync(path.join(bin, "doppler"), `#!/bin/sh\necho "doppler $*" >> "${log}"\nexit 0\n`, { mode: 0o755 });
+  fs.writeFileSync(
+    path.join(bin, "doppler"),
+    `#!${process.execPath}
+const fs = require("node:fs");
+const argv = process.argv.slice(2);
+let stdin = null;
+if (!process.stdin.isTTY) {
+  try { stdin = fs.readFileSync(0, "utf8"); } catch { stdin = null; }
+}
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ argv, stdin }) + "\\n");
+process.exit(0);
+`,
+    { mode: 0o755 }
+  );
   reset();
   const r = spawnSync(process.execPath, [path.join(here, "setup.mjs"), "doppler-create-ci-token"], { cwd: clone, env: stubEnv(), encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   const out = JSON.parse(r.stdout.slice(r.stdout.indexOf("{")));
   assert.equal(out.deferred, true);
   assert.equal(calls(), "");
+  assert.equal(callRecords().length, 0);
 });
 
 test("github-setup points gh at the product once the template is upstream", () => {

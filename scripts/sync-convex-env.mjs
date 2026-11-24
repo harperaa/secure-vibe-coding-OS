@@ -84,8 +84,10 @@ function listConvexEnv(deployKey) {
 function setConvexEnv(key, value, deployKey) {
   const env = { ...process.env };
   if (deployKey) env.CONVEX_DEPLOY_KEY = deployKey;
-  const result = spawnSync('npx', ['convex', 'env', 'set', key, value], {
-    stdio: ['ignore', 'inherit', 'inherit'],
+  // Omit the value argument so Convex reads it from stdin (documented form).
+  const result = spawnSync('npx', ['convex', 'env', 'set', key], {
+    input: String(value),
+    stdio: ['pipe', 'inherit', 'inherit'],
     env,
   });
   if (result.status !== 0) {
