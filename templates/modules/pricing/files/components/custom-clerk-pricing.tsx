@@ -1,6 +1,6 @@
 'use client'
 import { PricingTable, useClerk } from "@clerk/nextjs";
-import { dark } from '@clerk/themes'
+import { dark } from '@clerk/ui/themes'
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
@@ -28,8 +28,8 @@ export default function CustomClerkPricing() {
 
     // Check if Clerk billing is enabled before rendering PricingTable
     // to avoid the dev-mode error when billing is disabled.
-    // Clerk internally checks: __unstable__environment?.commerceSettings.billing.user.enabled
-    const env = (clerk as unknown as Record<string, unknown>)?.__unstable__environment as
+    // Clerk internally checks: __internal_environment?.commerceSettings.billing.user.enabled
+    const env = (clerk as unknown as Record<string, unknown>)?.__internal_environment as
         { commerceSettings?: { billing?: { user?: { enabled?: boolean } } } } | undefined
     const billingEnabled = !!env?.commerceSettings?.billing?.user?.enabled
 
@@ -45,7 +45,7 @@ export default function CustomClerkPricing() {
     return (
         <PricingTable
             appearance={{
-                baseTheme: mounted && theme === "dark" ? dark : undefined,
+                theme: mounted && theme === "dark" ? dark : undefined,
                 elements: {
                     pricingTableCardTitle: { // title
                         fontSize: 20,

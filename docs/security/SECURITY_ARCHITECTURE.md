@@ -426,7 +426,7 @@ const { name, email, message } = validation.data; // Type-safe, sanitized
 **Where Implemented:**
 - Clerk (external SOC 2 certified service)
 - `middleware.ts` (automatic session verification for protected routes)
-- Application code (authorization checks using Clerk's `<Protect>` component)
+- Application code (authorization checks using Clerk's `<Show>` component)
 
 **Why Needed:**
 - Weak authentication is the #1 cause of breaches
@@ -450,10 +450,10 @@ const { userId } = await auth();
 if (!userId) return handleUnauthorizedError();
 
 // Client-side (conditional rendering)
-import { Protect } from '@clerk/nextjs';
-<Protect condition={(has) => !has({ plan: "free_user" })} fallback={<Upgrade/>}>
+import { Show } from '@clerk/nextjs';
+<Show when={(has) => !has({ plan: "free_user" })} fallback={<Upgrade/>}>
   <PremiumFeature />
-</Protect>
+</Show>
 ```
 
 **Clerk Features Used:**
@@ -488,7 +488,7 @@ import { Protect } from '@clerk/nextjs';
 | **Validation Helper** | `lib/validateRequest.ts` | Same as above | Type-safe wrapper with formatted errors | A03 |
 | **Error Handling** | `lib/errorHandler.ts` | Information leakage, system fingerprinting | Generic errors (prod), detailed (dev) | A09, A05 |
 | **Authentication** | Clerk (external) | Weak passwords, session hijacking, account takeover | SOC 2 certified auth, MFA support | A07, A02 |
-| **Authorization** | Clerk + app code | Privilege escalation, unauthorized access | Role-based access with `<Protect>` component | A01 |
+| **Authorization** | Clerk + app code | Privilege escalation, unauthorized access | Role-based access with `<Show>` component | A01 |
 | **Payment Security** | Clerk Billing + Stripe | PCI violations, card data breaches | Never touch card data, Stripe handles all | A02, A04 |
 | **Dependency Auditing** | `package.json` + npm audit | Known vulnerabilities, supply chain attacks | 0 vulnerabilities, Next.js 15.5.4 (latest) | A06 |
 | **Secure Cookies** | Throughout | Session hijacking, XSS cookie theft | HTTP-only, SameSite=Strict, secure flag | A07, A02 |
