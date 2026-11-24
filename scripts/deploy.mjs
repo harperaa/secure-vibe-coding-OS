@@ -1356,12 +1356,46 @@ async function runVercelEnvDoppler(opts = {}) {
   const allTargets = config === 'dev'
     ? ['development', 'preview', 'production']
     : ['production'];
-  const present = vercelTargetsWithVar('DOPPLER_TOKEN');
-  const keepExisting = present !== null && (config === 'dev' || checkProdPromoted().promoted);
-  const targets = keepExisting ? allTargets.filter(t => !present.has(t)) : allTargets;
-  if (present === null) {
-    result.steps.push('Could not list Vercel env vars; setting DOPPLER_TOKEN on every target');
+  const vercelEnvs = listVercelEnv();
+  if (vercelEnvs === null) {
+    console.log(JSON.stringify({
+      success: false,
+      error: 'vercel_env_unreadable',
+      message: 'Could not list the Vercel project\'s environment variables, so it is not safe to add DOPPLER_TOKEN. Nothing was changed.',
+      hint: 'Check `vercel whoami` and that the project is linked (`vercel link`), then re-run.',
+    }, null, 2));
+    process.exit(1);
   }
+
+  // Never add DOPPLER_TOKEN to a project that still stores its own app values.
+  // The build inlines NEXT_PUBLIC_* from Vercel's variables (they win over the
+  // prebuild's .env.production.local), while the server overwrites process.env
+  // from Doppler at runtime. If the two disagree - e.g. Vercel holds one Clerk
+  // app's publishable key and Doppler another app's secret key - every Clerk
+  // handshake fails and the live site returns 500s. Such a project has to be
+  // moved over with /migrate-to-doppler, which copies Vercel's values into
+  // Doppler and removes them from Vercel before the token is added.
+  const dopplerKeys = new Set(Object.keys(downloadSecrets(config)));
+  const overlapTargets = new Set(allTargets);
+  const overlapping = [...new Set(
+    vercelEnvs
+      .filter(e => e.key !== 'DOPPLER_TOKEN' && dopplerKeys.has(e.key) && (e.target || []).some(t => overlapTargets.has(t)))
+      .map(e => e.key)
+  )].sort();
+  if (overlapping.length) {
+    console.log(JSON.stringify({
+      success: false,
+      error: 'vercel_has_app_env',
+      keys: overlapping,
+      message: `This Vercel project already stores ${overlapping.length} app variable(s) that Doppler (${config}) also provides. Adding DOPPLER_TOKEN would mix the two sources at build and runtime and can break sign-in on the live site. Nothing was changed.`,
+      hint: 'Run /migrate-to-doppler to move the Vercel values into Doppler and remove them from Vercel, then re-run this deploy. To keep this project on its own Vercel variables instead, deploy without Doppler (legacy mode).',
+    }, null, 2));
+    process.exit(1);
+  }
+
+  const present = new Set(vercelEnvs.filter(e => e.key === 'DOPPLER_TOKEN').flatMap(e => e.target || []));
+  const keepExisting = config === 'dev' || checkProdPromoted().promoted;
+  const targets = keepExisting ? allTargets.filter(t => !present.has(t)) : allTargets;
   const kept = allTargets.filter(t => !targets.includes(t));
   if (kept.length) {
     result.alreadySet = kept.map(t => `DOPPLER_TOKEN (${t})`);
@@ -1503,16 +1537,16 @@ async function runVercelEnvDoppler(opts = {}) {
   console.log(JSON.stringify(result, null, 2));
 }
 
-// Which Vercel targets (development/preview/production) already have `key`.
+// Every variable stored on the linked Vercel project: [{ key, target: [...] }].
 // Returns null when the list can't be read, so callers don't mistake a failed
-// lookup for "not set anywhere".
-function vercelTargetsWithVar(key) {
+// lookup for "nothing is set".
+function listVercelEnv() {
   const r = spawnSync('vercel', ['env', 'ls', '--json'], { cwd: ROOT_DIR, encoding: 'utf-8', timeout: 30000 });
   if (r.status !== 0) return null;
   try {
     const out = r.stdout || '';
     const { envs } = JSON.parse(out.slice(out.indexOf('{')));
-    return new Set(envs.filter(e => e.key === key).flatMap(e => e.target || []));
+    return Array.isArray(envs) ? envs : null;
   } catch {
     return null;
   }
