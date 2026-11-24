@@ -46,18 +46,12 @@ import {
   setSecret,
   downloadSecrets,
 } from './lib/doppler.mjs';
-import { parseGithubRepo } from './lib/github-repo.mjs';
+import { parseGithubRepo, isTemplateRepo } from './lib/github-repo.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.join(__dirname, '..');
 const ENV_FILE = path.join(ROOT_DIR, '.env.local');
-
-// Template repo identifiers used to detect upstream origin
-const TEMPLATE_REPOS = [
-  'harperaa/secure-vibe-coding-OS',
-  'harperaa/secure-vibe-coding-os',
-];
 
 // ---------------------------------------------------------------------------
 // Argument Parsing (same pattern as setup.mjs)
@@ -217,9 +211,7 @@ async function runCheckTools() {
   result.gitRemote = remoteUrl;
 
   if (remoteUrl) {
-    result.isUpstreamTemplate = TEMPLATE_REPOS.some(
-      repo => remoteUrl.toLowerCase().includes(repo.toLowerCase())
-    );
+    result.isUpstreamTemplate = isTemplateRepo(remoteUrl);
   }
 
   result.needsRepo = result.isUpstreamTemplate || !remoteUrl;
@@ -346,9 +338,7 @@ async function runGithubSetup(args) {
   // Check if origin points to template — rename to upstream
   const currentOrigin = tryExec('git remote get-url origin');
   if (currentOrigin) {
-    const isTemplate = TEMPLATE_REPOS.some(
-      repo => currentOrigin.toLowerCase().includes(repo.toLowerCase())
-    );
+    const isTemplate = isTemplateRepo(currentOrigin);
 
     if (isTemplate) {
       // Check if upstream already exists

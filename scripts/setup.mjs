@@ -42,6 +42,7 @@ import {
   isDopplerEnabled as dopplerIsEnabled,
   getProjectName as dopplerGetProjectName,
 } from './lib/doppler.mjs';
+import { resolveGithubRepo, isTemplateRepo } from './lib/github-repo.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1361,6 +1362,22 @@ async function runDopplerCreateCiToken() {
   const tokenName = 'github-actions-ci';
   const result = { success: true, steps: [] };
 
+  // On a fresh clone origin is still the template (or missing): the product
+  // repo doesn't exist until /deploy-to-dev creates it. Defer instead of
+  // minting a Doppler token that has nowhere to go.
+  const repo = resolveGithubRepo();
+  if (!repo || isTemplateRepo(repo)) {
+    console.log(JSON.stringify({
+      success: true,
+      deferred: true,
+      reason: repo
+        ? `origin is the template repo (${repo}), not your product repo`
+        : 'origin is not a GitHub repository',
+      hint: '/deploy-to-dev sets DOPPLER_TOKEN once your GitHub repo exists.',
+    }, null, 2));
+    return;
+  }
+
   let token;
   try {
     token = dopplerCreateServiceToken('dev', tokenName);
@@ -1371,7 +1388,7 @@ async function runDopplerCreateCiToken() {
   }
 
   try {
-    dopplerPushTokenToGithub(token, 'DOPPLER_TOKEN');
+    dopplerPushTokenToGithub(token, 'DOPPLER_TOKEN', repo);
     result.steps.push('Pushed DOPPLER_TOKEN to GitHub repo secrets via gh');
   } catch (err) {
     console.error(JSON.stringify({ success: false, step: 'gh-secret-set', error: err.message }));
