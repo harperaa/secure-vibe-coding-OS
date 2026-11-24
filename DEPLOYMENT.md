@@ -42,7 +42,30 @@ The deployment story depends on which secrets-management mode `/install` configu
 - **In Doppler:** every app value (`CLERK_SECRET_KEY`, `CSRF_SECRET`, `SESSION_SECRET`, `NEXT_PUBLIC_*`, `CONVEX_DEPLOY_KEY`, etc.) plus `REVALIDATE_TOKEN` for the runtime cache invalidation route.
 - **In Vercel env:** only `DOPPLER_TOKEN` (read-only, scoped to one Doppler config).
 - **In Convex env:** the allowlisted subset Convex functions need (`CLERK_WEBHOOK_SECRET`, `NEXT_PUBLIC_CLERK_FRONTEND_API_URL`, `ADMIN_EMAIL`, `SECURITY_LOG_KEY`), kept in sync via `scripts/sync-convex-env.mjs`. `SECURITY_LOG_KEY` is the one value that must be identical in Doppler (read by the app) and Convex (checked by `logSecurityViolation`).
-- **In GitHub Actions secrets:** `DOPPLER_TOKEN` (separate `dev`-scoped service token for CI builds).
+- **In GitHub Actions secrets:** see [GitHub Actions secrets](#github-actions-secrets) below.
+
+### GitHub Actions secrets
+
+GitHub does **not** copy repository secrets into a repo created from a template, and does not expose Actions secrets to pull requests from forks. Configure these under **Settings → Secrets and variables → Actions** (repository secrets). A skipped Claude review job means **no review ran** — it is not a pass.
+
+| Secret | Used by | If missing |
+| --- | --- | --- |
+| `DOPPLER_TOKEN` | `ci.yml` build job | Already handled: Doppler CLI / Doppler build steps are skipped when empty; the job falls back to a legacy `npm run build` (may fail if env vars are absent — expected for a fresh template without Doppler). Dependabot and cross-repo PRs also skip the Doppler path and emit a notice. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `claude-code-review.yml` (`claude-review`, `security-review`), `claude.yml` (`@claude` mentions) | Jobs are **skipped** (not failed, not green success). A `review-gate` job succeeds with a notice pointing here. |
+| `SYNC_TOKEN` (optional) | Commented example in `sync-testing.yml` | Not required. The workflow uses the default `GITHUB_TOKEN`. Uncomment and set a PAT/deploy key only if branch protection blocks the default token from pushing to `testing`. |
+
+**How to create `CLAUDE_CODE_OAUTH_TOKEN`** (from [Claude Code GitHub Actions](https://code.claude.com/docs/en/github-actions) and [claude-code-action setup](https://github.com/anthropics/claude-code-action/blob/c038e4dcdedfbbca18dfb17df35a17e40ded4ddc/docs/setup.md)):
+
+1. Install the [Claude GitHub App](https://github.com/apps/claude) on the repository (required for the action’s Contents / Issues / Pull requests access).
+2. Generate a long-lived OAuth token locally with `claude setup-token` (Pro, Max, Ultra, Team, or Enterprise). Approve the browser prompt and copy the token printed in the terminal — it is not saved for you.
+3. Store it as a repository secret, either:
+   - **From the terminal** (same terminal as step 2, not inside a Claude Code session): `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R <owner>/<repo>`, then paste the token when prompted (input is hidden). Check with `gh secret list -R <owner>/<repo>`.
+   - **On github.com:** **Settings → Secrets and variables → Actions → New repository secret**. Name: `CLAUDE_CODE_OAUTH_TOKEN`. Value: the token from step 2.
+4. Alternatively, from Claude Code run `/install-github-app`, which can create the secret and workflow wiring for you.
+
+Run `claude setup-token` in a **regular terminal window**, not through Claude Code: it needs an interactive terminal and browser sign-in, and running it inside a Claude session would put the token in the session transcript. `/deploy-to-dev` (and `/deploy-to-prod`) skip this by default and point here; if you choose to do it during the deploy, they show these same commands to run in another terminal and then verify the secret when you return. One token can be reused for all your repos; each repo needs its own copy of the secret.
+
+This template already ships the workflow files and authenticates with `claude_code_oauth_token` (subscription OAuth), not `ANTHROPIC_API_KEY`. Until the secret is set, PR Claude/security reviews and `@claude` mentions stay skipped.
 
 **Rotation runbook:**
 
@@ -991,7 +1014,7 @@ git push origin main
 3. Action: **Rate limit**, keyed by IP, with a window that matches your tolerance (for example 60 requests per minute). Start in log-only mode, read the Firewall logs for a day, then switch to deny.
 4. Keep `withRateLimit` in place: it still covers local and non-Vercel deployments and still writes the `rate_limit_exceeded` rows the security dashboard shows.
 
-Convex mutations never pass through Vercel, so neither control applies to them. Authenticated mutations should carry their own bound, as `convex/jobs.ts` does with its per-user active-job cap, and public ones should be gated the way `logSecurityViolation` is.
+Convex mutations never pass through Vercel, so neither control applies to them. Authenticated mutations should carry their own bound (for example a per-user cap enforced in the mutation), and public ones should be gated the way `logSecurityViolation` is.
 
 ## Monitoring and Observability
 

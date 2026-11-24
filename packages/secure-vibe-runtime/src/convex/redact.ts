@@ -1,9 +1,8 @@
 /**
  * Redacts identifiers from text before it leaves the system.
  *
- * Used by the background-job example (convex/jobs.ts) as the server-side step
- * that runs BEFORE any outside call: an AI model, a document processor, a
- * third-party API. The browser is never trusted to do this. No Convex imports,
+ * Meant as the server-side step that runs BEFORE any outside call: an AI
+ * model, a document processor, a third-party API. The browser is never trusted to do this. No Convex imports,
  * so it is unit-tested directly (scripts/redact.test.mjs).
  *
  * What it catches, deliberately narrow and documented:
