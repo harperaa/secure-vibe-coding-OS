@@ -23,7 +23,9 @@ const fs = require('node:fs');
 const argv = process.argv.slice(2);
 const sub = argv.slice(0, 3).join(' ');
 let stdin = null;
-if (sub === 'vercel env add') stdin = fs.readFileSync(0, 'utf-8');
+if (sub === 'vercel env add' || sub === 'convex env set') {
+  try { stdin = fs.readFileSync(0, 'utf-8'); } catch { stdin = null; }
+}
 fs.appendFileSync(process.env.FAKE_NPX_LOG, JSON.stringify({ argv, stdin }) + '\\n');
 if (sub === 'convex login status') {
   console.log('Logged in\\n  - Test Team (test-team)');
@@ -100,13 +102,16 @@ function makeSandbox(t, envLocal) {
   };
 }
 
-// The value `convex env set KEY ...` received, or undefined if it never ran.
+// The value `convex env set KEY` received on stdin, or undefined if it never ran.
 function convexValue(calls, key) {
   const call = calls.find(
     (c) => c.argv.slice(0, 3).join(' ') === 'convex env set' && c.argv.includes(key)
   );
   if (!call) return undefined;
-  return call.argv.slice(call.argv.indexOf(key) + 1).join(' ');
+  // Value must be on stdin, not argv after the key.
+  assert.equal(call.argv[call.argv.indexOf(key) + 1], undefined);
+  assert.ok(!call.argv.includes(HOSTILE));
+  return call.stdin;
 }
 
 // The value `vercel env add KEY ...` received on stdin, or undefined if it never ran.
@@ -114,7 +119,10 @@ function vercelValue(calls, key) {
   const call = calls.find(
     (c) => c.argv.slice(0, 3).join(' ') === 'vercel env add' && c.argv.includes(key)
   );
-  return call ? call.stdin : undefined;
+  if (!call) return undefined;
+  assert.ok(!call.argv.includes(HOSTILE));
+  assert.ok(!call.argv.includes('--value'));
+  return call.stdin;
 }
 
 // True if any script reached for the Vercel CLI through npx.

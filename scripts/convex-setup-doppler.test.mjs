@@ -30,7 +30,10 @@ const save = () => fs.writeFileSync(stateFile, JSON.stringify(state));
 if (sub === 'convex login status') {
   console.log('Logged in\\n  - Test Team (test-team)');
 } else if (sub === 'convex env set') {
-  state.env[argv[3]] = argv[4];
+  let stdin = '';
+  try { stdin = fs.readFileSync(0, 'utf-8'); } catch {}
+  // Prefer stdin (omit-value form); fall back to argv for older callers.
+  state.env[argv[3]] = stdin !== '' ? stdin : argv[4];
   save();
 } else if (sub === 'convex dev --once') {
   if (argv.includes('--configure=new')) {
@@ -56,7 +59,11 @@ if (sub === 'convex login status') {
 const FAKE_DOPPLER = `#!${process.execPath}
 const fs = require('node:fs');
 const argv = process.argv.slice(2);
-fs.appendFileSync(process.env.FAKE_DOPPLER_LOG, JSON.stringify(argv) + '\\n');
+let stdin = null;
+if (!process.stdin.isTTY) {
+  try { stdin = fs.readFileSync(0, 'utf8'); } catch { stdin = null; }
+}
+fs.appendFileSync(process.env.FAKE_DOPPLER_LOG, JSON.stringify({ argv, stdin }) + '\\n');
 if (argv[0] === 'secrets' && argv[1] === 'download') {
   console.log(process.env.FAKE_DOPPLER_SECRETS);
 }
@@ -129,9 +136,18 @@ function makeSandbox(t, { envLocal, doppler, convexEnv }) {
 }
 
 const siteUrlSets = (calls) =>
-  calls.filter((argv) => argv[0] === 'secrets' && argv[1] === 'set' && argv[2].startsWith('NEXT_PUBLIC_SITE_URL='));
+  calls.filter(
+    (c) =>
+      c.argv[0] === 'secrets' &&
+      c.argv[1] === 'set' &&
+      (c.argv[2] === 'NEXT_PUBLIC_SITE_URL' || String(c.argv[2] || '').startsWith('NEXT_PUBLIC_SITE_URL='))
+  );
 const setsSiteUrl = (calls) =>
-  siteUrlSets(calls).some((argv) => argv[2] === 'NEXT_PUBLIC_SITE_URL=http://localhost:3000');
+  siteUrlSets(calls).some(
+    (c) =>
+      (c.argv[2] === 'NEXT_PUBLIC_SITE_URL' && c.stdin === 'http://localhost:3000') ||
+      c.argv[2] === 'NEXT_PUBLIC_SITE_URL=http://localhost:3000'
+  );
 
 test('legacy mode: convex-setup resolves the Clerk issuer from .env.local on a fresh project', (t) => {
   const box = makeSandbox(t, { envLocal: `CLERK_JWT_ISSUER_DOMAIN=${ISSUER}\n` });

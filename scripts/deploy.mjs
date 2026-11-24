@@ -963,7 +963,7 @@ async function runProdWebhook(args) {
     const secret = await svix.endpoint.getSecret(appId, endpointId);
     result.webhookSecret = secret.key;
     result.success = true;
-    result.steps.push(`Retrieved webhook signing secret: ${result.webhookSecret.substring(0, 10)}...`);
+    result.steps.push('Retrieved webhook signing secret');
   } catch (err) {
     result.steps.push(`Webhook creation failed: ${err.message}`);
     result.manualSteps = [
@@ -1022,8 +1022,9 @@ async function runConvexProdEnv(args) {
 
   for (const [key, value] of Object.entries(envVars)) {
     try {
-      execFileSync('npx', ['convex', 'env', 'set', key, value], {
+      execFileSync('npx', ['convex', 'env', 'set', key], {
         cwd: ROOT_DIR,
+        input: String(value),
         stdio: 'pipe',
         timeout: 30000,
         env: {
@@ -1497,26 +1498,18 @@ function pushVercelEnvVar(key, value, vercelEnv) {
       : ['env', 'rm', key, vercelEnv, '--yes'];
     spawnSync('vercel', rmArgs, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
 
-    let add;
-    if (vercelEnv === 'preview') {
-      // Vercel CLI 52+ requires an explicit branch positional even for "all preview branches"
-      // (empty string ""), and `--value`/`--yes` instead of stdin. The stdin form falls
-      // through to an interactive branch prompt and dies on EOF.
-      add = spawnSync('vercel', ['env', 'add', key, vercelEnv, '', '--value', value, '--yes'], {
-        cwd: ROOT_DIR,
-        encoding: 'utf-8',
-        timeout: 30000,
-      });
-    } else {
-      // development / production: stdin form keeps the value out of argv (so it doesn't
-      // surface in `ps` or shell history).
-      add = spawnSync('vercel', ['env', 'add', key, vercelEnv], {
-        cwd: ROOT_DIR,
-        input: value,
-        encoding: 'utf-8',
-        timeout: 30000,
-      });
-    }
+    // Empty-string git-branch positional means "all preview branches" (CLI 52+).
+    // Value on stdin with --yes; same as production/development, no --value on argv.
+    // Invoke the globally installed `vercel` binary (not `npx vercel`).
+    const addArgs = vercelEnv === 'preview'
+      ? ['env', 'add', key, vercelEnv, '', '--yes']
+      : ['env', 'add', key, vercelEnv];
+    const add = spawnSync('vercel', addArgs, {
+      cwd: ROOT_DIR,
+      input: value,
+      encoding: 'utf-8',
+      timeout: 30000,
+    });
     if (add.status !== 0) {
       return { ok: false, error: ((add.stderr || '') + (add.stdout || '')).trim().slice(0, 200) };
     }
