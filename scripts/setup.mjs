@@ -1636,6 +1636,40 @@ function shredInventory(inventoryPath) {
   }
 }
 
+// Keys that two or more migration sources define with DIFFERENT values, per
+// Doppler config they would be merged into. The migrate phase merges sources
+// key by key ("first writer wins"), which is only safe when every source
+// describes the same stack. If .env.local, Convex and the Vercel targets hold
+// different Clerk apps or Convex deployments, a per-key merge produces a mix
+// (one app's publishable key with another app's secret key) that breaks
+// sign-in everywhere it is used. Names only; values never leave the file.
+function findMigrationConflicts(inventory) {
+  const vercel = inventory.vercel?.byTarget || {};
+  const prodPromoted = !!vercel.production?.['_PROD_PROMOTED_AT'];
+  const devSources = [
+    ['.env.local', inventory.envLocal],
+    ['Convex env', inventory.convex?.map],
+    ['Vercel development', vercel.development],
+    ['Vercel preview', vercel.preview],
+    ...(prodPromoted ? [] : [['Vercel production', vercel.production]]),
+  ];
+  const seen = new Map(); // key -> Map(value -> [source names])
+  for (const [name, map] of devSources) {
+    for (const [k, v] of Object.entries(map || {})) {
+      if (PROTECTED_KEYS.has(k) || /^(VERCEL_|TURBO_|NX_)/.test(k) || typeof v !== 'string' || v === '') continue;
+      if (!seen.has(k)) seen.set(k, new Map());
+      const byValue = seen.get(k);
+      if (!byValue.has(v)) byValue.set(v, []);
+      byValue.get(v).push(name);
+    }
+  }
+  const conflicts = [];
+  for (const [key, byValue] of seen) {
+    if (byValue.size > 1) conflicts.push({ key, config: 'dev', sources: [...byValue.values()].map(names => names.join(' + ')) });
+  }
+  return conflicts.sort((a, b) => a.key.localeCompare(b.key));
+}
+
 async function runMigrateToDoppler(args) {
   const phase = args.phase || 'inventory';
   const inventoryPath = args['inventory-file'] || path.join(os.tmpdir(), 'doppler-migration-inventory.json');
@@ -1700,7 +1734,9 @@ async function runMigrateToDoppler(args) {
       vercelChecked: vercel.ok && vercel.pulledTargets > 0,
     };
 
-    console.log(JSON.stringify({ success: true, phase: 'inventory', inventoryPath, counts, legacy }, null, 2));
+    const conflicts = findMigrationConflicts(inventory);
+
+    console.log(JSON.stringify({ success: true, phase: 'inventory', inventoryPath, counts, legacy, conflicts }, null, 2));
     return;
   }
 
@@ -1720,6 +1756,23 @@ async function runMigrateToDoppler(args) {
     // Build the prd payload: Vercel-Production, but only after /deploy-to-prod has promoted
     // real production keys. Until then those values are dev-equivalent and belong in dev.
     // Conflict resolution: .env.local > Convex > Vercel-Development > Vercel-Preview (most-local wins).
+    //
+    // That per-key merge is refused while sources disagree (see
+    // findMigrationConflicts). --accept-conflicts=true is for the rare case
+    // where the differing keys are known to be harmless.
+    const conflicts = findMigrationConflicts(inventory);
+    if (conflicts.length > 0 && args['accept-conflicts'] !== 'true') {
+      console.error(JSON.stringify({
+        success: false,
+        step: 'conflicting-sources',
+        error: 'conflicting_sources',
+        conflicts,
+        message: `${conflicts.length} key(s) have different values in different sources. Merging them key by key would write a mixed, inconsistent configuration to Doppler. Nothing was changed.`,
+        hint: 'Make the sources agree first (for example remove stale Vercel development/preview variables, or pull the intended values into .env.local), then re-run. If the differing keys are known to be harmless, re-run with --accept-conflicts=true.',
+      }, null, 2));
+      process.exit(1);
+    }
+
     const devPayload = {};
     const prdPayload = {};
 

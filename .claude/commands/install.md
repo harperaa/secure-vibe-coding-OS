@@ -134,7 +134,7 @@ Read `legacy` from the JSON output:
     - "Cancel" — "Stop the install without changing anything."
 
   Then:
-  - **Migrate:** install the content modules below if any were selected, then follow `.claude/commands/migrate-to-doppler.md` from Phase 0 through Phase 7 exactly as written (it runs `doppler-bootstrap` itself — pass `--project-name="<SITE_NAME>"` — and it has its own confirmation and HARD STOP before any cleanup; honour both). When it finishes, SKIP the "Doppler bootstrap" section below and continue at Phase 3. `init` then finds the migrated Clerk keys and secrets in Doppler `dev` and reuses them (`reusedClerk: true`), so nothing is regenerated.
+  - **Migrate:** if the inventory's `conflicts` array is non-empty, the existing sources disagree with each other (more than one Clerk app or Convex deployment): show the conflicting key names and STOP the Doppler path — tell the user to run `/migrate-to-doppler` once the sources agree, and offer to continue the install on legacy `.env.local` instead. Otherwise install the content modules below if any were selected, then follow `.claude/commands/migrate-to-doppler.md` from Phase 0 through Phase 7 exactly as written (it runs `doppler-bootstrap` itself — pass `--project-name="<SITE_NAME>"` — and it has its own confirmation and HARD STOP before any cleanup; honour both). When it finishes, SKIP the "Doppler bootstrap" section below and continue at Phase 3. `init` then finds the migrated Clerk keys and secrets in Doppler `dev` and reuses them (`reusedClerk: true`), so nothing is regenerated.
   - **Stay on legacy:** set `<USE_DOPPLER>` = `false` and continue; skip every Doppler-only step.
   - **Cancel:** STOP.
 
