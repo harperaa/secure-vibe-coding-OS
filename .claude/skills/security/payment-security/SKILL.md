@@ -109,7 +109,7 @@ CLERK_WEBHOOK_SECRET=whsec_...
 // components/custom-clerk-pricing.tsx
 'use client';
 
-import { PricingTable } from '@clerk/clerk-react';
+import { PricingTable } from '@clerk/nextjs';
 
 export function CustomClerkPricing() {
   return (
@@ -167,13 +167,13 @@ export async function GET(request: NextRequest) {
 ```typescript
 'use client';
 
-import { Protect } from '@clerk/nextjs';
+import { Show } from '@clerk/nextjs';
 import Link from 'next/link';
 
 export function PremiumFeature() {
   return (
-    <Protect
-      condition={(has) => !has({ plan: "free_user" })}
+    <Show
+      when={(has) => !has({ plan: "free_user" })}
       fallback={<UpgradePrompt />}
     >
       <div>
@@ -181,7 +181,7 @@ export function PremiumFeature() {
         <h2>Premium Feature</h2>
         <p>This content is only visible to paid subscribers</p>
       </div>
-    </Protect>
+    </Show>
   );
 }
 
@@ -204,14 +204,14 @@ function UpgradePrompt() {
 // app/dashboard/payment-gated/page.tsx
 'use client';
 
-import { Protect } from '@clerk/nextjs';
+import { Show } from '@clerk/nextjs';
 import { CustomClerkPricing } from '@/components/custom-clerk-pricing';
 
 export default function PaymentGatedPage() {
   return (
     <div>
-      <Protect
-        condition={(has) => !has({ plan: "free_user" })}
+      <Show
+        when={(has) => !has({ plan: "free_user" })}
         fallback={
           <div className="upgrade-required">
             <h1>Premium Access Required</h1>
@@ -225,7 +225,7 @@ export default function PaymentGatedPage() {
           <p>Welcome to the premium features!</p>
           {/* Premium features here */}
         </div>
-      </Protect>
+      </Show>
     </div>
   );
 }

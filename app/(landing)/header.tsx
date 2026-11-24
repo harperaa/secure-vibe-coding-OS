@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
-import { dark } from '@clerk/themes'
+import { dark } from '@clerk/ui/themes'
 import { useTheme } from "next-themes"
 
 
@@ -26,7 +26,7 @@ export const HeroHeader = () => {
     const { theme, setTheme } = useTheme()
 
     const appearance = {
-        baseTheme: theme === "dark" ? dark : undefined,
+        theme: theme === "dark" ? dark : undefined,
     }
 
     React.useEffect(() => {
