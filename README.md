@@ -450,6 +450,8 @@ Secure Vibe Coding OS ships with 11 slash commands that cover the full developme
 
 Every push and PR automatically runs the CI pipeline (lint → test → security → build) defined in `.github/workflows/ci.yml`. All four jobs must pass before merging to `main`.
 
+**GitHub Actions secrets:** template clones do not inherit secrets. Set `DOPPLER_TOKEN` (Doppler-mode CI builds) and optionally `CLAUDE_CODE_OAUTH_TOKEN` (Claude PR review + `@claude` mentions) under **Settings → Secrets and variables → Actions**. Without `CLAUDE_CODE_OAUTH_TOKEN`, the Claude review jobs are **skipped** — that is not a passed review. Full table and token setup steps: [`DEPLOYMENT.md` → GitHub Actions secrets](DEPLOYMENT.md#github-actions-secrets).
+
 For a detailed guide on branch strategy, commit conventions, CI/CD pipeline design, and deployment environments, see [`docs/git_cicd_workflow_guide.pdf`](docs/git_cicd_workflow_guide.pdf).
 
 ## 🧠 Continual Learning System
