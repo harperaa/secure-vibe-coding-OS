@@ -22,7 +22,7 @@
  *
  * Usage:
  *   node scripts/deploy.mjs check-tools
- *   node scripts/deploy.mjs github-setup --repo-name="my-project"
+ *   node scripts/deploy.mjs github-setup --repo-name="my-project" [--owner=<user|org>] [--no-push]
  *   node scripts/deploy.mjs convex-deploy-key
  *   node scripts/deploy.mjs validate-keys --clerk-pk=pk_live_... --clerk-sk=sk_live_... [--deploy-key=prod:...|...]
  *   node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...
@@ -294,6 +294,9 @@ async function runGithubSetup(args) {
   // personal account. Without OWNER/, `gh repo create REPO` always uses the
   // user's account, which has caused org-targeted deploys to land personally.
   const owner = args['owner'];
+  // Optional: --no-push creates the repo and remote without pushing, so the
+  // caller can set Actions secrets before the first push triggers CI.
+  const push = args['no-push'] !== 'true';
 
   if (!repoName) {
     console.error(JSON.stringify({
@@ -370,7 +373,7 @@ async function runGithubSetup(args) {
   // to the authenticated user's personal account.
   const repoArg = owner ? `${owner}/${repoName}` : repoName;
   const createResult = tryExecResult(
-    `gh repo create "${repoArg}" --private --source=. --remote=origin --push`,
+    `gh repo create "${repoArg}" --private --source=. --remote=origin${push ? ' --push' : ''}`,
     { timeout: 60000 }
   );
 
@@ -2005,7 +2008,7 @@ switch (command) {
   default:
     console.error(`Usage:
   node scripts/deploy.mjs check-tools
-  node scripts/deploy.mjs github-setup --repo-name="my-project"
+  node scripts/deploy.mjs github-setup --repo-name="my-project" [--owner=<user|org>] [--no-push]
   node scripts/deploy.mjs convex-deploy-key
   node scripts/deploy.mjs validate-keys --clerk-pk=... --clerk-sk=... [--deploy-key=prod:...|...] [--require-prod=true]
   node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...

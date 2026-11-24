@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(test -n *), Bash(printf *), Read, Edit, Write
+allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(node scripts/setup.mjs doppler-create-ci-token*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(test -n *), Bash(printf *), Read, Edit, Write
 description: Full production deployment (Clerk prod + Convex prod + Vercel + Google OAuth + optional Stripe)
 ---
 
@@ -123,7 +123,8 @@ Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
     - "[directory basename]" (Recommended) — Uses current folder name
     - "[site name from .env.local]" — Uses your configured site name
   - Header: "Repo name"
-- Run: `node scripts/deploy.mjs github-setup --repo-name="<NAME>"`
+- Run: `node scripts/deploy.mjs github-setup --repo-name="<NAME>" --no-push`
+  (`--no-push`: Phase 2b sets the repo's Actions secrets and then makes the first push, so CI starts with them.)
 - Parse result and show new repo URL
 
 **If "No":**
@@ -140,6 +141,8 @@ Users who skipped `/deploy-to-dev` get their GitHub repo in Phase 2 above, so it
 - `DOPPLER_TOKEN` in GitHub is the `dev`-scoped CI token on purpose (CI builds with dev config). Do not replace it with a `prd` token.
 
 If both secrets are already listed (typical when `/deploy-to-dev` ran first), show one checkmark ("GitHub Actions secrets already set") and continue without asking anything.
+
+**Finally, if Phase 2 created the repo** (it was run with `--no-push`), push now — even if the secrets step was skipped or failed: `git push -u origin main`.
 
 ## Phase 3: Clerk Production Instance + Keys
 

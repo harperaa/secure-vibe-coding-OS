@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(basename *), Bash(test -n *), Bash(printf *), Read, Write
+allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(node scripts/setup.mjs doppler-create-ci-token*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(basename *), Bash(test -n *), Bash(printf *), Read, Write
 description: Deploy to Vercel using dev keys (fully automated)
 ---
 
@@ -150,14 +150,15 @@ Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
 
 **If `isUpstreamTemplate: true` or no remote:**
 - Derive repo name from directory basename: `basename "$PWD"`
-- Run: `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>" --owner="<OWNER>"`
+- Run: `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>" --owner="<OWNER>" --no-push`
+  (`--no-push`: Step 2.6 sets the repo's Actions secrets before Step 4's first push triggers CI.)
   (where `<OWNER>` is the value locked in Step 1.5 — always pass it, even for
   personal accounts; it makes the intent explicit and triggers the post-create
   verification inside the script.)
 - Parse result:
   - If success: show repo URL with checkmark
   - If `error: "repo_exists"`: try with a suffix:
-    `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>-app" --owner="<OWNER>"`
+    `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>-app" --owner="<OWNER>" --no-push`
   - If `error: "owner_mismatch"`: STOP. Display the `hint` field verbatim — it
     includes the exact `gh repo delete` or `gh repo transfer` commands to fix
     the misplaced repo. Do NOT proceed past this step until the remote points
@@ -166,7 +167,7 @@ Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
 
 **If origin is already a non-template repo:**
 - Show checkmark: "GitHub repo already configured"
-- Ensure code is pushed: `git push origin main`
+- Do not push yet — Step 4 pushes after Step 2.6 sets the Actions secrets.
 
 ## Step 2.5: Verify the repo landed under `<OWNER>`
 
@@ -285,10 +286,11 @@ the overwrite above replaces it, which is correct for a dev deploy.)
 Run `git status` to check for uncommitted changes.
 
 If there are changes:
-- Run: `git add -A && git commit -m "Prepare for Vercel deployment" && git push origin main`
+- Run: `git add -A && git commit -m "Prepare for Vercel deployment"`
 
-If clean:
-- Show checkmark: "Code is up to date"
+Then always push (this is the first push for a repo created in Step 2, so it sets upstream):
+- Run: `git push -u origin main`
+- Show checkmark: "Code pushed to GitHub"
 
 ## Step 5: Vercel Link + Git Connect
 
@@ -361,7 +363,7 @@ Parse JSON output:
 
 ## Step 8: Write Summary
 
-Run: `node scripts/deploy.mjs write-summary --deploy-type="dev" --vercel-url="<PRODUCTION_URL or URL>" --dashboard-url="<DASHBOARD_URL>" --repo-url="<REPO_URL>" --convex-prod-url="<CONVEX_URL>" --convex-site-url="<CONVEX_SITE_URL>" --frontend-api-url="<FRONTEND_URL>" --site-name="<NAME>" --admin-email="" --google-oauth="deferred" --webhook-url="" --completed-steps="GitHub repo created,<DOPPLER_TOKEN GitHub secret set — Doppler mode only, if 2.6a succeeded>,<Claude Code GitHub token set — only if Step 2.6b pushed or found it>,Vercel project linked,Vercel env vars set,Deployed to Vercel" --skipped-steps="Clerk production (run /deploy-to-prod),Google OAuth (run /deploy-to-prod),Stripe billing (run /deploy-to-prod)"`
+Run: `node scripts/deploy.mjs write-summary --deploy-type="dev" --vercel-url="<PRODUCTION_URL or URL>" --dashboard-url="<DASHBOARD_URL>" --repo-url="<REPO_URL>" --convex-prod-url="<CONVEX_URL>" --convex-site-url="<CONVEX_SITE_URL>" --frontend-api-url="<FRONTEND_URL>" --site-name="<NAME>" --admin-email="" --google-oauth="deferred" --webhook-url="" --completed-steps="GitHub repo created,<DOPPLER_TOKEN GitHub secret set — Doppler mode only, if 2.6a succeeded>,<Claude Code GitHub token set — only if Step 2.6b pushed or found it>,Vercel project linked,Vercel env vars set,Deployed to Vercel" --skipped-steps="<DOPPLER_TOKEN GitHub secret — Doppler mode only, if 2.6a failed or deferred>,<Claude Code GitHub token (CLAUDE_CODE_OAUTH_TOKEN) — if 2.6b was skipped or failed>,Clerk production (run /deploy-to-prod),Google OAuth (run /deploy-to-prod),Stripe billing (run /deploy-to-prod)"`
 
 Use the Convex URL from .env.local (dev instance) for convex-prod-url, and derive the site URL by replacing `.convex.cloud` with `.convex.site`. For vercel-url, prefer `productionUrl` from the deploy result (the short alias). For dashboard-url, use the `dashboardUrl` from the deploy result.
 
