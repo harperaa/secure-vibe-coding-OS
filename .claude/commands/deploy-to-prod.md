@@ -355,10 +355,9 @@ file already has `"framework": "nextjs"`, or because its `buildCommand` already 
 `vercel-prebuild.mjs` and therefore looks "Doppler-aware".
 
 Two things make skipping actively wrong here:
-- The template's checked-in `vercel.json` begins its `buildCommand` with
-  `node scripts/modules.mjs install --all --apply-edits`, which exists so the *template's*
-  demo site renders fully from a minimal `main`. A clone has its modules committed already,
-  so that command does not belong in its build.
+- Older versions of the template's `vercel.json` began the `buildCommand` with
+  `node scripts/modules.mjs install --all --apply-edits`. A clone has its modules committed
+  already, so that command does not belong in its build.
 - The checked-in `buildCommand` has **no `convex deploy`**. Production requires it — without
   it, Convex functions are never deployed for this release and the live site runs against
   stale backend code.

@@ -28,8 +28,8 @@ export default function CustomClerkPricing() {
 
     // Check if Clerk billing is enabled before rendering PricingTable
     // to avoid the dev-mode error when billing is disabled.
-    // Clerk internally checks: __internal_environment?.commerceSettings.billing.user.enabled
-    const env = (clerk as unknown as Record<string, unknown>)?.__internal_environment as
+    // Clerk internally checks: __unstable__environment?.commerceSettings.billing.user.enabled
+    const env = (clerk as unknown as Record<string, unknown>)?.__unstable__environment as
         { commerceSettings?: { billing?: { user?: { enabled?: boolean } } } } | undefined
     const billingEnabled = !!env?.commerceSettings?.billing?.user?.enabled
 
