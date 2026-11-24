@@ -1258,7 +1258,12 @@ async function runDopplerBootstrap(args = {}) {
     }
     result.projectNameSource = 'argument';
   } else {
-    projectName = dopplerGetProjectName();
+    try {
+      projectName = dopplerGetProjectName();
+    } catch (err) {
+      console.error(JSON.stringify({ success: false, step: 'project-name', error: err.message }));
+      process.exit(1);
+    }
     result.projectNameSource = 'package.json';
   }
   result.project = projectName;
