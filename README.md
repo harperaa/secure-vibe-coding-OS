@@ -97,7 +97,10 @@ After installation, your app runs locally at the provided URL (typically `http:/
 
 ### Content Modules (optional pages — pick what you want)
 
-The default install is **minimal**: a login homepage and a blank dashboard page.
+This repository's `main` branch is the reference website, so it has every module
+below installed. Your own site is whatever you choose in `/install`, whatever
+the repo has installed. The default is **minimal**: a login homepage and a blank
+dashboard page, with the other modules removed.
 The secure backend — Clerk auth, Convex, rate limiting, CSRF protection, input
 validation, and the admin security monitoring dashboard — is always installed in
 full; modules only add **pages and content** on top of it:
