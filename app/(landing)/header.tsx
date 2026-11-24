@@ -16,6 +16,10 @@ import { useTheme } from "next-themes"
 
 
 const menuItems: { name: string; href: string }[] = [
+    { name: 'Features', href: '/#features' },
+    { name: 'About', href: '/#about' },
+    { name: 'Blog', href: '/blog' },
+    { name: 'Pricing', href: '/#pricing' },
     // modules:nav — content modules add their links here; add your own pages too
 ]
 
