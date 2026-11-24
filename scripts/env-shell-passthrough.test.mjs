@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isolatedTestPath } from './lib/isolated-test-path.mjs';
 
 // Issue #39: deploy.mjs and setup.mjs must hand env var values to the Convex
 // and Vercel CLIs verbatim, never through a shell.
@@ -23,7 +24,9 @@ const fs = require('node:fs');
 const argv = process.argv.slice(2);
 const sub = argv.slice(0, 3).join(' ');
 let stdin = null;
-if (sub === 'vercel env add') stdin = fs.readFileSync(0, 'utf-8');
+if (sub === 'vercel env add' || sub === 'convex env set') {
+  try { stdin = fs.readFileSync(0, 'utf-8'); } catch { stdin = null; }
+}
 fs.appendFileSync(process.env.FAKE_NPX_LOG, JSON.stringify({ argv, stdin }) + '\\n');
 if (sub === 'convex login status') {
   console.log('Logged in\\n  - Test Team (test-team)');
@@ -78,13 +81,22 @@ function makeSandbox(t, envLocal) {
   );
   // The globally installed `vercel` binary, recorded as `vercel ...`.
   fs.writeFileSync(path.join(binDir, 'vercel'), FAKE_NPX.replace("const argv = process.argv.slice(2);", "const argv = ['vercel', ...process.argv.slice(2)];"), { mode: 0o755 });
+  // Stub doppler/gh too so a stray call cannot resolve a real CLI.
+  for (const name of ['doppler', 'gh']) {
+    fs.writeFileSync(
+      path.join(binDir, name),
+      `#!${process.execPath}\nprocess.exit(0);\n`,
+      { mode: 0o755 }
+    );
+  }
+  const testPath = isolatedTestPath([binDir], t);
 
   fs.writeFileSync(path.join(root, '.env.local'), envLocal);
 
   const log = path.join(root, 'npx-calls.jsonl');
   return {
     run(script, args) {
-      const env = { ...process.env, FAKE_NPX_LOG: log, PATH: `${binDir}${path.delimiter}${process.env.PATH}` };
+      const env = { ...process.env, FAKE_NPX_LOG: log, PATH: testPath };
       delete env.CLERK_SECRET_KEY;
       const r = spawnSync(process.execPath, [path.join(root, 'scripts', script), ...args], {
         cwd: root,
@@ -100,13 +112,16 @@ function makeSandbox(t, envLocal) {
   };
 }
 
-// The value `convex env set KEY ...` received, or undefined if it never ran.
+// The value `convex env set KEY` received on stdin, or undefined if it never ran.
 function convexValue(calls, key) {
   const call = calls.find(
     (c) => c.argv.slice(0, 3).join(' ') === 'convex env set' && c.argv.includes(key)
   );
   if (!call) return undefined;
-  return call.argv.slice(call.argv.indexOf(key) + 1).join(' ');
+  // Value must be on stdin, not argv after the key.
+  assert.equal(call.argv[call.argv.indexOf(key) + 1], undefined);
+  assert.ok(!call.argv.includes(HOSTILE));
+  return call.stdin;
 }
 
 // The value `vercel env add KEY ...` received on stdin, or undefined if it never ran.
@@ -114,7 +129,10 @@ function vercelValue(calls, key) {
   const call = calls.find(
     (c) => c.argv.slice(0, 3).join(' ') === 'vercel env add' && c.argv.includes(key)
   );
-  return call ? call.stdin : undefined;
+  if (!call) return undefined;
+  assert.ok(!call.argv.includes(HOSTILE));
+  assert.ok(!call.argv.includes('--value'));
+  return call.stdin;
 }
 
 // True if a script tried to remove a Vercel variable. Vercel CLI 66 refuses `env rm --yes`

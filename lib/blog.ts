@@ -248,3 +248,63 @@ export function generateBlogListJsonLd(posts: BlogPostMeta[], siteUrl: string) {
     })),
   }
 }
+
+// Serialize JSON-LD for an inline <script> tag. JSON.stringify does not escape
+// "<", so a title containing "</script>" would close the tag and inject markup.
+export function serializeJsonLd(data: unknown): string {
+  return JSON.stringify(data).replace(/</g, '\\u003c')
+}
+
+function escapeXml(value: unknown): string {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+// Generate the RSS feed. Every interpolated value is XML-escaped: frontmatter
+// such as `category: Q&A` or a title containing "]]>" would otherwise break
+// the document or inject elements into it.
+export function generateRssFeed(posts: BlogPost[], siteUrl: string, siteName: string): string {
+  const site = escapeXml(siteUrl)
+  const name = escapeXml(siteName)
+
+  const rssItems = posts
+    .slice(0, 20) // Limit to 20 most recent posts
+    .map((post) => {
+      const postUrl = `${site}/blog/${escapeXml(post.slug)}`
+
+      return `
+    <item>
+      <title>${escapeXml(post.title)}</title>
+      <link>${postUrl}</link>
+      <guid isPermaLink="true">${postUrl}</guid>
+      <description>${escapeXml(post.description)}</description>
+      <pubDate>${new Date(post.date).toUTCString()}</pubDate>
+      <author>${escapeXml(post.author)}</author>
+      <category>${escapeXml(post.category)}</category>
+      ${post.tags.map((tag) => `<category>${escapeXml(tag)}</category>`).join('\n      ')}
+    </item>`
+    })
+    .join('')
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>${name} Blog</title>
+    <link>${site}/blog</link>
+    <description>Articles on secure development, vibe coding, AI-assisted programming, and building production-ready applications.</description>
+    <language>en-us</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <atom:link href="${site}/feed.xml" rel="self" type="application/rss+xml"/>
+    <image>
+      <url>${site}/logo.png</url>
+      <title>${name} Blog</title>
+      <link>${site}/blog</link>
+    </image>
+    ${rssItems}
+  </channel>
+</rss>`
+}

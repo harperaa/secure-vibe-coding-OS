@@ -1,15 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { registerHooks } from "node:module";
 
-// `next` has no package exports map, so outside the Next bundler plain Node
-// cannot resolve the bare `next/server` that withRateLimit.ts imports. Point it
-// at the file before loading the module under test.
-registerHooks({
-  resolve: (specifier, context, nextResolve) =>
-    nextResolve(specifier === "next/server" ? "next/server.js" : specifier, context),
-});
-const { NextRequest, NextResponse } = await import("next/server");
+// Package sources import `next/server.js`, which plain Node can resolve.
+const { NextRequest, NextResponse } = await import("next/server.js");
 const { withRateLimit } = await import("../packages/secure-vibe-runtime/src/withRateLimit.ts");
 
 // Each test uses its own IP so the module-level buckets do not leak between tests.

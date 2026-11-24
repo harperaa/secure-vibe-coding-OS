@@ -287,11 +287,11 @@ export function setupRepoForConfig(config = 'dev', name = getProjectName()) {
 // ---------------------------------------------------------------------------
 
 export function setSecret(key, value, config, name = getProjectName()) {
-  // Use spawnSync to avoid escaping problems with secret values.
+  // Value on stdin (Doppler's recommended form) so it is not a process argument.
   const result = spawnSync(
     'doppler',
-    ['secrets', 'set', `${key}=${value}`, '--project', name, '--config', config, '--silent'],
-    { stdio: ['ignore', 'inherit', 'inherit'] }
+    ['secrets', 'set', key, '--project', name, '--config', config, '--silent'],
+    { input: String(value), stdio: ['pipe', 'inherit', 'inherit'] }
   );
   if (result.status !== 0) {
     throw new Error(`doppler secrets set ${key} failed.`);
@@ -333,7 +333,7 @@ export function createServiceToken(config, tokenName, name = getProjectName()) {
   );
   const token = out.trim();
   if (!token.startsWith('dp.')) {
-    throw new Error(`Unexpected service-token format from doppler: ${token.slice(0, 10)}…`);
+    throw new Error('Unexpected service-token format from doppler.');
   }
   return token;
 }
@@ -350,9 +350,11 @@ export function pushTokenToGithub(token, secretName, repo = resolveGithubRepo())
     );
   }
   // Name the repo: with origin + upstream remotes gh fails or picks the template.
+  // Value on stdin when --body is absent (same bytes as --body; no trailing newline added).
   const target = repo ? ['-R', repo] : [];
-  const result = spawnSync('gh', ['secret', 'set', secretName, ...target, '--body', token], {
-    stdio: ['ignore', 'inherit', 'inherit'],
+  const result = spawnSync('gh', ['secret', 'set', secretName, ...target], {
+    input: token,
+    stdio: ['pipe', 'inherit', 'inherit'],
   });
   if (result.status !== 0) {
     throw new Error(`gh secret set ${secretName} failed.`);

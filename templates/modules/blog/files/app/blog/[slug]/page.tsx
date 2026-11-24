@@ -8,6 +8,7 @@ import {
   getRelatedPosts,
   formatDate,
   generatePostJsonLd,
+  serializeJsonLd,
 } from '../../../lib/blog'
 import { compileMDXContent, extractTableOfContents } from '../../../lib/mdx'
 import { TableOfContents } from '../components/table-of-contents'
@@ -89,7 +90,7 @@ export default async function BlogPostPage({ params }: PageProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       <article className="container mx-auto px-4 py-12 max-w-4xl">
