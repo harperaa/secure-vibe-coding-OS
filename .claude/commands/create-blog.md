@@ -180,7 +180,7 @@ If the script exits non-zero with `ERROR: GEMINI_API_KEY is not set.`, do NOT sk
    Tell them to reply when done; on their next message, retry the same `node scripts/generate-image.js ...` (or `doppler run --` wrapped variant) command and continue Step 4.
 
 2. **"I'll paste the key here, you handle it"** — collect the key via `AskUserQuestion` with a single "Enter below" option (the user types it into "Other"). Validate the input: must start with `AIza` and be ≥ 35 characters; if not, re-ask. Then write it to the appropriate place WITHOUT echoing it back in chat:
-   - Doppler mode: `printf '%s' "$GEMINI_API_KEY" | doppler secrets set GEMINI_API_KEY --config dev` (value on stdin; do not print the key in updates)
+   - Doppler mode: `printf '%s' '<key>' | doppler secrets set GEMINI_API_KEY --config dev`, replacing `<key>` with the validated key (single bash call; `printf` is a shell builtin, so the key goes to Doppler on stdin and never appears in a process argument list; do not print the key in updates)
    - Legacy mode: append `GEMINI_API_KEY=<key>` as a new line to `.env.local`. If the file already has a `GEMINI_API_KEY=` line, use Edit to replace that exact line in place rather than duplicating it.
    Confirm the key was stored, then retry the image generation. Never paste the key back into a user-visible message; refer to it as "the key you provided".
 

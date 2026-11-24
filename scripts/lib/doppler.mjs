@@ -4,8 +4,9 @@
  * Used by setup.mjs, deploy.mjs, sync-convex-env.mjs, and the rotate command.
  *
  * Conventions:
- *   - Project name is read from package.json `name` field.
+ *   - Project name is read from `.doppler.yaml` when present, else package.json `name`.
  *   - Configs are: `dev` (local dev, deploy-to-dev, CI build) and `prd` (deploy-to-prod).
+ *   - New projects delete Doppler's default unused `stg` environment; existing projects are left alone.
  *   - The marker `.doppler.yaml` (created by `doppler setup`) signals Doppler mode.
  */
 
@@ -20,6 +21,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const DOPPLER_MARKER = path.join(ROOT_DIR, '.doppler.yaml');
+// package.json name of the template itself; never a valid Doppler fallback.
+export const TEMPLATE_PACKAGE_NAME = 'secure-vibe-coding-os';
 
 // ---------------------------------------------------------------------------
 // Project identity
@@ -45,10 +48,20 @@ export function getProjectName() {
 
   const pkgPath = path.join(ROOT_DIR, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-  _projectName = pkg.name;
-  if (!_projectName) {
+  if (!pkg.name) {
     throw new Error('package.json has no "name" field — cannot derive Doppler project name.');
   }
+  // A fresh clone still carries the template's package name. Falling back to
+  // it would read and write the TEMPLATE's Doppler project (which exists in
+  // the maintainer's account), leaking one app's values into another. Refuse.
+  if (pkg.name === TEMPLATE_PACKAGE_NAME) {
+    throw new Error(
+      `No .doppler.yaml in this repo, and package.json still has the template name "${TEMPLATE_PACKAGE_NAME}". ` +
+      'Refusing to use the template\'s Doppler project. Run ' +
+      '`node scripts/setup.mjs doppler-bootstrap --project-name="<Your Site Name>"` first.'
+    );
+  }
+  _projectName = pkg.name;
   return _projectName;
 }
 
@@ -230,16 +243,28 @@ export function ensureLoggedIn() {
 // Project & config provisioning
 // ---------------------------------------------------------------------------
 
+/**
+ * Ensure a Doppler project exists. On first create only, remove the default
+ * unused `stg` environment (Doppler auto-creates dev/stg/prd). Existing
+ * projects are never modified.
+ *
+ * @returns {{ created: boolean, stgRemoved: boolean }}
+ */
 export function ensureProject(name = getProjectName()) {
   const probe = tryRun(`doppler projects get ${shellQuote(name)} --json`);
-  if (probe.ok) return;
+  if (probe.ok) {
+    return { created: false, stgRemoved: false };
+  }
 
   console.log(`Creating Doppler project "${name}"…`);
   run(`doppler projects create ${shellQuote(name)}`);
 
-  // Doppler auto-creates dev/stg/prd configs. We only want dev and prd.
-  // Best-effort delete; ignore failures if `stg` doesn't exist.
-  tryRun(`doppler configs delete stg --project ${shellQuote(name)} --yes`);
+  // Doppler auto-creates dev/stg/prd environments. This template only uses
+  // dev and prd — remove stg. Tolerate "not found" / already-absent.
+  const stg = tryRun(
+    `doppler environments delete stg --project ${shellQuote(name)} --yes`
+  );
+  return { created: true, stgRemoved: stg.ok };
 }
 
 export function setupRepoForConfig(config = 'dev', name = getProjectName()) {
@@ -311,14 +336,6 @@ export function createServiceToken(config, tokenName, name = getProjectName()) {
     throw new Error(`Unexpected service-token format from doppler: ${token.slice(0, 10)}…`);
   }
   return token;
-}
-
-export function revokeServiceToken(config, tokenName, name = getProjectName()) {
-  // Idempotent — Doppler returns non-zero if token doesn't exist; treat as success.
-  const result = tryRun(
-    `doppler configs tokens revoke ${shellQuote(tokenName)} --project ${shellQuote(name)} --config ${shellQuote(config)} --yes`
-  );
-  return result.ok;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(doppler *), Bash(npx vercel*), Bash(npx convex*), Bash(node *), Bash(curl *), Bash(gh *), Read
+allowed-tools: AskUserQuestion, Bash(doppler *), Bash(vercel *), Bash(npx convex*), Bash(node *), Bash(curl *), Bash(gh *), Read
 description: Rotate Doppler-managed secrets after a suspected compromise — containment first, then per-credential rotation
 ---
 
@@ -41,7 +41,7 @@ Persist this — affects how much the rotation walkthrough emphasizes.
 
 Persist `<ROTATE_SESSIONS>`.
 
-Compute `PROJECT=$(node -p "require('./package.json').name")` and store as `<PROJECT>`.
+Project is pinned by `.doppler.yaml` from `/install`. Omit `--project` on all Doppler CLI calls (do not use `package.json` name). Pass `--config <DOPPLER_CONFIG>` when the target config is not the pinned one.
 
 Map `<ENV>`:
 - `dev` → `<VERCEL_ENV>=development`, `<DOPPLER_CONFIG>=dev`
@@ -57,15 +57,15 @@ TOKEN_NAME="vercel-runtime-<DOPPLER_CONFIG>"
 
 # 1a. Revoke (idempotent — succeeds even if the token name already revoked)
 doppler configs tokens revoke "$TOKEN_NAME" \
-  --project <PROJECT> --config <DOPPLER_CONFIG> --yes 2>/dev/null || true
+  --config <DOPPLER_CONFIG> --yes 2>/dev/null || true
 
 # 1b. Issue a fresh service token
 NEW_TOKEN=$(doppler configs tokens create "$TOKEN_NAME" --plain \
-              --project <PROJECT> --config <DOPPLER_CONFIG>)
+              --config <DOPPLER_CONFIG>)
 
 # 1c. Replace DOPPLER_TOKEN in Vercel
-npx vercel env rm DOPPLER_TOKEN <VERCEL_ENV> --yes 2>/dev/null || true
-echo "$NEW_TOKEN" | npx vercel env add DOPPLER_TOKEN <VERCEL_ENV>
+vercel env rm DOPPLER_TOKEN <VERCEL_ENV> --yes 2>/dev/null || true
+echo "$NEW_TOKEN" | vercel env add DOPPLER_TOKEN <VERCEL_ENV>
 ```
 
 Show: ":white_check_mark: Stolen token revoked; new DOPPLER_TOKEN pushed to Vercel <VERCEL_ENV>"
@@ -76,14 +76,14 @@ Some Vercel function instances are still warm with the old cached secrets. Trigg
 
 ```bash
 # For prd:
-npx vercel --prod
+vercel --prod
 # For dev/preview: a new deploy happens on git push; if you need it now:
-npx vercel deploy
+vercel deploy
 ```
 
 Or, if a redeploy is undesirable and the app exposes the revalidate endpoint:
 ```bash
-REVALIDATE_TOKEN=$(doppler secrets get REVALIDATE_TOKEN --plain --project <PROJECT> --config <DOPPLER_CONFIG>)
+REVALIDATE_TOKEN=$(doppler secrets get REVALIDATE_TOKEN --plain --config <DOPPLER_CONFIG>)
 APP_URL="https://<your-app>"   # ask the user to confirm
 printf 'Authorization: Bearer %s\n' "$REVALIDATE_TOKEN" | curl -X POST "$APP_URL/api/revalidate-secrets" -H @-
 ```
@@ -107,7 +107,7 @@ For each, display the rotation steps and AskUserQuestion to confirm completion b
 After the user has the new key: run Doppler's interactive prompt (or have them set it in the Doppler dashboard). Do not put the value on the command line:
 ```bash
 doppler secrets set CLERK_SECRET_KEY \
-  --project <PROJECT> --config <DOPPLER_CONFIG>
+  --config <DOPPLER_CONFIG>
 ```
 Have the user paste `<NEW_SK>` at the interactive prompt, then confirm when done.
 
@@ -122,7 +122,7 @@ Have the user paste `<NEW_SK>` at the interactive prompt, then confirm when done
 Run Doppler's interactive prompt (or the dashboard). Do not put the value on the command line:
 ```bash
 doppler secrets set CLERK_WEBHOOK_SECRET \
-  --project <PROJECT> --config <DOPPLER_CONFIG>
+  --config <DOPPLER_CONFIG>
 ```
 Have the user paste `<NEW_WHSEC>` at the interactive prompt, then confirm when done.
 
@@ -130,7 +130,7 @@ Have the user paste `<NEW_WHSEC>` at the interactive prompt, then confirm when d
 
 ```bash
 NEW=$(node -p "require('crypto').randomBytes(32).toString('base64url')")
-printf '%s' "$NEW" | doppler secrets set SESSION_SECRET --project <PROJECT> --config <DOPPLER_CONFIG>
+printf '%s' "$NEW" | doppler secrets set SESSION_SECRET --config <DOPPLER_CONFIG>
 ```
 
 Warn the user: every active user is now logged out and must sign back in.
@@ -139,14 +139,14 @@ Warn the user: every active user is now logged out and must sign back in.
 
 ```bash
 NEW=$(node -p "require('crypto').randomBytes(32).toString('base64url')")
-printf '%s' "$NEW" | doppler secrets set CSRF_SECRET --project <PROJECT> --config <DOPPLER_CONFIG>
+printf '%s' "$NEW" | doppler secrets set CSRF_SECRET --config <DOPPLER_CONFIG>
 ```
 
 ### 3.4b SECURITY_LOG_KEY
 
 ```bash
 NEW=$(node -p "require('crypto').randomBytes(32).toString('base64url')")
-printf '%s' "$NEW" | doppler secrets set SECURITY_LOG_KEY --project <PROJECT> --config <DOPPLER_CONFIG>
+printf '%s' "$NEW" | doppler secrets set SECURITY_LOG_KEY --config <DOPPLER_CONFIG>
 ```
 
 This key gates writes to the Convex security log, so it must reach Convex too. Step 4 (`sync-convex-env.mjs`) mirrors it; until both Step 4 and Step 5 have run, security-log writes fail closed and the app logs `Invalid SECURITY_LOG_KEY` to the server console. Requests are unaffected.
@@ -161,7 +161,7 @@ This key gates writes to the Convex security log, so it must reach Convex too. S
 
 Run Doppler's interactive prompt (or the dashboard). Do not put the value on the command line:
 ```bash
-doppler secrets set CONVEX_DEPLOY_KEY --project <PROJECT> --config prd
+doppler secrets set CONVEX_DEPLOY_KEY --config prd
 ```
 Have the user paste `<NEW>` at the interactive prompt, then confirm when done.
 
@@ -173,13 +173,13 @@ Have the user paste `<NEW>` at the interactive prompt, then confirm when done.
 
 Run Doppler's interactive prompt (or the dashboard). Do not put the value on the command line:
 ```bash
-doppler secrets set GEMINI_API_KEY --project <PROJECT> --config <DOPPLER_CONFIG>
+doppler secrets set GEMINI_API_KEY --config <DOPPLER_CONFIG>
 ```
 Have the user paste `<NEW>` at the interactive prompt, then confirm when done.
 
 ### 3.7 Any other secret in scope
 
-Run `doppler secrets --project <PROJECT> --config <DOPPLER_CONFIG> --only-names` to enumerate remaining keys. For each one not yet rotated, decide: rotate now, or known-clean. Rotate anything you can't be sure about.
+Run `doppler secrets --config <DOPPLER_CONFIG> --only-names` to enumerate remaining keys. For each one not yet rotated, decide: rotate now, or known-clean. Rotate anything you can't be sure about.
 
 ## Step 4: Sync Convex env
 
@@ -196,7 +196,7 @@ Show: ":white_check_mark: Convex env synced"
 After all rotations, force the app to drop any cached server secrets again so warm instances start using the new values immediately (without waiting for a cold start):
 
 ```bash
-REVALIDATE_TOKEN=$(doppler secrets get REVALIDATE_TOKEN --plain --project <PROJECT> --config <DOPPLER_CONFIG>)
+REVALIDATE_TOKEN=$(doppler secrets get REVALIDATE_TOKEN --plain --config <DOPPLER_CONFIG>)
 printf 'Authorization: Bearer %s\n' "$REVALIDATE_TOKEN" | curl -X POST "https://<your-app>/api/revalidate-secrets" -H @-
 ```
 
@@ -204,13 +204,13 @@ printf 'Authorization: Bearer %s\n' "$REVALIDATE_TOKEN" | curl -X POST "https://
 
 ```bash
 # What did the compromised token access? Look for unusual IPs / times.
-doppler activity --project <PROJECT> --config <DOPPLER_CONFIG> --limit 100
+doppler activity --config <DOPPLER_CONFIG> --limit 100
 
 # Confirm new Doppler state.
-doppler secrets --project <PROJECT> --config <DOPPLER_CONFIG> --only-names
+doppler secrets --config <DOPPLER_CONFIG> --only-names
 
 # Confirm Vercel still has only the bootstrap tokens.
-npx vercel env ls <VERCEL_ENV>
+vercel env ls <VERCEL_ENV>
 ```
 
 The Vercel env listing should show only `DOPPLER_TOKEN` (and optionally `REVALIDATE_TOKEN`). Anything else in there is a leftover from legacy mode and should be deleted.

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/sidebar"
 
 import { useClerk, useUser } from "@clerk/nextjs"
-import { dark } from '@clerk/themes'
+import { dark } from '@clerk/ui/themes'
 import { useTheme } from "next-themes"
 
 export function NavUser() {
@@ -26,7 +26,7 @@ export function NavUser() {
   const { user: clerkUser } = useUser();
 
   const appearance = {
-    baseTheme: theme === "dark" ? dark : undefined,
+    theme: theme === "dark" ? dark : undefined,
   }
 
   return (
@@ -36,7 +36,7 @@ export function NavUser() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               onClick={() => openUserProfile({ appearance: {
-                baseTheme: theme === "dark" ? dark : undefined,
+                theme: theme === "dark" ? dark : undefined,
               } })}
             >
               <Avatar className="h-8 w-8 rounded-lg grayscale">

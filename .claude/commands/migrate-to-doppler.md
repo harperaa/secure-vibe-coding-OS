@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(node *setup.mjs*), Bash(npx convex*), Bash(npx vercel*), Bash(npx --no-install vercel*), Bash(vercel*), Bash(gh*), Bash(doppler*), Bash(ls *), Bash(cat *), Read
+allowed-tools: Bash(node *setup.mjs*), Bash(npx convex*), Bash(vercel*), Bash(gh*), Bash(doppler*), Bash(ls *), Bash(cat *), Read
 description: Migrate an existing repo's secrets from .env.local + Vercel + Convex into Doppler, then remove them from the source locations
 ---
 
@@ -15,11 +15,11 @@ This is **destructive** — the cleanup phase removes secrets from Vercel and Co
    - If missing, run `node scripts/setup.mjs doppler-bootstrap` and wait for completion. If it fails, surface the error verbatim and STOP.
 2. Check tools available (note which ones — affects what gets migrated):
    - `node -v` (required)
-   - `npx --no-install vercel --version 2>&1 || npx vercel --version 2>&1` (optional — Vercel CLI is invoked via `npx vercel` in this repo, no global install required. If `npx` can't resolve it, Vercel migration is skipped.)
+   - `vercel --version 2>&1` (optional — the Vercel CLI is a one-time global install, `cd ~ && npm i -g vercel`. If it's missing, Vercel migration is skipped.)
    - `npx convex env list 2>&1 | head -1` (optional — if it fails, Convex migration is skipped)
    - `gh --version 2>&1` (optional — needed only to push DOPPLER_TOKEN to GitHub at the end)
 
-If `npx vercel --version` fails (no internet to fetch it, or `vercel` not in `package.json` and not cached), tell the user: "Vercel CLI not resolvable via npx — Vercel env vars will not be migrated this run. Run `npm i -g vercel` or ensure network access for npx, then re-run /migrate-to-doppler. Continuing without Vercel."
+If `vercel --version` fails, tell the user: "Vercel CLI not installed — Vercel env vars will not be migrated this run. Install it once from outside this repo (`cd ~ && npm i -g vercel`, then `vercel login`) and re-run /migrate-to-doppler. Continuing without Vercel."
 
 ## Phase 1: Inventory (read-only)
 
@@ -44,16 +44,15 @@ Found in Vercel Preview:           <count> keys
 Found in Vercel Development:       <count> keys
 ```
 
-If a key appears in multiple sources with **different values**, list those conflicts explicitly:
+**Conflicts.** The output's `conflicts` array lists every key whose value differs between the sources that would be merged into the same Doppler config (key names and source names only). If it is non-empty, show it:
 
 ```
-⚠ Conflict for KEY=...
-  .env.local:           <truncated value>
-  Vercel Production:    <truncated value>
-  → Doppler dev will get the .env.local value (most-local wins)
+⚠ These keys differ between sources:
+  CLERK_SECRET_KEY          .env.local  vs  Vercel development + Vercel preview  vs  Vercel production
+  NEXT_PUBLIC_CONVEX_URL    .env.local  vs  Vercel development + Vercel preview
 ```
 
-(Truncate values to first 6 chars + "…" so secrets don't leak to the terminal.)
+and STOP before Phase 2. The migrate step merges sources key by key, which is only safe when they all describe the same Clerk app and Convex deployment. Sources that disagree usually mean the project has more than one stack (for example local dev on one Clerk app and the deployed site on another); merging them would give Doppler one app's publishable key and another app's secret key and break sign-in. Explain that to the user and ask which stack is the real one. Do not continue until the sources agree (stale Vercel variables removed, or the intended values pulled into `.env.local`), then re-run Phase 1: the migrate step reads the saved inventory, so a fresh `--phase=inventory` is what clears the conflicts. `--phase=migrate` refuses to run while conflicts exist; pass `--accept-conflicts=true` only when the user confirms the differing keys are harmless (for example a display name), never for Clerk or Convex keys.
 
 If `inventory.vercel.ok` is `false`, show the reason (e.g. "Vercel CLI not installed" or "Project not linked"). Continue with whatever was found.
 
@@ -133,10 +132,10 @@ Skipped: <list> (e.g. CONVEX_DEPLOY_KEY kept in Convex)
 
 ## Phase 6: Add DOPPLER_TOKEN to Vercel and GitHub
 
-If Vercel is resolvable (`npx vercel`), check whether `DOPPLER_TOKEN` is already in Vercel env:
+If Vercel is resolvable (`vercel`), check whether `DOPPLER_TOKEN` is already in Vercel env:
 
 ```bash
-npx vercel env ls 2>&1 | grep -i DOPPLER_TOKEN || echo "MISSING"
+vercel env ls 2>&1 | grep -i DOPPLER_TOKEN || echo "MISSING"
 ```
 
 Decide which scope to use for the **production** Vercel target. The rule mirrors `/deploy-to-dev`:
@@ -147,27 +146,26 @@ Decide which scope to use for the **production** Vercel target. The rule mirrors
 Detect promotion state:
 
 ```bash
-PROD_PROMOTED=$(doppler secrets get _PROD_PROMOTED_AT --project $(node -e "console.log(require('./.doppler.yaml').toString().match(/project:\s*(\S+)/)?.[1] || require('./package.json').name)") --config dev --plain 2>/dev/null && echo "yes" || echo "no")
+PROD_PROMOTED=$(doppler secrets get _PROD_PROMOTED_AT --config dev --plain 2>/dev/null && echo "yes" || echo "no")
 ```
 
-If MISSING, create a dev-scoped token. Pass the token value on standard input (not `--value`) for all three targets — and for **preview**, you MUST pass an empty string `""` as the third positional argument plus `--yes` (Vercel CLI 52+ requires the branch positional even for "all preview branches"; the `--yes` flag alone does not skip the prompt):
+If MISSING, create a dev-scoped token. Pass the token value on standard input (not `--value`) for all three targets. `--force` overwrites an existing value in place and `--yes` accepts the default of all preview branches (the same form `scripts/deploy.mjs` uses):
 
 ```bash
-PROJECT=$(node -e "const m=require('fs').readFileSync('.doppler.yaml','utf-8').match(/project:\s*(\S+)/); console.log(m ? m[1] : require('./package.json').name)")
-DEV_TOKEN=$(doppler configs tokens create vercel-runtime-dev --plain --project "$PROJECT" --config dev)
-printf '%s' "$DEV_TOKEN" | npx vercel env add DOPPLER_TOKEN development
-printf '%s' "$DEV_TOKEN" | npx vercel env add DOPPLER_TOKEN preview "" --yes
+DEV_TOKEN=$(doppler configs tokens create vercel-runtime-dev --plain --config dev)
+printf '%s' "$DEV_TOKEN" | vercel env add DOPPLER_TOKEN --environment development --force --yes
+printf '%s' "$DEV_TOKEN" | vercel env add DOPPLER_TOKEN --environment preview --force --yes
 ```
 
 Production target — branch on the promotion state:
 
 ```bash
 if [ "$PROD_PROMOTED" = "yes" ]; then
-  PRD_TOKEN=$(doppler configs tokens create vercel-runtime-prd --plain --project "$PROJECT" --config prd)
-  printf '%s' "$PRD_TOKEN" | npx vercel env add DOPPLER_TOKEN production
+  PRD_TOKEN=$(doppler configs tokens create vercel-runtime-prd --plain --config prd)
+  printf '%s' "$PRD_TOKEN" | vercel env add DOPPLER_TOKEN --environment production --force --yes
 else
   # Use the same dev-scoped token; /deploy-to-prod will replace it later.
-  printf '%s' "$DEV_TOKEN" | npx vercel env add DOPPLER_TOKEN production
+  printf '%s' "$DEV_TOKEN" | vercel env add DOPPLER_TOKEN --environment production --force --yes
 fi
 ```
 

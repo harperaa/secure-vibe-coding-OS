@@ -696,7 +696,7 @@ Show me how to test that client-side code modifications can't bypass the protect
 
 ```typescript
 // app/dashboard/my-feature/page.tsx
-import { Protect } from '@clerk/nextjs'
+import { Show } from '@clerk/nextjs'
 import CustomClerkPricing from "@/components/custom-clerk-pricing";
 
 function UpgradePrompt() {
@@ -721,12 +721,12 @@ function PremiumFeature() {
 
 export default function MyFeaturePage() {
   return (
-    <Protect
-      condition={(has) => !has({ plan: "free_user" })}
+    <Show
+      when={(has) => !has({ plan: "free_user" })}
       fallback={<UpgradePrompt />}
     >
       <PremiumFeature />
-    </Protect>
+    </Show>
   )
 }
 ```
@@ -1430,8 +1430,8 @@ const { userId } = await auth();
 
 **Subscription Gating:**
 ```typescript
-import { Protect } from '@clerk/nextjs';
-<Protect condition={(has) => !has({ plan: "free_user" })} fallback={...}>
+import { Show } from '@clerk/nextjs';
+<Show when={(has) => !has({ plan: "free_user" })} fallback={...}>
 ```
 
 **Pro Tip:** Keep `.cursor/rules/security_rules.mdc` open as reference. It contains copy-paste templates for all common patterns.
