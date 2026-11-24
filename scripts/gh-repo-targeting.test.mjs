@@ -141,13 +141,27 @@ test("doppler-create-ci-token defers while origin is still the template", () => 
   const clone = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "gh-clone-")));
   execFileSync("git", ["init", "-q"], { cwd: clone });
   execFileSync("git", ["remote", "add", "origin", "https://github.com/harperaa/secure-vibe-coding-OS.git"], { cwd: clone });
-  fs.writeFileSync(path.join(bin, "doppler"), `#!/bin/sh\necho "doppler $*" >> "${log}"\nexit 0\n`, { mode: 0o755 });
+  fs.writeFileSync(
+    path.join(bin, "doppler"),
+    `#!${process.execPath}
+const fs = require("node:fs");
+const argv = process.argv.slice(2);
+let stdin = null;
+if (!process.stdin.isTTY) {
+  try { stdin = fs.readFileSync(0, "utf8"); } catch { stdin = null; }
+}
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ argv, stdin }) + "\\n");
+process.exit(0);
+`,
+    { mode: 0o755 }
+  );
   reset();
   const r = spawnSync(process.execPath, [path.join(here, "setup.mjs"), "doppler-create-ci-token"], { cwd: clone, env: stubEnv(), encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   const out = JSON.parse(r.stdout.slice(r.stdout.indexOf("{")));
   assert.equal(out.deferred, true);
   assert.equal(calls(), "");
+  assert.equal(callRecords().length, 0);
 });
 
 test("github-setup points gh at the product once the template is upstream", () => {
