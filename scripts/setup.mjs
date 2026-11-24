@@ -1573,6 +1573,7 @@ function readVercelEnv() {
     return { ok: false, error: 'vercel CLI not installed — run `npm i -g vercel` outside this repo (skipping Vercel migration)' };
   }
   const byTarget = { production: {}, preview: {}, development: {} };
+  let pulledTargets = 0;
   for (const target of Object.keys(byTarget)) {
     const tmp = path.join(os.tmpdir(), `vercel-env-${target}-${Date.now()}.txt`);
     const result = spawnSync(
@@ -1584,12 +1585,13 @@ function readVercelEnv() {
       // Project may not be linked yet, or no values for that target.
       continue;
     }
+    pulledTargets += 1;
     if (fs.existsSync(tmp)) {
       byTarget[target] = readEnvFileAsMap(tmp);
       try { fs.unlinkSync(tmp); } catch {}
     }
   }
-  return { ok: true, byTarget };
+  return { ok: true, byTarget, pulledTargets };
 }
 
 /**
@@ -1676,7 +1678,29 @@ async function runMigrateToDoppler(args) {
     // Counts only. The raw `inventory` object was previously included here, which
     // printed every secret value to stdout — and therefore into terminal
     // scrollback, CI logs, and any agent transcript driving this command.
-    console.log(JSON.stringify({ success: true, phase: 'inventory', inventoryPath, counts }, null, 2));
+    // "Legacy config" = app values that live outside Doppler. /install uses this
+    // to decide whether choosing Doppler means a fresh setup or a migration.
+    // Not counted: Convex routing values the Convex CLI writes to .env.local in
+    // every mode, platform/bootstrap keys, and unfilled placeholders. Convex's
+    // own env is not counted either (it always holds its runtime allowlist).
+    const ROUTING_KEYS = new Set(['CONVEX_DEPLOYMENT', 'NEXT_PUBLIC_CONVEX_URL', 'NEXT_PUBLIC_CONVEX_SITE_URL']);
+    const isAppKey = (k, v) =>
+      !PROTECTED_KEYS.has(k) && !/^(VERCEL_|TURBO_|NX_)/.test(k) &&
+      typeof v === 'string' && v !== '' && !v.includes('your_') && !v.includes('<');
+    const envLocalAppKeys = Object.entries(inventory.envLocal)
+      .filter(([k, v]) => !ROUTING_KEYS.has(k) && isAppKey(k, v)).map(([k]) => k).sort();
+    const vercelAppKeys = [...new Set(
+      Object.values(inventory.vercel.byTarget).flatMap(t => Object.entries(t).filter(([k, v]) => isAppKey(k, v)).map(([k]) => k))
+    )].sort();
+    const legacy = {
+      hasLegacyConfig: envLocalAppKeys.length > 0 || vercelAppKeys.length > 0,
+      envLocalAppKeys,
+      vercelAppKeys,
+      // False when the CLI is missing or no target could be pulled (not linked).
+      vercelChecked: vercel.ok && vercel.pulledTargets > 0,
+    };
+
+    console.log(JSON.stringify({ success: true, phase: 'inventory', inventoryPath, counts, legacy }, null, 2));
     return;
   }
 
