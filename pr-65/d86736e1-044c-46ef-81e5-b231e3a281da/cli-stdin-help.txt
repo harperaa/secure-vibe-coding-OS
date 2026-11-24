@@ -1,0 +1,58 @@
+=== doppler secrets set --help (stdin) ===
+Set the value of one or more secrets.
+
+There are several methods for setting secrets:
+
+1) stdin (recommended)
+$ echo -e 'multiline\nvalue' | doppler secrets set CERT
+
+2) interactive stdin (recommended)
+$ doppler secrets set CERT
+multiline
+value
+
+.
+
+3) one secret
+$ doppler secrets set API_KEY '123'
+
+4) multiple secrets
+$ doppler secrets set API_KEY='123' DATABASE_URL='postgres:random@127.0.0.1:5432'
+
+Usage:
+  doppler secrets set [secrets] [flags]
+
+Flags:
+  -c, --config string       config (e.g. dev)
+
+=== vercel env add --help (stdin / --value) ===
+       --no-sensitive          Store the value as Config                             
+       --project <NAME_OR_ID>  Project name or ID (defaults to the linked project)   
+       --sensitive             Store the value as a Secret                           
+       --type <TYPE>           Set the Environment Variable type (`config` or        
+                               `secret`)                                             
+       --value <VALUE>         Set the variable value for non-interactive use;       
+                               otherwise use stdin or the prompt                     
+  -y,  --yes                   Accept default choices when adding an Environment     
+                               Variable                                              
+--
+  Examples:
+
+  - Add a new variable (prompts for value and Environments)
+
+    $ vercel env add <name>
+--
+  - Add a new Environment Variable from stdin
+
+    $ cat <file> | vercel env add <name> <production | preview | development>
+    $ cat ~/.npmrc | vercel env add NPM_RC preview
+    $ vercel env add API_URL production < url.txt
+
+  - Add with --value for non-interactive use
+
+    $ vercel env add API_TOKEN production --value "<value>" --yes
+
+
+=== curl --help all (-H) ===
+ -H, --header <header/@file>         Pass custom header(s) to server
+     --proxy-header <header/@file>   Pass custom header(s) to proxy
