@@ -325,12 +325,35 @@ export function createServiceToken(config, tokenName, name = getProjectName()) {
   return token;
 }
 
-export function revokeServiceToken(config, tokenName, name = getProjectName()) {
-  // Idempotent — Doppler returns non-zero if token doesn't exist; treat as success.
-  const result = tryRun(
-    `doppler configs tokens revoke ${shellQuote(tokenName)} --project ${shellQuote(name)} --config ${shellQuote(config)} --yes`
+/** Slugs of every service token on `config` named `tokenName` (names are not unique). */
+export function listServiceTokenSlugs(config, tokenName, name = getProjectName()) {
+  const res = tryRun(
+    `doppler configs tokens --project ${shellQuote(name)} --config ${shellQuote(config)} --json`
   );
-  return result.ok;
+  if (!res.ok) return [];
+  try {
+    return JSON.parse(res.stdout).filter(t => t.name === tokenName).map(t => t.slug);
+  } catch {
+    return [];
+  }
+}
+
+/** Revoke tokens by slug. `doppler configs tokens revoke` takes a slug, not a name, and has no --yes flag. */
+export function revokeServiceTokenSlugs(config, slugs, name = getProjectName()) {
+  let revoked = 0;
+  for (const slug of slugs) {
+    const res = tryRun(
+      `doppler configs tokens revoke ${shellQuote(slug)} --project ${shellQuote(name)} --config ${shellQuote(config)}`
+    );
+    if (res.ok) revoked += 1;
+  }
+  return revoked;
+}
+
+export function revokeServiceToken(config, tokenName, name = getProjectName()) {
+  // Idempotent: nothing to do when no token has this name.
+  const slugs = listServiceTokenSlugs(config, tokenName, name);
+  return revokeServiceTokenSlugs(config, slugs, name) === slugs.length;
 }
 
 // ---------------------------------------------------------------------------

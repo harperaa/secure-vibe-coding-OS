@@ -42,7 +42,8 @@ import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import {
   isDopplerEnabled,
   createServiceToken,
-  revokeServiceToken,
+  listServiceTokenSlugs,
+  revokeServiceTokenSlugs,
   setSecret,
   downloadSecrets,
 } from './lib/doppler.mjs';
@@ -1347,9 +1348,10 @@ async function runVercelEnvDoppler(opts = {}) {
   // 1. Issue a fresh service token for this Vercel environment.
   //    Token name encodes config so dev/prd tokens never collide.
   const tokenName = `vercel-runtime-${config}`;
-  // Revoke any existing token with the same name (idempotent — ignores absence)
-  // so re-running this command always produces a freshly-scoped credential.
-  revokeServiceToken(config, tokenName);
+  // Re-running rotates the credential, but the previous token(s) are revoked
+  // only AFTER the new one is on every Vercel target (see below). Revoking
+  // first would take the live site down if the Vercel update then failed.
+  const previousTokenSlugs = listServiceTokenSlugs(config, tokenName);
   let dopplerToken;
   try {
     dopplerToken = createServiceToken(config, tokenName);
@@ -1396,6 +1398,15 @@ async function runVercelEnvDoppler(opts = {}) {
       result.success = false;
       result.steps.push(`Failed to set DOPPLER_TOKEN on ${target}: ${pushed.error}`);
     }
+  }
+
+  if (result.varsSet.length === targets.length) {
+    const revoked = revokeServiceTokenSlugs(config, previousTokenSlugs);
+    if (previousTokenSlugs.length) {
+      result.steps.push(`Revoked ${revoked} of ${previousTokenSlugs.length} previous ${tokenName} token(s)`);
+    }
+  } else if (previousTokenSlugs.length) {
+    result.steps.push(`Kept the previous ${tokenName} token(s): not every Vercel target was updated, and revoking them would break the targets still using one`);
   }
 
   // 4. Sync allowlisted secrets to Convex (no native Doppler integration).
@@ -1490,33 +1501,18 @@ async function runVercelEnvDoppler(opts = {}) {
 // Helper: push a single value to Vercel env, replacing any existing one.
 function pushVercelEnvVar(key, value, vercelEnv) {
   try {
-    // Best-effort remove first so `add` doesn't error on duplicates. For preview the
-    // empty-string branch positional means "all preview branches" (CLI 52 requirement).
-    const rmArgs = vercelEnv === 'preview'
-      ? ['env', 'rm', key, vercelEnv, '', '--yes']
-      : ['env', 'rm', key, vercelEnv, '--yes'];
-    spawnSync('vercel', rmArgs, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
-
-    let add;
-    if (vercelEnv === 'preview') {
-      // Vercel CLI 52+ requires an explicit branch positional even for "all preview branches"
-      // (empty string ""), and `--value`/`--yes` instead of stdin. The stdin form falls
-      // through to an interactive branch prompt and dies on EOF.
-      add = spawnSync('vercel', ['env', 'add', key, vercelEnv, '', '--value', value, '--yes'], {
-        cwd: ROOT_DIR,
-        encoding: 'utf-8',
-        timeout: 30000,
-      });
-    } else {
-      // development / production: stdin form keeps the value out of argv (so it doesn't
-      // surface in `ps` or shell history).
-      add = spawnSync('vercel', ['env', 'add', key, vercelEnv], {
-        cwd: ROOT_DIR,
-        input: value,
-        encoding: 'utf-8',
-        timeout: 30000,
-      });
-    }
+    // `--force` overwrites an existing variable in place. Do NOT remove first:
+    // Vercel CLI 66 refuses `env rm --yes` from an agent session (removals need a
+    // person's approval), which left the old variable there and made the add fail
+    // with "already been added" on every re-run. The value goes on stdin so it
+    // stays out of argv (`ps`, shell history); `--yes` accepts the default of all
+    // preview branches instead of prompting.
+    const add = spawnSync('vercel', ['env', 'add', key, '--environment', vercelEnv, '--force', '--yes'], {
+      cwd: ROOT_DIR,
+      input: value,
+      encoding: 'utf-8',
+      timeout: 30000,
+    });
     if (add.status !== 0) {
       return { ok: false, error: ((add.stderr || '') + (add.stdout || '')).trim().slice(0, 200) };
     }

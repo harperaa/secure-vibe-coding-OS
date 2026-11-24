@@ -38,6 +38,8 @@ import {
   setSecrets as dopplerSetSecrets,
   downloadSecrets as dopplerDownloadSecrets,
   createServiceToken as dopplerCreateServiceToken,
+  listServiceTokenSlugs as dopplerListServiceTokenSlugs,
+  revokeServiceTokenSlugs as dopplerRevokeServiceTokenSlugs,
   pushTokenToGithub as dopplerPushTokenToGithub,
   isDopplerEnabled as dopplerIsEnabled,
   getProjectName as dopplerGetProjectName,
@@ -1366,7 +1368,10 @@ async function runDopplerSyncEnvLocal() {
       if (hashIdx !== -1) value = value.slice(0, hashIdx).trimEnd();
     }
     if (!key) continue;
-    if (!value || value.includes('your_') || value.includes('<')) {
+    // VERCEL_* (e.g. VERCEL_OIDC_TOKEN) is written into .env.local by the Vercel
+    // CLI on `vercel link` / `env pull`. Those are short-lived Vercel credentials,
+    // not app config: never copy them into Doppler.
+    if (key.startsWith('VERCEL_') || !value || value.includes('your_') || value.includes('<')) {
       result.skipped.push(key);
       continue;
     }
@@ -1412,6 +1417,9 @@ async function runDopplerCreateCiToken() {
     return;
   }
 
+  // Re-runs replace the token: the previous one(s) are revoked once GitHub has
+  // the new one, so tokens don't pile up and CI is never left without one.
+  const previousSlugs = dopplerListServiceTokenSlugs('dev', tokenName);
   let token;
   try {
     token = dopplerCreateServiceToken('dev', tokenName);
@@ -1427,6 +1435,11 @@ async function runDopplerCreateCiToken() {
   } catch (err) {
     console.error(JSON.stringify({ success: false, step: 'gh-secret-set', error: err.message }));
     process.exit(1);
+  }
+
+  if (previousSlugs.length) {
+    const revoked = dopplerRevokeServiceTokenSlugs('dev', previousSlugs);
+    result.steps.push(`Revoked ${revoked} of ${previousSlugs.length} previous "${tokenName}" token(s)`);
   }
 
   console.log(JSON.stringify(result, null, 2));
