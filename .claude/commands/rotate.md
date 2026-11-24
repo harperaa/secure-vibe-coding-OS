@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(doppler *), Bash(npx vercel*), Bash(npx convex*), Bash(node *), Bash(curl *), Bash(gh *), Read
+allowed-tools: AskUserQuestion, Bash(doppler *), Bash(vercel *), Bash(npx convex*), Bash(node *), Bash(curl *), Bash(gh *), Read
 description: Rotate Doppler-managed secrets after a suspected compromise — containment first, then per-credential rotation
 ---
 
@@ -64,8 +64,8 @@ NEW_TOKEN=$(doppler configs tokens create "$TOKEN_NAME" --plain \
               --config <DOPPLER_CONFIG>)
 
 # 1c. Replace DOPPLER_TOKEN in Vercel
-npx vercel env rm DOPPLER_TOKEN <VERCEL_ENV> --yes 2>/dev/null || true
-echo "$NEW_TOKEN" | npx vercel env add DOPPLER_TOKEN <VERCEL_ENV>
+vercel env rm DOPPLER_TOKEN <VERCEL_ENV> --yes 2>/dev/null || true
+echo "$NEW_TOKEN" | vercel env add DOPPLER_TOKEN <VERCEL_ENV>
 ```
 
 Show: ":white_check_mark: Stolen token revoked; new DOPPLER_TOKEN pushed to Vercel <VERCEL_ENV>"
@@ -76,9 +76,9 @@ Some Vercel function instances are still warm with the old cached secrets. Trigg
 
 ```bash
 # For prd:
-npx vercel --prod
+vercel --prod
 # For dev/preview: a new deploy happens on git push; if you need it now:
-npx vercel deploy
+vercel deploy
 ```
 
 Or, if a redeploy is undesirable and the app exposes the revalidate endpoint:
@@ -203,7 +203,7 @@ doppler activity --config <DOPPLER_CONFIG> --limit 100
 doppler secrets --config <DOPPLER_CONFIG> --only-names
 
 # Confirm Vercel still has only the bootstrap tokens.
-npx vercel env ls <VERCEL_ENV>
+vercel env ls <VERCEL_ENV>
 ```
 
 The Vercel env listing should show only `DOPPLER_TOKEN` (and optionally `REVALIDATE_TOKEN`). Anything else in there is a leftover from legacy mode and should be deleted.

@@ -10,12 +10,16 @@ import { cn } from '@/lib/utils'
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
-import { dark } from '@clerk/themes'
+import { dark } from '@clerk/ui/themes'
 import { useTheme } from "next-themes"
 
 
 
 const menuItems: { name: string; href: string }[] = [
+    { name: 'Features', href: '/#features' },
+    { name: 'About', href: '/#about' },
+    { name: 'Blog', href: '/blog' },
+    { name: 'Pricing', href: '/#pricing' },
     // modules:nav — content modules add their links here; add your own pages too
 ]
 
@@ -26,7 +30,7 @@ export const HeroHeader = () => {
     const { theme, setTheme } = useTheme()
 
     const appearance = {
-        baseTheme: theme === "dark" ? dark : undefined,
+        theme: theme === "dark" ? dark : undefined,
     }
 
     React.useEffect(() => {

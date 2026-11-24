@@ -619,9 +619,9 @@ if (!userId) return handleUnauthorizedError();
 
 **Subscription-based authorization:**
 ```typescript
-<Protect condition={(has) => !has({ plan: "free_user" })} fallback={<Upgrade/>}>
+<Show when={(has) => !has({ plan: "free_user" })} fallback={<Upgrade/>}>
   <PremiumFeature />
-</Protect>
+</Show>
 ```
 
 Server-side check (cannot be bypassed by client code).

@@ -64,8 +64,8 @@ After Phase 1 completes, call AskUserQuestion with ALL FOUR questions in a SINGL
       "multiSelect": false,
       "options": [
         { "label": "Minimal shell (Recommended)", "description": "Login homepage + blank dashboard, no content modules. Add any of them later with /add-module." },
-        { "label": "All modules", "description": "Install every content module now: homepage content, blog, dashboard sample, pricing, and the background-job example." },
-        { "label": "Let me pick modules", "description": "Choose which content modules to install now (homepage content, blog, dashboard sample, pricing, background-job example)." }
+        { "label": "All modules", "description": "Install every content module now: homepage content, blog, dashboard sample, and pricing." },
+        { "label": "Let me pick modules", "description": "Choose which content modules to install now (homepage content, blog, dashboard sample, pricing)." }
       ]
     }
   ]
@@ -86,8 +86,8 @@ Persist the secrets-management choice as `<USE_DOPPLER>` (`true` if Doppler, `fa
 
 Branch on the answer to the "App shell" question above:
 
-- **"Minimal shell" (the default)** — do NOT ask anything further: set `<MODULES>` = empty and `<SKIPPED_MODULES>` = `homepage-content,blog,dashboard-sample,pricing,background-job`, and skip the follow-up question entirely.
-- **"All modules"** — do NOT ask anything further: set `<MODULES>` = `homepage-content,blog,dashboard-sample,pricing,background-job` and `<SKIPPED_MODULES>` = empty, and skip the follow-up question entirely.
+- **"Minimal shell" (the default)** — do NOT ask anything further: set `<MODULES>` = empty and `<SKIPPED_MODULES>` = `homepage-content,blog,dashboard-sample,pricing`, and skip the follow-up question entirely.
+- **"All modules"** — do NOT ask anything further: set `<MODULES>` = `homepage-content,blog,dashboard-sample,pricing` and `<SKIPPED_MODULES>` = empty, and skip the follow-up question entirely.
 - **"Let me pick modules"** — call AskUserQuestion with the module picker below.
 
 Module picker (only for "Let me pick modules"):
@@ -105,21 +105,38 @@ Module picker (only for "Let me pick modules"):
         { "label": "Dashboard sample", "description": "Demo dashboard: KPI cards, interactive chart, data table" },
         { "label": "Pricing", "description": "Clerk Billing pricing section + payment-gated dashboard page" }
       ]
-    },
-    {
-      "question": "Include the background-job example page? (The pattern's backend, convex/jobs.ts, is installed either way; this adds the dashboard page that drives it.)",
-      "header": "Examples",
-      "multiSelect": false,
-      "options": [
-        { "label": "No (Recommended)", "description": "Keep the dashboard minimal; add it later with /add-module background-job" },
-        { "label": "Yes", "description": "Adds /dashboard/jobs: start slow work in a Convex action with retries and watch it finish live" }
-      ]
     }
   ]
 }
 ```
 
-Persist the modules choice as `<MODULES>` — the selected module names mapped to: `homepage-content`, `blog`, `dashboard-sample`, `pricing`, plus `background-job` when the Examples answer was "Yes" (possibly empty if the user deselects everything). Persist the unselected names as `<SKIPPED_MODULES>`. Carry both through every phase below.
+Persist the modules choice as `<MODULES>` — the selected module names mapped to: `homepage-content`, `blog`, `dashboard-sample`, `pricing` (possibly empty if the user deselects everything). Persist the unselected names as `<SKIPPED_MODULES>`. Carry both through every phase below.
+
+### Existing configuration check (only if the user chose Doppler)
+
+Choosing Doppler on a project that is ALREADY set up the legacy way (app values in `.env.local` and/or stored on the Vercel project) must not start a fresh Doppler setup next to it. That leaves two sources of truth: the next `/deploy-to-dev` would refuse to run (`vercel_has_app_env`), and before that guard existed it broke sign-in on the live site. Such a project is moved over with the `/migrate-to-doppler` pattern instead.
+
+Run the read-only inventory (it works before Doppler is bootstrapped and changes nothing):
+
+```bash
+node scripts/setup.mjs migrate-to-doppler --phase=inventory
+```
+
+Read `legacy` from the JSON output:
+
+- **`legacy.hasLegacyConfig: false`** — nothing to migrate (fresh clone, or already on Doppler). Continue with the normal flow below. If `legacy.vercelChecked` is false, mention once that the Vercel project could not be checked (CLI missing or project not linked); `/deploy-to-dev` checks again before it touches Vercel.
+- **`legacy.hasLegacyConfig: true`** — show the key NAMES only (never values) from `legacy.envLocalAppKeys` and `legacy.vercelAppKeys`, then call AskUserQuestion:
+  - Question: "This project already has its own configuration (<N> app values in .env.local, <M> on the Vercel project). To use Doppler, those values need to be moved into Doppler rather than replaced. How do you want to proceed?"
+  - Header: "Existing config"
+  - Options:
+    - "Migrate it into Doppler (Recommended)" — "Copy the existing values into Doppler (Vercel Production → prd, everything else → dev), then, after a separate confirmation, remove them from .env.local and Vercel. Your current Clerk app, database and users are kept."
+    - "Stay on legacy .env.local" — "Leave everything where it is and continue the install without Doppler."
+    - "Cancel" — "Stop the install without changing anything."
+
+  Then:
+  - **Migrate:** if the inventory's `conflicts` array is non-empty, the existing sources disagree with each other (more than one Clerk app or Convex deployment): show the conflicting key names and STOP the Doppler path — tell the user to run `/migrate-to-doppler` once the sources agree, and offer to continue the install on legacy `.env.local` instead. Otherwise install the content modules below if any were selected, then follow `.claude/commands/migrate-to-doppler.md` from Phase 0 through Phase 7 exactly as written (it runs `doppler-bootstrap` itself — pass `--project-name="<SITE_NAME>"` — and it has its own confirmation and HARD STOP before any cleanup; honour both). When it finishes, SKIP the "Doppler bootstrap" section below and continue at Phase 3. `init` then finds the migrated Clerk keys and secrets in Doppler `dev` and reuses them (`reusedClerk: true`), so nothing is regenerated.
+  - **Stay on legacy:** set `<USE_DOPPLER>` = `false` and continue; skip every Doppler-only step.
+  - **Cancel:** STOP.
 
 ### Install content modules (only if `<MODULES>` is non-empty)
 
@@ -184,6 +201,8 @@ node scripts/setup.mjs init --site-name="<SITE_NAME>" --admin-email="<ADMIN_EMAI
 ```
 
 Omit `--clerk-pk`/`--clerk-sk` in the normal case — without them the script creates an accountless Clerk app. Pass them only if the user brought their own keys in the optional section above.
+
+Re-running is safe: `init` reuses the Clerk application and the CSRF, session and security-log secrets that are already configured (Doppler `dev` or `.env.local`) and only creates what is missing. If the output has `reusedClerk: true`, no new Clerk app was created: in Phase 6 replace "Clerk application created (accountless)" with "Existing Clerk application reused" in the completed steps. Reusing the keys does not mean the app was claimed — if the output also has a `claimUrl` (carried over from the previous `docs/INSTALL.md`), pass it with `--accountless="true"` and run the claim section and Step 3 as usual, so the link is kept until the user confirms they claimed it. Only if `claimUrl` is null: pass `--accountless="false"`, omit `--claim-url`, and skip the claim section and Step 3.
 
 Parse the JSON output and display results to the user:
 - Show each completed step with a checkmark
@@ -280,7 +299,7 @@ node scripts/setup.mjs doppler-sync-env-local
 node scripts/setup.mjs doppler-create-ci-token
 ```
 
-If `doppler-create-ci-token` fails because `gh` is not authenticated, prompt the user: "Run `gh auth login` then re-run `node scripts/setup.mjs doppler-create-ci-token` manually." Show a checkmark for each step that succeeded.
+If `doppler-create-ci-token` returns `deferred: true`, that is expected on a fresh clone: `origin` still points at the template, so there is no product repo to hold the secret yet. Show "DOPPLER_TOKEN GitHub secret: deferred — /deploy-to-dev sets it once your GitHub repo exists" and continue (no token was created). If it fails because `gh` is not authenticated, prompt the user: "Run `gh auth login` then re-run `node scripts/setup.mjs doppler-create-ci-token` manually." Show a checkmark for each step that succeeded.
 
 ## Phase 6: Write Summary + Completion
 
@@ -291,7 +310,7 @@ Build the `write-install-summary` arguments from data collected during the insta
 - `--claim-url` from Phase 3 init result (if accountless app was created)
 - `--accountless` = "true" if an accountless app was created, "false" if user provided keys
 - `--completed-steps` = comma-separated list of steps that succeeded. Adjust for the chosen mode:
-  - **Doppler mode** (`<USE_DOPPLER>` is true): "Dependencies installed,Doppler CLI installed and authenticated,Doppler project created with dev/prd configs,Repo pinned to dev (.doppler.yaml written),CSRF\\, Session and Security Log secrets pushed to Doppler dev,Clerk application created (accountless),JWT template for Convex created,Frontend API URL pushed to Doppler dev,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL\\, SECURITY_LOG_KEY),Convex deployment IDs synced to Doppler dev,CI service token created and pushed to GitHub Actions"
+  - **Doppler mode** (`<USE_DOPPLER>` is true): "Dependencies installed,Doppler CLI installed and authenticated,Doppler project created with dev/prd configs,Repo pinned to dev (.doppler.yaml written),CSRF\\, Session and Security Log secrets pushed to Doppler dev,Clerk application created (accountless),JWT template for Convex created,Frontend API URL pushed to Doppler dev,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL\\, SECURITY_LOG_KEY),Convex deployment IDs synced to Doppler dev,CI service token created and pushed to GitHub Actions" — drop that last item if `doppler-create-ci-token` returned `deferred: true`
   - **Legacy mode**: "Dependencies installed,.env.local created and configured,CSRF\\, Session and Security Log secrets generated,Clerk application created (accountless),JWT template for Convex created,Frontend API URL configured,Convex project set up and functions deployed,Webhook endpoint created via Svix,Convex environment variables set (CLERK_WEBHOOK_SECRET\\, ADMIN_EMAIL\\, NEXT_PUBLIC_CLERK_FRONTEND_API_URL\\, SECURITY_LOG_KEY)"
 - `--manual-steps` = comma-separated list of anything that failed and needs manual completion (from `manualSteps` arrays in configure output)
 - `--modules-installed` = comma-separated `<MODULES>` (empty string if none were selected)
@@ -319,7 +338,7 @@ Run: `node scripts/setup.mjs write-install-summary --claim-url="<URL>" --account
 - Webhook endpoint created via Svix
 - Convex environment variables set (CLERK_WEBHOOK_SECRET, ADMIN_EMAIL, NEXT_PUBLIC_CLERK_FRONTEND_API_URL, SECURITY_LOG_KEY)
 - (Doppler mode) Convex deployment IDs synced to Doppler dev
-- (Doppler mode) CI service token created and pushed to GitHub as DOPPLER_TOKEN
+- (Doppler mode) CI service token created and pushed to GitHub as DOPPLER_TOKEN — or, if deferred, "DOPPLER_TOKEN GitHub secret will be set by /deploy-to-dev"
 
 ### Claim Your Clerk App (if accountless)
 
