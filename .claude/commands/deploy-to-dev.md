@@ -264,12 +264,11 @@ existing file looks correct.** This is not a conditional step. Do NOT skip it be
 file already has `"framework": "nextjs"`, or because its `buildCommand` already mentions
 `vercel-prebuild.mjs` and therefore looks "Doppler-aware".
 
-Why this trap exists: the template's own checked-in `vercel.json` deliberately carries
-`node scripts/modules.mjs install --all --apply-edits` at the front of its `buildCommand`,
-so the *template's* demo site renders the full site while its `main` stays a minimal shell.
+Why this trap exists: older versions of the template's `vercel.json` carried
+`node scripts/modules.mjs install --all --apply-edits` at the front of its `buildCommand`.
 That command is wrong for a clone, which has its modules committed already — leaving it in
 place makes the build re-install modules over files that are already there. Overwriting is
-what removes it.
+what removes it, and keeps the build command correct for the active mode.
 
 **Doppler mode** (`.doppler.yaml` exists): write `vercel.json` with the prebuild chain so the build machine fetches secrets from Doppler before `next build` inlines `NEXT_PUBLIC_*`:
 ```json
