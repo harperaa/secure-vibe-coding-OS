@@ -176,6 +176,8 @@ node scripts/setup.mjs init --site-name="<SITE_NAME>" --admin-email="<ADMIN_EMAI
 
 Omit `--clerk-pk`/`--clerk-sk` in the normal case — without them the script creates an accountless Clerk app. Pass them only if the user brought their own keys in the optional section above.
 
+Re-running is safe: `init` reuses the Clerk application and the CSRF, session and security-log secrets that are already configured (Doppler `dev` or `.env.local`) and only creates what is missing. If the output has `reusedClerk: true`, no new Clerk app was created and there is no claim URL — in Phase 6 pass `--accountless="false"`, omit `--claim-url`, replace "Clerk application created (accountless)" with "Existing Clerk application reused" in the completed steps, and skip the claim section and Step 3.
+
 Parse the JSON output and display results to the user:
 - Show each completed step with a checkmark
 - Do NOT display the claim URL yet — it will be shown in the final summary (Phase 6)

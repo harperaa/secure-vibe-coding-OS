@@ -146,9 +146,13 @@ deploys to land personally. This step locks in: the right account, the
 
 ## Step 2: GitHub Repository
 
-Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
+Check the `needsRepo`, `isUpstreamTemplate`, `isTemplateMaintainer` and `gitRemote` values from check-tools.
 
-**If `isUpstreamTemplate: true` or no remote:**
+**If `isTemplateMaintainer: true`** (origin is the template repo and this user can push to it — the template's own working copy, not a clone):
+- Do NOT run `github-setup`. Treat origin as the existing repo: show checkmark "GitHub repo already configured (template repository)" and use origin's owner as `<OWNER>` for Step 2.5, whatever was picked in Step 1.5.
+- Do not push yet — Step 4 pushes after Step 2.6.
+
+**If `needsRepo: true`** (`isUpstreamTemplate: true` without push access, or no remote):
 - Derive repo name from directory basename: `basename "$PWD"`
 - Run: `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>" --owner="<OWNER>" --no-push`
   (`--no-push`: Step 2.6 sets the repo's Actions secrets before Step 4's first push triggers CI.)

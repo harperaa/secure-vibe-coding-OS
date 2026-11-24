@@ -104,9 +104,11 @@ STOP here.
 
 ## Phase 2: GitHub Setup
 
-Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
+Check the `isUpstreamTemplate`, `isTemplateMaintainer` and `gitRemote` values from check-tools.
 
-**If `isUpstreamTemplate: true` (origin points to the template repo):**
+**If `isTemplateMaintainer: true`** (origin is the template repo and this user can push to it — the template's own working copy): do NOT offer to create a repo. Show checkmark "GitHub repo already configured (template repository)" and proceed.
+
+**If `isUpstreamTemplate: true` and `isTemplateMaintainer: false` (origin points to the template repo):**
 
 **AskUserQuestion**: "Your git origin still points to the template repo. Would you like me to create your own private GitHub repository?"
 - Options:
