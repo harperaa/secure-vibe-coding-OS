@@ -5,7 +5,7 @@ description: Deploy to Vercel using dev keys (fully automated)
 
 # /deploy-to-dev - Automated Dev Deployment
 
-You are the dev deployment assistant for Secure Vibe Coding OS. You will deploy the app to GitHub and Vercel using the existing development keys from `/install`. This is fully automated — no user interaction required beyond prerequisite checks and the optional Claude Code GitHub token (Step 2.6b).
+You are the dev deployment assistant for Secure Vibe Coding OS. You will deploy the app to GitHub and Vercel using the existing development keys from `/install`. This is fully automated — no user interaction required beyond prerequisite checks and the optional Claude Code GitHub token (Step 2.6b, skipped by default).
 
 **Important context:** The user has already run `/install` and has a working local development setup. This command pushes to GitHub and deploys to Vercel using the dev Clerk and Convex instances. No Convex production deployment or deploy key is needed — the Vercel app points directly at the dev Convex backend.
 
@@ -213,34 +213,47 @@ The repo's `claude.yml` (`@claude` mentions) and `claude-code-review.yml` (PR re
 
 1. **Already set?** If `CLAUDE_CODE_OAUTH_TOKEN` is listed, show a checkmark ("Claude Code GitHub token already set") and go to Step 3 without asking anything.
 2. **Token already in the shell?** Check without printing it: `test -n "$CLAUDE_CODE_OAUTH_TOKEN" && echo present || echo absent`.
-3. **Ask.** Call AskUserQuestion. Include the option "Push my existing token" only if step 2 printed `present`:
+3. **Ask.** Call AskUserQuestion. "Skip for now" is the default and goes first. Include "Push my existing token" only if step 2 printed `present`:
    ```json
    {
      "questions": [
        {
-         "question": "Your repo's @claude and Claude PR-review GitHub workflows need a CLAUDE_CODE_OAUTH_TOKEN secret. It's a long-lived token from `claude setup-token`, billed to your Claude subscription and separate from your normal login (which can't be reused for CI). Set it up now?",
+         "question": "Optional: your repo's @claude and Claude PR-review GitHub workflows need a CLAUDE_CODE_OAUTH_TOKEN secret (a long-lived token from `claude setup-token`, billed to your Claude subscription). Until it's set, those workflows are skipped; nothing else is affected. Setup steps are in DEPLOYMENT.md → GitHub Actions secrets. Set it up now?",
          "header": "Claude CI",
          "multiSelect": false,
          "options": [
-           { "label": "Generate one now (Recommended)", "description": "You run `! claude setup-token` (opens your browser), then I store the token as a GitHub Actions secret on this repo" },
-           { "label": "Push my existing token", "description": "CLAUDE_CODE_OAUTH_TOKEN is already set in this shell; store it on this repo without displaying it" },
-           { "label": "Skip for now", "description": "The Claude workflows won't run until the secret is added. You can do it later." }
+           { "label": "Skip for now (Recommended)", "description": "Continue the deploy. Add the secret any time later; the steps are in DEPLOYMENT.md → GitHub Actions secrets." },
+           { "label": "I'll do it in another terminal", "description": "I'll show the two commands to run in a separate terminal window, wait, then check the secret" },
+           { "label": "Push my existing token", "description": "CLAUDE_CODE_OAUTH_TOKEN is already set in this shell; store it on this repo without displaying it" }
          ]
        }
      ]
    }
    ```
 4. **Act on the answer.**
-   - **Generate one now:** tell the user to type `! claude setup-token` at the prompt and complete the browser sign-in. You cannot run it yourself, because it needs their browser and an interactive terminal. Warn them that the token printed at the end will be visible in this session's transcript; if they'd rather keep it out, they can run it in a separate terminal and pick "Skip for now" instead. When the output appears, extract the token (it starts with `sk-ant-oat`) and push it via stdin so it never appears in process arguments:
-     ```bash
-     gh secret set CLAUDE_CODE_OAUTH_TOKEN -R <GH_REPO> <<'EOF'
-     <TOKEN>
-     EOF
+   - **Skip for now:** tell the user: "Skipped. The Claude review workflows will show as skipped until the secret is set. To add it later, follow DEPLOYMENT.md → GitHub Actions secrets." List it under Next Steps in Step 8 and continue.
+   - **I'll do it in another terminal:** NEVER run `claude setup-token` yourself (it needs a real interactive terminal and hangs in the background) and NEVER suggest the `! claude setup-token` prefix (that would print the token into this session's transcript). Show these instructions, substituting `<GH_REPO>`:
+
      ```
-     Do not echo the token back in your own messages. If no token appears (login cancelled or failed), offer "Try again" / "Skip for now" via AskUserQuestion.
+     Open a NEW terminal window (outside Claude Code) and run:
+
+       1. claude setup-token
+          Approve the sign-in in your browser, then copy the token it prints
+          (starts with sk-ant-oat). It isn't saved anywhere, so copy it now.
+
+       2. gh secret set CLAUDE_CODE_OAUTH_TOKEN -R <GH_REPO>
+          Paste the token when gh asks for the secret value (input is hidden).
+
+     Also install the Claude GitHub App on the repo if you haven't:
+       https://github.com/apps/claude
+
+     Then come back here and tell me you're done. The token never needs to
+     enter this chat.
+     ```
+
+     Then call AskUserQuestion (Header: "Claude CI") with "Done, check it" and "Skip for now". On "Done, check it", run step 5. If the secret isn't listed yet, say so and ask again with "Check again" / "Skip for now".
    - **Push my existing token:** `printf '%s' "$CLAUDE_CODE_OAUTH_TOKEN" | gh secret set CLAUDE_CODE_OAUTH_TOKEN -R <GH_REPO>`
-   - **Skip for now:** remember to list it under Next Steps in Step 8.
-5. **Verify.** After a push, re-run the `gh secret list` above and confirm `CLAUDE_CODE_OAUTH_TOKEN` is listed, then show a checkmark. On failure, show the `gh` error and treat it like "Skip for now". Never block the deploy on this step.
+5. **Verify.** Re-run the `gh secret list` above and confirm `CLAUDE_CODE_OAUTH_TOKEN` is listed, then show a checkmark. On failure, show the `gh` error and treat it like "Skip for now". Never block the deploy on this step.
 
 ## Step 3: Ensure vercel.json is correct for the active mode
 
@@ -408,7 +421,7 @@ Full record saved to: **docs/DEPLOYMENT-DEV.md**
 - Authentication, webhooks, and all features work normally
 
 ### Next Steps
-(Only if Step 2.6b was skipped or failed) Enable @claude and Claude PR reviews: run `claude setup-token`, then `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R <GH_REPO>` and paste the token.
+(Only if Step 2.6b was skipped or failed) Enable @claude and Claude PR reviews: in a separate terminal run `claude setup-token`, then `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R <GH_REPO>` and paste the token. Full steps: DEPLOYMENT.md → GitHub Actions secrets.
 
 When you're ready to go fully production (custom domain, remove dev badge, Stripe billing):
   /deploy-to-prod
