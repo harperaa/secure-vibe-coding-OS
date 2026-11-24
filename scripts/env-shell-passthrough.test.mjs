@@ -135,6 +135,10 @@ function vercelValue(calls, key) {
   return call.stdin;
 }
 
+// True if a script tried to remove a Vercel variable. Vercel CLI 66 refuses `env rm --yes`
+// from an agent session, so values are overwritten with `env add --force` instead.
+const usedVercelEnvRm = (calls) => calls.some((c) => c.argv.slice(0, 3).join(' ') === 'vercel env rm');
+
 // True if any script reached for the Vercel CLI through npx.
 const usedNpxVercel = (calls) => calls.some((c) => c.argv[0] === 'npx' && c.argv[1] === 'vercel');
 
@@ -149,6 +153,7 @@ test('deploy.mjs vercel-env-dev passes .env.local values to Vercel verbatim', (t
   const { calls } = box.run('deploy.mjs', ['vercel-env-dev']);
   assert.equal(vercelValue(calls, 'CSRF_SECRET'), HOSTILE);
   assert.equal(usedNpxVercel(calls), false);
+  assert.equal(usedVercelEnvRm(calls), false);
 });
 
 test('deploy.mjs vercel-env passes .env.local values to Vercel verbatim', (t) => {
@@ -163,6 +168,7 @@ test('deploy.mjs vercel-env passes .env.local values to Vercel verbatim', (t) =>
   ]);
   assert.equal(vercelValue(calls, 'CSRF_SECRET'), HOSTILE);
   assert.equal(usedNpxVercel(calls), false);
+  assert.equal(usedVercelEnvRm(calls), false);
 });
 
 test('deploy.mjs update-vercel-clerk-keys passes the Clerk secret key to Vercel verbatim', (t) => {
@@ -175,6 +181,7 @@ test('deploy.mjs update-vercel-clerk-keys passes the Clerk secret key to Vercel 
   ]);
   assert.equal(vercelValue(calls, 'CLERK_SECRET_KEY'), HOSTILE);
   assert.equal(usedNpxVercel(calls), false);
+  assert.equal(usedVercelEnvRm(calls), false);
 });
 
 test('setup.mjs configure passes SECURITY_LOG_KEY to Convex verbatim', (t) => {

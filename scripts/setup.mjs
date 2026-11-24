@@ -688,7 +688,8 @@ async function runConfigure(args) {
       `  2. Endpoint URL: ${webhookEndpointUrl}`,
       `  3. Subscribe to events: user.created, user.updated, user.deleted, paymentAttempt.updated`,
       `  4. Click Create, copy the Signing Secret (whsec_...)`,
-      `  5. Run: npx convex env set CLERK_WEBHOOK_SECRET (value on stdin)`,
+      `  5. Run: npx convex env set CLERK_WEBHOOK_SECRET`,
+      `     and paste the signing secret (whsec_...) when it asks for the value`,
     );
   }
 
@@ -1372,7 +1373,10 @@ async function runDopplerSyncEnvLocal() {
       if (hashIdx !== -1) value = value.slice(0, hashIdx).trimEnd();
     }
     if (!key) continue;
-    if (!value || value.includes('your_') || value.includes('<')) {
+    // VERCEL_* (e.g. VERCEL_OIDC_TOKEN) is written into .env.local by the Vercel
+    // CLI on `vercel link` / `env pull`. Those are short-lived Vercel credentials,
+    // not app config: never copy them into Doppler.
+    if (key.startsWith('VERCEL_') || !value || value.includes('your_') || value.includes('<')) {
       result.skipped.push(key);
       continue;
     }
@@ -1418,6 +1422,27 @@ async function runDopplerCreateCiToken() {
     return;
   }
 
+  // Idempotent: if the repo already has DOPPLER_TOKEN, leave it. Minting a new
+  // token on every run piled up credentials; nothing here revokes one (that is
+  // /rotate's job). A failed lookup is not "missing": stop rather than guess.
+  const listed = spawnSync('gh', ['secret', 'list', '-R', repo, '--json', 'name', '-q', '.[].name'], { encoding: 'utf-8' });
+  if (listed.status !== 0) {
+    console.error(JSON.stringify({
+      success: false,
+      step: 'gh-secret-list',
+      error: `Could not list GitHub secrets for ${repo}: ${(listed.stderr || '').trim().slice(0, 200)}`,
+      hint: 'Nothing was changed. Check `gh auth status`, then re-run.',
+    }));
+    process.exit(1);
+  }
+  if (listed.stdout.split('\n').includes('DOPPLER_TOKEN')) {
+    console.log(JSON.stringify({
+      success: true,
+      alreadySet: true,
+      steps: [`DOPPLER_TOKEN already set on ${repo}; left unchanged`],
+    }, null, 2));
+    return;
+  }
   let token;
   try {
     token = dopplerCreateServiceToken('dev', tokenName);
@@ -1555,6 +1580,7 @@ function readVercelEnv() {
     return { ok: false, error: 'vercel CLI not installed — run `npm i -g vercel` outside this repo (skipping Vercel migration)' };
   }
   const byTarget = { production: {}, preview: {}, development: {} };
+  let pulledTargets = 0;
   for (const target of Object.keys(byTarget)) {
     const tmp = path.join(os.tmpdir(), `vercel-env-${target}-${Date.now()}.txt`);
     const result = spawnSync(
@@ -1566,12 +1592,13 @@ function readVercelEnv() {
       // Project may not be linked yet, or no values for that target.
       continue;
     }
+    pulledTargets += 1;
     if (fs.existsSync(tmp)) {
       byTarget[target] = readEnvFileAsMap(tmp);
       try { fs.unlinkSync(tmp); } catch {}
     }
   }
-  return { ok: true, byTarget };
+  return { ok: true, byTarget, pulledTargets };
 }
 
 /**
@@ -1616,6 +1643,40 @@ function shredInventory(inventoryPath) {
   }
 }
 
+// Keys that two or more migration sources define with DIFFERENT values, per
+// Doppler config they would be merged into. The migrate phase merges sources
+// key by key ("first writer wins"), which is only safe when every source
+// describes the same stack. If .env.local, Convex and the Vercel targets hold
+// different Clerk apps or Convex deployments, a per-key merge produces a mix
+// (one app's publishable key with another app's secret key) that breaks
+// sign-in everywhere it is used. Names only; values never leave the file.
+function findMigrationConflicts(inventory) {
+  const vercel = inventory.vercel?.byTarget || {};
+  const prodPromoted = !!vercel.production?.['_PROD_PROMOTED_AT'];
+  const devSources = [
+    ['.env.local', inventory.envLocal],
+    ['Convex env', inventory.convex?.map],
+    ['Vercel development', vercel.development],
+    ['Vercel preview', vercel.preview],
+    ...(prodPromoted ? [] : [['Vercel production', vercel.production]]),
+  ];
+  const seen = new Map(); // key -> Map(value -> [source names])
+  for (const [name, map] of devSources) {
+    for (const [k, v] of Object.entries(map || {})) {
+      if (PROTECTED_KEYS.has(k) || /^(VERCEL_|TURBO_|NX_)/.test(k) || typeof v !== 'string' || v === '') continue;
+      if (!seen.has(k)) seen.set(k, new Map());
+      const byValue = seen.get(k);
+      if (!byValue.has(v)) byValue.set(v, []);
+      byValue.get(v).push(name);
+    }
+  }
+  const conflicts = [];
+  for (const [key, byValue] of seen) {
+    if (byValue.size > 1) conflicts.push({ key, config: 'dev', sources: [...byValue.values()].map(names => names.join(' + ')) });
+  }
+  return conflicts.sort((a, b) => a.key.localeCompare(b.key));
+}
+
 async function runMigrateToDoppler(args) {
   const phase = args.phase || 'inventory';
   const inventoryPath = args['inventory-file'] || path.join(os.tmpdir(), 'doppler-migration-inventory.json');
@@ -1658,7 +1719,31 @@ async function runMigrateToDoppler(args) {
     // Counts only. The raw `inventory` object was previously included here, which
     // printed every secret value to stdout — and therefore into terminal
     // scrollback, CI logs, and any agent transcript driving this command.
-    console.log(JSON.stringify({ success: true, phase: 'inventory', inventoryPath, counts }, null, 2));
+    // "Legacy config" = app values that live outside Doppler. /install uses this
+    // to decide whether choosing Doppler means a fresh setup or a migration.
+    // Not counted: Convex routing values the Convex CLI writes to .env.local in
+    // every mode, platform/bootstrap keys, and unfilled placeholders. Convex's
+    // own env is not counted either (it always holds its runtime allowlist).
+    const ROUTING_KEYS = new Set(['CONVEX_DEPLOYMENT', 'NEXT_PUBLIC_CONVEX_URL', 'NEXT_PUBLIC_CONVEX_SITE_URL']);
+    const isAppKey = (k, v) =>
+      !PROTECTED_KEYS.has(k) && !/^(VERCEL_|TURBO_|NX_)/.test(k) &&
+      typeof v === 'string' && v !== '' && !v.includes('your_') && !v.includes('<');
+    const envLocalAppKeys = Object.entries(inventory.envLocal)
+      .filter(([k, v]) => !ROUTING_KEYS.has(k) && isAppKey(k, v)).map(([k]) => k).sort();
+    const vercelAppKeys = [...new Set(
+      Object.values(inventory.vercel.byTarget).flatMap(t => Object.entries(t).filter(([k, v]) => isAppKey(k, v)).map(([k]) => k))
+    )].sort();
+    const legacy = {
+      hasLegacyConfig: envLocalAppKeys.length > 0 || vercelAppKeys.length > 0,
+      envLocalAppKeys,
+      vercelAppKeys,
+      // False when the CLI is missing or no target could be pulled (not linked).
+      vercelChecked: vercel.ok && vercel.pulledTargets > 0,
+    };
+
+    const conflicts = findMigrationConflicts(inventory);
+
+    console.log(JSON.stringify({ success: true, phase: 'inventory', inventoryPath, counts, legacy, conflicts }, null, 2));
     return;
   }
 
@@ -1678,6 +1763,23 @@ async function runMigrateToDoppler(args) {
     // Build the prd payload: Vercel-Production, but only after /deploy-to-prod has promoted
     // real production keys. Until then those values are dev-equivalent and belong in dev.
     // Conflict resolution: .env.local > Convex > Vercel-Development > Vercel-Preview (most-local wins).
+    //
+    // That per-key merge is refused while sources disagree (see
+    // findMigrationConflicts). --accept-conflicts=true is for the rare case
+    // where the differing keys are known to be harmless.
+    const conflicts = findMigrationConflicts(inventory);
+    if (conflicts.length > 0 && args['accept-conflicts'] !== 'true') {
+      console.error(JSON.stringify({
+        success: false,
+        step: 'conflicting-sources',
+        error: 'conflicting_sources',
+        conflicts,
+        message: `${conflicts.length} key(s) have different values in different sources. Merging them key by key would write a mixed, inconsistent configuration to Doppler. Nothing was changed.`,
+        hint: 'Make the sources agree first (for example remove stale Vercel development/preview variables, or pull the intended values into .env.local). Then run --phase=inventory again (this check reads the saved inventory, not the live sources) and re-run --phase=migrate. If the differing keys are known to be harmless, re-run with --accept-conflicts=true.',
+      }, null, 2));
+      process.exit(1);
+    }
+
     const devPayload = {};
     const prdPayload = {};
 

@@ -42,7 +42,6 @@ import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import {
   isDopplerEnabled,
   createServiceToken,
-  revokeServiceToken,
   setSecret,
   downloadSecrets,
 } from './lib/doppler.mjs';
@@ -1348,19 +1347,74 @@ async function runVercelEnvDoppler(opts = {}) {
   // 1. Issue a fresh service token for this Vercel environment.
   //    Token name encodes config so dev/prd tokens never collide.
   const tokenName = `vercel-runtime-${config}`;
-  // Revoke any existing token with the same name (idempotent — ignores absence)
-  // so re-running this command always produces a freshly-scoped credential.
-  revokeServiceToken(config, tokenName);
-  let dopplerToken;
-  try {
-    dopplerToken = createServiceToken(config, tokenName);
-    result.steps.push(`Issued Doppler service token (${tokenName}) for config=${config}`);
-  } catch (err) {
-    console.error(JSON.stringify({
+  // Idempotent: a target that already has DOPPLER_TOKEN keeps it. Minting a
+  // new token on every run piled up credentials, and nothing here revokes one:
+  // the live deployment keeps reading the token it was built with, and
+  // retiring credentials is /rotate's job, not a deploy re-run's.
+  //   - dev: mint only for targets that have no DOPPLER_TOKEN yet.
+  //   - prd: production must swap the dev-scoped token for a prd-scoped one the
+  //     first time, so "already set" only counts once production was promoted.
+  const allTargets = config === 'dev'
+    ? ['development', 'preview', 'production']
+    : ['production'];
+  const vercelEnvs = listVercelEnv();
+  if (vercelEnvs === null) {
+    console.log(JSON.stringify({
       success: false,
-      error: `Failed to create Doppler service token: ${err.message}`,
-    }));
+      error: 'vercel_env_unreadable',
+      message: 'Could not list the Vercel project\'s environment variables, so it is not safe to add DOPPLER_TOKEN. Nothing was changed.',
+      hint: 'Check `vercel whoami` and that the project is linked (`vercel link`), then re-run.',
+    }, null, 2));
     process.exit(1);
+  }
+
+  // Never add DOPPLER_TOKEN to a project that still stores its own app values.
+  // The build inlines NEXT_PUBLIC_* from Vercel's variables (they win over the
+  // prebuild's .env.production.local), while the server overwrites process.env
+  // from Doppler at runtime. If the two disagree - e.g. Vercel holds one Clerk
+  // app's publishable key and Doppler another app's secret key - every Clerk
+  // handshake fails and the live site returns 500s. Such a project has to be
+  // moved over with /migrate-to-doppler, which copies Vercel's values into
+  // Doppler and removes them from Vercel before the token is added.
+  const dopplerKeys = new Set(Object.keys(downloadSecrets(config)));
+  const overlapTargets = new Set(allTargets);
+  const overlapping = [...new Set(
+    vercelEnvs
+      .filter(e => e.key !== 'DOPPLER_TOKEN' && dopplerKeys.has(e.key) && (e.target || []).some(t => overlapTargets.has(t)))
+      .map(e => e.key)
+  )].sort();
+  if (overlapping.length) {
+    console.log(JSON.stringify({
+      success: false,
+      error: 'vercel_has_app_env',
+      keys: overlapping,
+      message: `This Vercel project already stores ${overlapping.length} app variable(s) that Doppler (${config}) also provides. Adding DOPPLER_TOKEN would mix the two sources at build and runtime and can break sign-in on the live site. Nothing was changed.`,
+      hint: 'Run /migrate-to-doppler to move the Vercel values into Doppler and remove them from Vercel, then re-run this deploy. To keep this project on its own Vercel variables instead, deploy without Doppler (legacy mode).',
+    }, null, 2));
+    process.exit(1);
+  }
+
+  const present = new Set(vercelEnvs.filter(e => e.key === 'DOPPLER_TOKEN').flatMap(e => e.target || []));
+  const keepExisting = config === 'dev' || checkProdPromoted().promoted;
+  const targets = keepExisting ? allTargets.filter(t => !present.has(t)) : allTargets;
+  const kept = allTargets.filter(t => !targets.includes(t));
+  if (kept.length) {
+    result.alreadySet = kept.map(t => `DOPPLER_TOKEN (${t})`);
+    result.steps.push(`DOPPLER_TOKEN already set on ${kept.join(', ')}; left unchanged`);
+  }
+
+  let dopplerToken;
+  if (targets.length) {
+    try {
+      dopplerToken = createServiceToken(config, tokenName);
+      result.steps.push(`Issued Doppler service token (${tokenName}) for config=${config}`);
+    } catch (err) {
+      console.error(JSON.stringify({
+        success: false,
+        error: `Failed to create Doppler service token: ${err.message}`,
+      }));
+      process.exit(1);
+    }
   }
 
   // 2. Ensure REVALIDATE_TOKEN exists in Doppler. Generate one if absent so
@@ -1384,10 +1438,6 @@ async function runVercelEnvDoppler(opts = {}) {
   //      prd-scoped token. This intentionally overwrites the dev-scoped token
   //      that /deploy-to-dev left there earlier — production deploys must use
   //      prd Doppler config, not dev.
-  const targets = config === 'dev'
-    ? ['development', 'preview', 'production']
-    : ['production'];
-
   for (const target of targets) {
     const pushed = pushVercelEnvVar('DOPPLER_TOKEN', dopplerToken, target);
     if (pushed.ok) {
@@ -1488,23 +1538,31 @@ async function runVercelEnvDoppler(opts = {}) {
   console.log(JSON.stringify(result, null, 2));
 }
 
+// Every variable stored on the linked Vercel project: [{ key, target: [...] }].
+// Returns null when the list can't be read, so callers don't mistake a failed
+// lookup for "nothing is set".
+function listVercelEnv() {
+  const r = spawnSync('vercel', ['env', 'ls', '--json'], { cwd: ROOT_DIR, encoding: 'utf-8', timeout: 30000 });
+  if (r.status !== 0) return null;
+  try {
+    const out = r.stdout || '';
+    const { envs } = JSON.parse(out.slice(out.indexOf('{')));
+    return Array.isArray(envs) ? envs : null;
+  } catch {
+    return null;
+  }
+}
+
 // Helper: push a single value to Vercel env, replacing any existing one.
 function pushVercelEnvVar(key, value, vercelEnv) {
   try {
-    // Best-effort remove first so `add` doesn't error on duplicates. For preview the
-    // empty-string branch positional means "all preview branches" (CLI 52 requirement).
-    const rmArgs = vercelEnv === 'preview'
-      ? ['env', 'rm', key, vercelEnv, '', '--yes']
-      : ['env', 'rm', key, vercelEnv, '--yes'];
-    spawnSync('vercel', rmArgs, { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
-
-    // Empty-string git-branch positional means "all preview branches" (CLI 52+).
-    // Value on stdin with --yes; same as production/development, no --value on argv.
-    // Invoke the globally installed `vercel` binary (not `npx vercel`).
-    const addArgs = vercelEnv === 'preview'
-      ? ['env', 'add', key, vercelEnv, '', '--yes']
-      : ['env', 'add', key, vercelEnv];
-    const add = spawnSync('vercel', addArgs, {
+    // `--force` overwrites an existing variable in place. Do NOT remove first:
+    // Vercel CLI 66 refuses `env rm --yes` from an agent session (removals need a
+    // person's approval), which left the old variable there and made the add fail
+    // with "already been added" on every re-run. The value goes on stdin so it
+    // stays out of argv (`ps`, shell history); `--yes` accepts the default of all
+    // preview branches instead of prompting.
+    const add = spawnSync('vercel', ['env', 'add', key, '--environment', vercelEnv, '--force', '--yes'], {
       cwd: ROOT_DIR,
       input: value,
       encoding: 'utf-8',

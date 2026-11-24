@@ -325,14 +325,6 @@ export function createServiceToken(config, tokenName, name = getProjectName()) {
   return token;
 }
 
-export function revokeServiceToken(config, tokenName, name = getProjectName()) {
-  // Idempotent — Doppler returns non-zero if token doesn't exist; treat as success.
-  const result = tryRun(
-    `doppler configs tokens revoke ${shellQuote(tokenName)} --project ${shellQuote(name)} --config ${shellQuote(config)} --yes`
-  );
-  return result.ok;
-}
-
 // ---------------------------------------------------------------------------
 // GitHub Actions secrets
 // ---------------------------------------------------------------------------

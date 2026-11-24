@@ -44,16 +44,15 @@ Found in Vercel Preview:           <count> keys
 Found in Vercel Development:       <count> keys
 ```
 
-If a key appears in multiple sources with **different values**, list those conflicts explicitly:
+**Conflicts.** The output's `conflicts` array lists every key whose value differs between the sources that would be merged into the same Doppler config (key names and source names only). If it is non-empty, show it:
 
 ```
-⚠ Conflict for KEY=...
-  .env.local:           <truncated value>
-  Vercel Production:    <truncated value>
-  → Doppler dev will get the .env.local value (most-local wins)
+⚠ These keys differ between sources:
+  CLERK_SECRET_KEY          .env.local  vs  Vercel development + Vercel preview  vs  Vercel production
+  NEXT_PUBLIC_CONVEX_URL    .env.local  vs  Vercel development + Vercel preview
 ```
 
-(Truncate values to first 6 chars + "…" so secrets don't leak to the terminal.)
+and STOP before Phase 2. The migrate step merges sources key by key, which is only safe when they all describe the same Clerk app and Convex deployment. Sources that disagree usually mean the project has more than one stack (for example local dev on one Clerk app and the deployed site on another); merging them would give Doppler one app's publishable key and another app's secret key and break sign-in. Explain that to the user and ask which stack is the real one. Do not continue until the sources agree (stale Vercel variables removed, or the intended values pulled into `.env.local`), then re-run Phase 1: the migrate step reads the saved inventory, so a fresh `--phase=inventory` is what clears the conflicts. `--phase=migrate` refuses to run while conflicts exist; pass `--accept-conflicts=true` only when the user confirms the differing keys are harmless (for example a display name), never for Clerk or Convex keys.
 
 If `inventory.vercel.ok` is `false`, show the reason (e.g. "Vercel CLI not installed" or "Project not linked"). Continue with whatever was found.
 
