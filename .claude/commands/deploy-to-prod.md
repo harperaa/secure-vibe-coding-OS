@@ -1,5 +1,5 @@
 ---
-allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(npx vercel*), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Read, Edit, Write
+allowed-tools: AskUserQuestion, Bash(node *deploy.mjs*), Bash(node scripts/setup.mjs doppler-create-ci-token*), Bash(vercel *), Bash(npm install*), Bash(git *), Bash(gh *), Bash(ls *), Bash(node -v*), Bash(which *), Bash(test -n *), Bash(printf *), Read, Edit, Write
 description: Full production deployment (Clerk prod + Convex prod + Vercel + Google OAuth + optional Stripe)
 ---
 
@@ -36,6 +36,7 @@ The legacy mode (`.env.local` → `vercel env add` → secrets stored in Vercel)
    - If not: run `npm install`
 3. Run `node scripts/deploy.mjs check-tools`
 4. Parse the JSON result and display tool status with checkmarks
+   - If `vercel` is in `missing`: STOP. Display: "Vercel CLI is required. Install it once, from OUTSIDE this repo (the repo's strict install-script setting blocks it here): `cd ~ && npm i -g vercel`, then `vercel login`, then re-run `/deploy-to-prod`."
 
 5. Read `.env.local` and verify it has been configured by `/install`:
    - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
@@ -104,9 +105,13 @@ STOP here.
 
 ## Phase 2: GitHub Setup
 
-Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
+Check the `isUpstreamTemplate`, `isTemplateMaintainer`, `originAccessUnknown` and `gitRemote` values from check-tools.
 
-**If `isUpstreamTemplate: true` (origin points to the template repo):**
+**If `originAccessUnknown: true`**: STOP. Display: "Couldn't check your access to the origin repository (GitHub lookup failed). Nothing was changed. Check `gh auth status` and your network, then re-run `/deploy-to-prod`." Do NOT run `github-setup`.
+
+**If `isTemplateMaintainer: true`** (origin is the template repo and this user can push to it — the template's own working copy): do NOT offer to create a repo. Show checkmark "GitHub repo already configured (template repository)" and proceed.
+
+**If `isUpstreamTemplate: true` and `isTemplateMaintainer: false` (origin points to the template repo):**
 
 **AskUserQuestion**: "Your git origin still points to the template repo. Would you like me to create your own private GitHub repository?"
 - Options:
@@ -123,13 +128,26 @@ Check the `isUpstreamTemplate` and `gitRemote` values from check-tools.
     - "[directory basename]" (Recommended) — Uses current folder name
     - "[site name from .env.local]" — Uses your configured site name
   - Header: "Repo name"
-- Run: `node scripts/deploy.mjs github-setup --repo-name="<NAME>"`
+- Run: `node scripts/deploy.mjs github-setup --repo-name="<NAME>" --no-push`
+  (`--no-push`: Phase 2b sets the repo's Actions secrets and then makes the first push, so CI starts with them.)
 - Parse result and show new repo URL
 
 **If "No":**
 Display manual instructions and AskUserQuestion to confirm when done.
 
 **If origin is already a non-template repo:** show checkmark and proceed.
+
+## Phase 2b: GitHub Actions secrets (DOPPLER_TOKEN, CLAUDE_CODE_OAUTH_TOKEN)
+
+Users who skipped `/deploy-to-dev` get their GitHub repo in Phase 2 above, so its Actions secrets were never set. Read `.claude/commands/deploy-to-dev.md` and follow **Step 2.6** (2.6a and 2.6b) exactly, with these substitutions:
+
+- `<GH_REPO>` = `owner/repo` parsed from `git remote get-url origin`. If origin is still the template or missing (the user chose "No, I'll set it up myself" and hasn't finished), skip this phase and list both secrets under Remaining Setup in Phase 12.
+- "go to Step 3" means continue to Phase 3; "Next Steps in Step 8" means Remaining Setup in Phase 12.
+- `DOPPLER_TOKEN` in GitHub is the `dev`-scoped CI token on purpose (CI builds with dev config). Do not replace it with a `prd` token.
+
+If both secrets are already listed (typical when `/deploy-to-dev` ran first), show one checkmark ("GitHub Actions secrets already set") and continue without asking anything.
+
+**Finally, if Phase 2 created the repo** (it was run with `--no-push`), push now — even if the secrets step was skipped or failed: `git push -u origin main`.
 
 ## Phase 3: Clerk Production Instance + Keys
 
@@ -342,10 +360,9 @@ file already has `"framework": "nextjs"`, or because its `buildCommand` already 
 `vercel-prebuild.mjs` and therefore looks "Doppler-aware".
 
 Two things make skipping actively wrong here:
-- The template's checked-in `vercel.json` begins its `buildCommand` with
-  `node scripts/modules.mjs install --all --apply-edits`, which exists so the *template's*
-  demo site renders fully from a minimal `main`. A clone has its modules committed already,
-  so that command does not belong in its build.
+- Older versions of the template's `vercel.json` began the `buildCommand` with
+  `node scripts/modules.mjs install --all --apply-edits`. A clone has its modules committed
+  already, so that command does not belong in its build.
 - The checked-in `buildCommand` has **no `convex deploy`**. Production requires it — without
   it, Convex functions are never deployed for this release and the live site runs against
   stale backend code.
@@ -380,24 +397,24 @@ Derive the Vercel project name from the GitHub repo name (NOT the directory name
    team, Vercel never auto-selects in a non-interactive run and the commands below fail with
    `Multiple teams found. Teams are never auto-selected when the CLI runs without an
    interactive terminal.`
-   Run: `npx vercel teams ls`
+   Run: `vercel teams ls`
    - Exactly one team → use its id as `<SCOPE>`.
    - More than one → ask the user which team with AskUserQuestion, then use that id.
-3. Run: `npx vercel project add <REPO_NAME> --scope=<SCOPE> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
-4. Run: `npx vercel link --yes --project=<REPO_NAME> --scope=<SCOPE>`
-If auth error: tell user to run `npx vercel login`, AskUserQuestion to confirm, retry.
+3. Run: `vercel project add <REPO_NAME> --scope=<SCOPE> 2>&1 || true` (creates the project on Vercel with the correct name; ignore errors if it already exists)
+4. Run: `vercel link --yes --project=<REPO_NAME> --scope=<SCOPE>`
+If auth error: tell user to run `vercel login`, AskUserQuestion to confirm, retry.
 5. Connect the GitHub repo for automatic deployments on push.
    ALWAYS pass the origin URL explicitly:
-   Run: `npx vercel git connect "$(git remote get-url origin)" --yes --scope=<SCOPE>`
+   Run: `vercel git connect "$(git remote get-url origin)" --yes --scope=<SCOPE>`
    This enables Vercel to auto-rebuild and redeploy when you `git push origin main`.
    The explicit URL is REQUIRED: this repo may carry both an `origin` (the user's repo) and
    an `upstream` (the template). A bare `vercel git connect --yes` can bind the PRODUCTION
    project to the template repository — shipping template code to a live site.
 
    Then VERIFY before continuing:
-   Run: `npx vercel project inspect <REPO_NAME> --scope=<SCOPE>` and confirm the connected
+   Run: `vercel project inspect <REPO_NAME> --scope=<SCOPE>` and confirm the connected
    repo matches the `origin` basename. If it shows the template, run
-   `npx vercel git disconnect --yes --scope=<SCOPE>` and redo the connect.
+   `vercel git disconnect --yes --scope=<SCOPE>` and redo the connect.
 
    If the connect itself fails, show a warning but continue — the CLI deploy will still work. User can connect manually in Vercel Dashboard → Settings → Git.
 
@@ -446,6 +463,8 @@ done
 
 Then run: `node scripts/deploy.mjs vercel-env`
 
+**If the script returns `error: "vercel_has_app_env"`**: STOP. Display the `message`, the `keys` list and the `hint` verbatim. The Vercel project still stores its own app variables; adding `DOPPLER_TOKEN` on top would mix two sources and can break sign-in on the live site. Nothing was changed. Run `/migrate-to-doppler` first. Do NOT remove variables or add the token by hand to get past this. (`error: "vercel_env_unreadable"`: STOP and show the `message` and `hint`.)
+
 **If the script returns `error: "doppler_prd_incomplete"`**: STOP. Display the `message` and `hint` fields verbatim, then run the `doppler secrets set` commands above for whatever's listed in `missing[]`, then retry `vercel-env`.
 
 The command auto-delegates to `vercel-env-doppler`: issues a fresh `prd`-scoped Doppler service token, pushes only `DOPPLER_TOKEN` (and generates `REVALIDATE_TOKEN` if absent) to Vercel Production, runs `scripts/sync-convex-env.mjs --config prd`, and writes the `_PROD_PROMOTED_AT` marker (which gates future `/deploy-to-dev` runs from stomping prod). The `--clerk-*`, `--deploy-key`, `--frontend-api-url`, `--site-name`, `--convex-url` arguments are ignored in Doppler mode — values come from Doppler.
@@ -457,7 +476,7 @@ Use the production Convex URL from Phase 8 (`prodUrl`). This is required — ser
 
 Parse and show each variable set.
 
-**Doppler mode verification:** After this step, `npx vercel env ls production` should show ONLY `DOPPLER_TOKEN`. App values are NOT in Vercel — they're fetched from Doppler at build time (via `scripts/vercel-prebuild.mjs`) and runtime (via `lib/secrets.ts`).
+**Doppler mode verification:** After this step, `vercel env ls production` should show ONLY `DOPPLER_TOKEN`. App values are NOT in Vercel — they're fetched from Doppler at build time (via `scripts/vercel-prebuild.mjs`) and runtime (via `lib/secrets.ts`).
 
 ## Phase 11: Production Deployment
 
@@ -478,6 +497,8 @@ Build write-summary arguments from all collected data. Include google-oauth stat
 - If `<SKIP_STRIPE>` is false and `<STRIPE_STATUS>` is `"configured"` → pass `--stripe-status="configured"`, add "Stripe billing connected" to `--completed-steps`.
 - If `<SKIP_STRIPE>` is false and `<STRIPE_STATUS>` is `"deferred"` → pass `--stripe-status="deferred"`, add "Stripe billing (deferred)" to `--skipped-steps`.
 
+**GitHub Actions secrets (Phase 2b):** add "DOPPLER_TOKEN GitHub secret set" (Doppler mode) and "Claude Code GitHub token set (CLAUDE_CODE_OAUTH_TOKEN)" to `--completed-steps` for each one that was pushed or already present; add any that were skipped or failed to `--skipped-steps`.
+
 Run: `node scripts/deploy.mjs write-summary --deploy-type="prod" --vercel-url="<URL>" --repo-url="<URL>" --convex-prod-url="<URL>" --convex-site-url="<URL>" --frontend-api-url="<URL>" --site-name="<NAME>" --admin-email="<EMAIL>" --google-oauth="<configured|skipped>" --stripe-status="<configured|skipped|deferred>" --webhook-url="<URL>" --completed-steps="<STEPS>" --skipped-steps="<STEPS>" --vercel-vars="<VARS>" --convex-vars="<VARS>"`
 
 When `<stripe-status>` is `"skipped"` or `"deferred"`, `write-summary` injects an "Enable Stripe billing later" section into `docs/DEPLOYMENT-PROD.md` with the exact steps to connect Stripe + Clerk Billing post-deploy. No additional guidance is needed in the live chat — the doc is the source of truth.
@@ -489,6 +510,7 @@ Display:
 
 ### Automated Steps
 - [x] GitHub repository created / configured
+- [x] GitHub Actions secrets set (DOPPLER_TOKEN in Doppler mode, CLAUDE_CODE_OAUTH_TOKEN) — list only the ones Phase 2b set or found
 - [x] Clerk production instance created (with custom domain)
 - [x] Clerk production keys validated (pk_live_/sk_live_)
 - [x] JWT template created on production Clerk
@@ -523,6 +545,7 @@ Full record saved to: **docs/DEPLOYMENT-PROD.md**
 1. **Point your domain to Vercel**: Vercel Dashboard → Settings → Domains → Add <THEIR_DOMAIN>
 2. **Configure DNS**: Add the records shown by Vercel at your domain registrar
 3. **Update Clerk domain**: After DNS propagates, verify in Clerk Dashboard (Production) → Domains
+4. (Only if Phase 2b skipped or failed) **GitHub Actions secrets**: `node scripts/setup.mjs doppler-create-ci-token` (Doppler mode) and `claude setup-token` then `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R <GH_REPO>`
 
 ### Ongoing Deployments
 Future deployments happen automatically when you push to main:

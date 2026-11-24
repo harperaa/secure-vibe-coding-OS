@@ -1,6 +1,6 @@
 'use client'
 import { PricingTable, useClerk } from "@clerk/nextjs";
-import { dark } from '@clerk/themes'
+import { dark } from '@clerk/ui/themes'
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
@@ -45,7 +45,7 @@ export default function CustomClerkPricing() {
     return (
         <PricingTable
             appearance={{
-                baseTheme: mounted && theme === "dark" ? dark : undefined,
+                theme: mounted && theme === "dark" ? dark : undefined,
                 elements: {
                     pricingTableCardTitle: { // title
                         fontSize: 20,

@@ -43,6 +43,23 @@ export function extractTableOfContents(content: string): TableOfContentsItem[] {
   const idCounts: Record<string, number> = {}
   let match
 
+  // Lines inside fenced code blocks (``` or ~~~) are not headings: a "## Title"
+  // in a code sample renders as code and gets no anchor, so a contents entry
+  // for it would link nowhere. Blank those lines out before scanning.
+  let fence: string | null = null
+  content = content
+    .split('\n')
+    .map((line) => {
+      const marker = line.match(/^\s*(```+|~~~+)/)
+      if (marker) {
+        if (fence === null) fence = marker[1][0]
+        else if (marker[1][0] === fence) fence = null
+        return ''
+      }
+      return fence === null ? line : ''
+    })
+    .join('\n')
+
   while ((match = headingRegex.exec(content)) !== null) {
     const level = match[1].length
     const title = match[2].trim()

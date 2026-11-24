@@ -58,8 +58,12 @@ GitHub does **not** copy repository secrets into a repo created from a template,
 
 1. Install the [Claude GitHub App](https://github.com/apps/claude) on the repository (required for the action’s Contents / Issues / Pull requests access).
 2. Generate a long-lived OAuth token locally with `claude setup-token` (Pro, Max, Ultra, Team, or Enterprise). Approve the browser prompt and copy the token printed in the terminal — it is not saved for you.
-3. In the repository: **Settings → Secrets and variables → Actions → New repository secret**. Name: `CLAUDE_CODE_OAUTH_TOKEN`. Value: the token from step 2.
+3. Store it as a repository secret, either:
+   - **From the terminal** (same terminal as step 2, not inside a Claude Code session): `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R <owner>/<repo>`, then paste the token when prompted (input is hidden). Check with `gh secret list -R <owner>/<repo>`.
+   - **On github.com:** **Settings → Secrets and variables → Actions → New repository secret**. Name: `CLAUDE_CODE_OAUTH_TOKEN`. Value: the token from step 2.
 4. Alternatively, from Claude Code run `/install-github-app`, which can create the secret and workflow wiring for you.
+
+Run `claude setup-token` in a **regular terminal window**, not through Claude Code: it needs an interactive terminal and browser sign-in, and running it inside a Claude session would put the token in the session transcript. `/deploy-to-dev` (and `/deploy-to-prod`) skip this by default and point here; if you choose to do it during the deploy, they show these same commands to run in another terminal and then verify the secret when you return. One token can be reused for all your repos; each repo needs its own copy of the secret.
 
 This template already ships the workflow files and authenticates with `claude_code_oauth_token` (subscription OAuth), not `ANTHROPIC_API_KEY`. Until the secret is set, PR Claude/security reviews and `@claude` mentions stay skipped.
 
@@ -1010,7 +1014,7 @@ git push origin main
 3. Action: **Rate limit**, keyed by IP, with a window that matches your tolerance (for example 60 requests per minute). Start in log-only mode, read the Firewall logs for a day, then switch to deny.
 4. Keep `withRateLimit` in place: it still covers local and non-Vercel deployments and still writes the `rate_limit_exceeded` rows the security dashboard shows.
 
-Convex mutations never pass through Vercel, so neither control applies to them. Authenticated mutations should carry their own bound, as `convex/jobs.ts` does with its per-user active-job cap, and public ones should be gated the way `logSecurityViolation` is.
+Convex mutations never pass through Vercel, so neither control applies to them. Authenticated mutations should carry their own bound (for example a per-user cap enforced in the mutation), and public ones should be gated the way `logSecurityViolation` is.
 
 ## Monitoring and Observability
 
