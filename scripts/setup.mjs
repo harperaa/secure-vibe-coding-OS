@@ -1768,7 +1768,7 @@ async function runMigrateToDoppler(args) {
         error: 'conflicting_sources',
         conflicts,
         message: `${conflicts.length} key(s) have different values in different sources. Merging them key by key would write a mixed, inconsistent configuration to Doppler. Nothing was changed.`,
-        hint: 'Make the sources agree first (for example remove stale Vercel development/preview variables, or pull the intended values into .env.local), then re-run. If the differing keys are known to be harmless, re-run with --accept-conflicts=true.',
+        hint: 'Make the sources agree first (for example remove stale Vercel development/preview variables, or pull the intended values into .env.local). Then run --phase=inventory again (this check reads the saved inventory, not the live sources) and re-run --phase=migrate. If the differing keys are known to be harmless, re-run with --accept-conflicts=true.',
       }, null, 2));
       process.exit(1);
     }
