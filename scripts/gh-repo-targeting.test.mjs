@@ -38,6 +38,7 @@ if (!process.stdin.isTTY) {
 }
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ argv, stdin }) + "\\n");
 if (argv[0] === "repo" && argv[1] === "view") console.log("harperaa/secure-vibe-coding-OS");
+if (argv[0] === "secret" && argv[1] === "list") console.log(process.env.STUB_GH_SECRETS || "");
 process.exit(0);
 `,
   { mode: 0o755 }
@@ -162,6 +163,66 @@ process.exit(0);
   assert.equal(out.deferred, true);
   assert.equal(calls(), "");
   assert.equal(callRecords().length, 0);
+});
+
+// setup.mjs in a throwaway root whose package.json/.doppler.yaml name a product
+// (the template name is refused as a Doppler project), run from the
+// two-remote repo so origin resolves to acme/product.
+const CI_TOKEN = "dp.st.dev.ci-synthetic";
+function runCreateCiToken(t, extraEnv = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ci-token-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "scripts", "lib"), { recursive: true });
+  for (const f of ["setup.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs")]) {
+    fs.copyFileSync(path.join(here, f), path.join(root, "scripts", f));
+  }
+  const clerkDir = path.join(root, "node_modules", "@clerk", "backend");
+  fs.mkdirSync(clerkDir, { recursive: true });
+  fs.writeFileSync(path.join(clerkDir, "package.json"), JSON.stringify({ name: "@clerk/backend", type: "module", main: "index.js" }));
+  fs.writeFileSync(path.join(clerkDir, "index.js"), "export function createClerkClient() { return {}; }\n");
+  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "product" }));
+  fs.writeFileSync(path.join(root, ".doppler.yaml"), "setup:\n  project: product\n  config: dev\n");
+  fs.writeFileSync(
+    path.join(bin, "doppler"),
+    `#!${process.execPath}
+const fs = require("node:fs");
+const argv = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ bin: "doppler", argv, stdin: null }) + "\\n");
+if (argv[0] === "configs" && argv[1] === "tokens" && argv[2] === "create") console.log(${JSON.stringify(CI_TOKEN)});
+process.exit(0);
+`,
+    { mode: 0o755 }
+  );
+  reset();
+  const r = spawnSync(process.execPath, [path.join(root, "scripts", "setup.mjs"), "doppler-create-ci-token"], { cwd: repo, env: stubEnv(extraEnv), encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const records = callRecords();
+  return {
+    out: JSON.parse(r.stdout.slice(r.stdout.indexOf("{"))),
+    minted: records.filter((c) => c.bin === "doppler" && c.argv.slice(0, 3).join(" ") === "configs tokens create"),
+    sets: records.filter((c) => c.bin !== "doppler" && c.argv[0] === "secret" && c.argv[1] === "set"),
+    output: r.stdout + r.stderr,
+  };
+}
+
+test("doppler-create-ci-token sends the CI token to gh secret set -R acme/product on stdin", (t) => {
+  const { out, minted, sets, output } = runCreateCiToken(t);
+  assert.equal(out.success, true);
+  assert.equal(minted.length, 1);
+  assert.equal(sets.length, 1);
+  assert.deepEqual(sets[0].argv, ["secret", "set", "DOPPLER_TOKEN", "-R", "acme/product"]);
+  assert.equal(sets[0].stdin, CI_TOKEN);
+  assert.ok(!sets[0].argv.includes("--body"));
+  assert.ok(!JSON.stringify(callRecords().map((c) => c.argv)).includes(CI_TOKEN));
+  assert.ok(!output.includes(CI_TOKEN));
+});
+
+test("doppler-create-ci-token re-run leaves an existing DOPPLER_TOKEN alone", (t) => {
+  const { out, minted, sets } = runCreateCiToken(t, { STUB_GH_SECRETS: "SOME_OTHER\nDOPPLER_TOKEN" });
+  assert.equal(out.alreadySet, true);
+  assert.equal(minted.length, 0);
+  assert.equal(sets.length, 0);
+  assert.ok(callRecords().some((c) => c.argv.join(" ") === "secret list -R acme/product --json name -q .[].name"));
 });
 
 test("github-setup points gh at the product once the template is upstream", () => {

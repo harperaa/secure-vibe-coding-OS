@@ -15,7 +15,9 @@
  *
  * Usage:
  *   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com"
- *   node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" --clerk-pk=pk_test_... --clerk-sk=sk_test_...
+ *     (Clerk keys from the NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY / CLERK_SECRET_KEY env
+ *      vars, else the keys already in Doppler dev / .env.local, else a new
+ *      accountless app; --clerk-pk / --clerk-sk are optional overrides)
  *   node scripts/setup.mjs convex-setup --project-name="My App" [--team=team-slug]
  *   node scripts/setup.mjs configure --admin-email="me@example.com"
  *     (Clerk secret key resolved from CLERK_SECRET_KEY env var, Doppler dev
@@ -162,8 +164,10 @@ function isValidAdminEmail(email) {
 async function runInit(args) {
   const siteName = args['site-name'];
   const adminEmail = args['admin-email'];
-  let clerkPk = args['clerk-pk'];
-  let clerkSk = args['clerk-sk'];
+  // Clerk keys: flag, then env var; Step 4 below then falls back to the keys
+  // already stored (Doppler dev in Doppler mode, .env.local otherwise).
+  let clerkPk = args['clerk-pk'] || process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  let clerkSk = args['clerk-sk'] || process.env.CLERK_SECRET_KEY;
 
   if (!siteName || !adminEmail) {
     console.error(JSON.stringify({
@@ -314,7 +318,7 @@ async function runInit(args) {
       console.error(JSON.stringify({
         success: false,
         error: `Failed to create accountless application: ${err.message}`,
-        hint: 'You may need to provide --clerk-pk and --clerk-sk instead',
+        hint: 'You may need to set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY (env, Doppler dev or .env.local), or pass --clerk-pk and --clerk-sk, instead',
       }));
       process.exit(1);
     }
@@ -2019,7 +2023,7 @@ switch (command) {
     break;
   default:
     console.error(`Usage:
-  node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
+  node scripts/setup.mjs init --site-name="My App" --admin-email="me@example.com"  (Clerk keys from NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY / CLERK_SECRET_KEY env vars, Doppler dev, or .env.local, else a new accountless app; [--clerk-pk=... --clerk-sk=...] override)
   node scripts/setup.mjs convex-setup --project-name="My App" [--team=SLUG]
   node scripts/setup.mjs configure --admin-email="me@example.com"  (Clerk secret key resolved from CLERK_SECRET_KEY env var, Doppler dev, or .env.local; --clerk-sk overrides)
   node scripts/setup.mjs detect-port

@@ -339,6 +339,75 @@ export function createServiceToken(config, tokenName, name = getProjectName()) {
 }
 
 // ---------------------------------------------------------------------------
+// Secret resolution without a command-line flag
+// ---------------------------------------------------------------------------
+
+const _downloads = new Map();
+function downloadSecretsOnce(config) {
+  if (!_downloads.has(config)) {
+    try {
+      _downloads.set(config, { secrets: downloadSecrets(config) });
+    } catch (err) {
+      _downloads.set(config, { error: err.message });
+    }
+  }
+  return _downloads.get(config);
+}
+
+/**
+ * Resolve one secret in this order (same as `setup.mjs configure` does for
+ * CLERK_SECRET_KEY):
+ *   1. `flag`: the value of a command-line flag (kept for compatibility)
+ *   2. process.env[key]
+ *   3. Doppler `config` (Doppler mode; skipped when `config` is not given)
+ *   4. `envFile`, i.e. .env.local (legacy mode; skipped when not given)
+ * `accept(value)` filters sources 2-4 (e.g. production key prefixes); a value
+ * it rejects is skipped and the next source is tried. The flag is never
+ * filtered. The returned `error` names the variable, never a value.
+ *
+ * @returns {{ value?: string, source?: string, error?: string }}
+ */
+export function resolveSecret(key, { flag, flagName, config, envFile, accept = () => true, expected } = {}) {
+  if (flag) return { value: flag, source: 'flag' };
+  const places = [];
+  const rejected = [];
+  let dopplerError = null;
+  const take = (value, source) => {
+    if (!value) return false;
+    if (!accept(value)) {
+      rejected.push(source);
+      return false;
+    }
+    return true;
+  };
+
+  if (take(process.env[key], 'environment')) return { value: process.env[key], source: 'environment' };
+  places.push(`the ${key} environment variable`);
+
+  if (isDopplerEnabled()) {
+    if (config) {
+      places.push(`Doppler ${config}`);
+      const got = downloadSecretsOnce(config);
+      if (got.error) dopplerError = got.error;
+      const value = got.secrets?.[key];
+      if (take(value, `Doppler ${config}`)) return { value, source: `Doppler ${config}` };
+    }
+  } else if (envFile) {
+    places.push('.env.local');
+    const content = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf-8') : '';
+    const value = content.match(new RegExp(`^${key}=(.*)$`, 'm'))?.[1]?.trim();
+    const placeholder = !value || value.includes('<') || value.includes('your_');
+    if (!placeholder && take(value, '.env.local')) return { value, source: '.env.local' };
+  }
+
+  if (flagName) places.push(flagName);
+  let error = `${key} not found (checked ${places.join(', ')}).`;
+  if (rejected.length) error += ` Skipped the value in ${rejected.join(', ')}: ${expected || 'not accepted'}.`;
+  if (dopplerError) error += ` Doppler ${config} could not be read: ${dopplerError}`;
+  return { error };
+}
+
+// ---------------------------------------------------------------------------
 // GitHub Actions secrets
 // ---------------------------------------------------------------------------
 
