@@ -22,14 +22,20 @@ const a = process.argv.slice(2);
 if (a[0] === '--version') { console.log('66.0.0'); process.exit(0); }
 if (a[0] === 'env' && a[1] === 'pull') {
   if (process.env.STUB_VERCEL_FAIL) process.exit(1);
-  fs.writeFileSync(a[2], process.env.STUB_VERCEL_ENV || '');
+  // Per-target values when STUB_VERCEL_<TARGET> is set, else the same for every target.
+  const target = a[a.indexOf('--environment') + 1];
+  const perTarget = process.env['STUB_VERCEL_' + String(target).toUpperCase()];
+  fs.writeFileSync(a[2], perTarget !== undefined ? perTarget : (process.env.STUB_VERCEL_ENV || ''));
   process.exit(0);
 }
 process.exit(0);
 `;
-const NPX = `#!${process.execPath}\nprocess.exit(1);\n`;
+// `npx convex env list` prints STUB_CONVEX_ENV (KEY=value lines); fails when unset.
+const NPX = `#!${process.execPath}\nconst a = process.argv.slice(2).join(' ');\nif (a === 'convex env list' && process.env.STUB_CONVEX_ENV !== undefined) { console.log(process.env.STUB_CONVEX_ENV); process.exit(0); }\nprocess.exit(1);\n`;
+// Records every call; a migration that is refused must never reach `doppler secrets set`.
+const DOPPLER = `#!${process.execPath}\nrequire('node:fs').appendFileSync(process.env.STUB_DOPPLER_LOG, process.argv.slice(2).join(' ') + '\\n');\nprocess.exit(0);\n`;
 
-function inventory({ envLocal = "", vercelEnv = "", vercelFail = false } = {}) {
+function inventory({ envLocal = "", vercelEnv = "", vercelByTarget = null, convexEnv = null, vercelFail = false, thenMigrate = false, full = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "legacy-inv-"));
   fs.mkdirSync(path.join(root, "scripts", "lib"), { recursive: true });
   for (const f of ["setup.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs")]) {
@@ -45,6 +51,9 @@ function inventory({ envLocal = "", vercelEnv = "", vercelFail = false } = {}) {
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, "vercel"), VERCEL, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, "npx"), NPX, { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, "doppler"), DOPPLER, { mode: 0o755 });
+  const dopplerLog = path.join(root, "doppler-calls.log");
+  const env = { ...process.env, STUB_DOPPLER_LOG: dopplerLog, STUB_VERCEL_ENV: vercelEnv, ...(vercelFail ? { STUB_VERCEL_FAIL: "1" } : {}), ...(convexEnv !== null ? { STUB_CONVEX_ENV: convexEnv } : {}), ...(vercelByTarget ? { STUB_VERCEL_DEVELOPMENT: vercelByTarget.development || "", STUB_VERCEL_PREVIEW: vercelByTarget.preview || "", STUB_VERCEL_PRODUCTION: vercelByTarget.production || "" } : {}), PATH: `${bin}${path.delimiter}${process.env.PATH}` };
   const r = spawnSync(
     process.execPath,
     [path.join(root, "scripts", "setup.mjs"), "migrate-to-doppler", "--phase=inventory", `--inventory-file=${path.join(root, "inv.json")}`],
@@ -52,11 +61,22 @@ function inventory({ envLocal = "", vercelEnv = "", vercelFail = false } = {}) {
       cwd: root,
       encoding: "utf8",
       timeout: 60000,
-      env: { ...process.env, STUB_VERCEL_ENV: vercelEnv, ...(vercelFail ? { STUB_VERCEL_FAIL: "1" } : {}), PATH: `${bin}${path.delimiter}${process.env.PATH}` },
+      env,
     }
   );
   assert.equal(r.status, 0, r.stderr);
-  return JSON.parse(r.stdout.slice(r.stdout.indexOf("{"))).legacy;
+  const out = JSON.parse(r.stdout.slice(r.stdout.indexOf("{")));
+  if (thenMigrate) {
+    fs.writeFileSync(path.join(root, ".doppler.yaml"), "setup:\n  project: my-product\n  config: dev\n");
+    const m = spawnSync(
+      process.execPath,
+      [path.join(root, "scripts", "setup.mjs"), "migrate-to-doppler", "--phase=migrate", `--inventory-file=${path.join(root, "inv.json")}`],
+      { cwd: root, encoding: "utf8", timeout: 60000, env }
+    );
+    const dopplerCalls = fs.existsSync(dopplerLog) ? fs.readFileSync(dopplerLog, "utf8") : "";
+    return { out, status: m.status, err: JSON.parse(m.stderr.slice(m.stderr.indexOf("{"))), dopplerCalls };
+  }
+  return full ? out : out.legacy;
 }
 
 const ROUTING = "CONVEX_DEPLOYMENT=dev:some-animal-1\nNEXT_PUBLIC_CONVEX_URL=https://some-animal-1.convex.cloud\n";
@@ -80,4 +100,67 @@ test("app values stored on the Vercel project are legacy config", () => {
   const legacy = inventory({ envLocal: ROUTING, vercelEnv: 'CLERK_SECRET_KEY="sk_test_synthetic"\nNEXT_PUBLIC_CONVEX_URL="https://other-animal-2.convex.cloud"\nVERCEL_ENV="production"\n' });
   assert.equal(legacy.hasLegacyConfig, true);
   assert.deepEqual(legacy.vercelAppKeys, ["CLERK_SECRET_KEY", "NEXT_PUBLIC_CONVEX_URL"]);
+});
+
+// Two stacks: local dev on one Clerk app, the deployed site on another.
+const TWO_STACKS = {
+  envLocal: ROUTING + "CLERK_SECRET_KEY=sk_test_local\n",
+  vercelEnv: 'CLERK_SECRET_KEY="sk_test_deployed"\nNEXT_PUBLIC_CONVEX_URL="https://other-animal-2.convex.cloud"\nNEXT_PUBLIC_SITE_NAME="Same"\n',
+};
+
+test("inventory lists keys whose sources disagree, by name only", () => {
+  const out = inventory({ ...TWO_STACKS, full: true });
+  assert.deepEqual(out.conflicts.map((c) => c.key), ["CLERK_SECRET_KEY", "NEXT_PUBLIC_CONVEX_URL"]);
+  assert.doesNotMatch(JSON.stringify(out.conflicts), /sk_test_|convex\.cloud/);
+});
+
+test("sources that agree have no conflicts", () => {
+  const out = inventory({ envLocal: ROUTING + "CLERK_SECRET_KEY=sk_test_same\n", vercelEnv: 'CLERK_SECRET_KEY="sk_test_same"\n', full: true });
+  assert.deepEqual(out.conflicts, []);
+});
+
+test("migrate refuses to merge conflicting sources and writes nothing to Doppler", () => {
+  const { status, err, dopplerCalls } = inventory({ ...TWO_STACKS, thenMigrate: true });
+  assert.equal(status, 1);
+  assert.equal(err.error, "conflicting_sources");
+  assert.deepEqual(err.conflicts.map((c) => c.key), ["CLERK_SECRET_KEY", "NEXT_PUBLIC_CONVEX_URL"]);
+  assert.doesNotMatch(dopplerCalls, /secrets set/);
+});
+
+test("Convex env is compared too", () => {
+  const out = inventory({
+    envLocal: ROUTING,
+    convexEnv: "NEXT_PUBLIC_CLERK_FRONTEND_API_URL=https://app-one.clerk.accounts.dev",
+    vercelEnv: 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL="https://app-two.clerk.accounts.dev"\n',
+    full: true,
+  });
+  assert.deepEqual(out.conflicts.map((c) => c.key), ["NEXT_PUBLIC_CLERK_FRONTEND_API_URL"]);
+  assert.match(out.conflicts[0].sources.join(" | "), /Convex env/);
+});
+
+test("before promotion, production differing from development is a conflict", () => {
+  const out = inventory({
+    envLocal: ROUTING,
+    vercelByTarget: {
+      development: 'CLERK_SECRET_KEY="sk_test_dev"\n',
+      preview: 'CLERK_SECRET_KEY="sk_test_dev"\n',
+      production: 'CLERK_SECRET_KEY="sk_test_prod"\n',
+    },
+    full: true,
+  });
+  assert.deepEqual(out.conflicts.map((c) => c.key), ["CLERK_SECRET_KEY"]);
+  assert.deepEqual(out.conflicts[0].sources, ["Vercel development + Vercel preview", "Vercel production"]);
+});
+
+test("after promotion, production goes to prd and is not compared with development", () => {
+  const out = inventory({
+    envLocal: ROUTING,
+    vercelByTarget: {
+      development: 'CLERK_SECRET_KEY="sk_test_dev"\n',
+      preview: 'CLERK_SECRET_KEY="sk_test_dev"\n',
+      production: 'CLERK_SECRET_KEY="sk_live_prod"\n_PROD_PROMOTED_AT="2026-01-01T00:00:00Z"\n',
+    },
+    full: true,
+  });
+  assert.deepEqual(out.conflicts, []);
 });
