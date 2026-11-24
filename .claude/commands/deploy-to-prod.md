@@ -15,7 +15,7 @@ If `.doppler.yaml` exists in the repo root, this deployment runs in **Doppler mo
 
 - The operator must populate the Doppler `prd` config **before** the corresponding phase runs. As you collect each production credential (Clerk prod keys in Phase 3, Stripe in Phase 5 **only when `<SKIP_STRIPE>` is false**, Convex deploy key in Phase 6, etc.), push it immediately to Doppler:
   ```
-  doppler secrets set CLERK_SECRET_KEY="$SK" --project $(node -p "require('./package.json').name") --config prd
+  doppler secrets set CLERK_SECRET_KEY="$SK" --config prd
   ```
 - Phase 9 (Convex prod env): `sync-convex-env.mjs --config prd` is the source-of-truth path; the legacy `convex-prod-env` subcommand still works but the script supersedes it.
 - Phase 10 (Vercel env): `node scripts/deploy.mjs vercel-env` automatically delegates to `vercel-env-doppler`. Only `DOPPLER_TOKEN` and `REVALIDATE_TOKEN` end up in Vercel — production app values live exclusively in Doppler.
@@ -424,40 +424,40 @@ If auth error: tell user to run `vercel login`, AskUserQuestion to confirm, retr
 
 Required keys (the script's preflight allowlist):
 ```bash
-# Read project name from .doppler.yaml (preferred) or package.json fallback
-PROJECT=$(node -e "const fs=require('fs'); const m=fs.readFileSync('.doppler.yaml','utf-8').match(/project:\s*(\S+)/); console.log(m ? m[1] : require('./package.json').name)")
+# Project is pinned by .doppler.yaml from /install. Pass only --config when
+# targeting prd (or reading from dev); never derive --project from package.json.
 
 # Clerk production app
-doppler secrets set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="<PK>" --project $PROJECT --config prd
-doppler secrets set CLERK_SECRET_KEY="<SK>" --project $PROJECT --config prd
-doppler secrets set CLERK_WEBHOOK_SECRET="<WHSEC>" --project $PROJECT --config prd
-doppler secrets set NEXT_PUBLIC_CLERK_FRONTEND_API_URL="<URL>" --project $PROJECT --config prd
+doppler secrets set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="<PK>" --config prd
+doppler secrets set CLERK_SECRET_KEY="<SK>" --config prd
+doppler secrets set CLERK_WEBHOOK_SECRET="<WHSEC>" --config prd
+doppler secrets set NEXT_PUBLIC_CLERK_FRONTEND_API_URL="<URL>" --config prd
 
 # Convex production
-doppler secrets set CONVEX_DEPLOY_KEY="<KEY>" --project $PROJECT --config prd
-doppler secrets set NEXT_PUBLIC_CONVEX_URL="<PROD_CONVEX_URL>" --project $PROJECT --config prd
+doppler secrets set CONVEX_DEPLOY_KEY="<KEY>" --config prd
+doppler secrets set NEXT_PUBLIC_CONVEX_URL="<PROD_CONVEX_URL>" --config prd
 
 # Site identity
-doppler secrets set NEXT_PUBLIC_SITE_NAME="<NAME>" --project $PROJECT --config prd
+doppler secrets set NEXT_PUBLIC_SITE_NAME="<NAME>" --config prd
 
 # Runtime crypto (carry over from dev if you want sessions to persist; or generate new and accept that all sessions invalidate)
-DEV_CSRF=$(doppler secrets get CSRF_SECRET --project $PROJECT --config dev --plain)
-DEV_SESSION=$(doppler secrets get SESSION_SECRET --project $PROJECT --config dev --plain)
-doppler secrets set CSRF_SECRET="$DEV_CSRF" --project $PROJECT --config prd
-doppler secrets set SESSION_SECRET="$DEV_SESSION" --project $PROJECT --config prd
+DEV_CSRF=$(doppler secrets get CSRF_SECRET --config dev --plain)
+DEV_SESSION=$(doppler secrets get SESSION_SECRET --config dev --plain)
+doppler secrets set CSRF_SECRET="$DEV_CSRF" --config prd
+doppler secrets set SESSION_SECRET="$DEV_SESSION" --config prd
 
 # Security log key: generate a NEW one for prd (prod Convex is a separate deployment;
 # sync-convex-env.mjs --config prd mirrors it there in Phase 10)
-doppler secrets set SECURITY_LOG_KEY="$(node -p "require('crypto').randomBytes(32).toString('base64url')")" --project $PROJECT --config prd
+doppler secrets set SECURITY_LOG_KEY="$(node -p "require('crypto').randomBytes(32).toString('base64url')")" --config prd
 
 # Admin (used by Convex queries)
-doppler secrets set ADMIN_EMAIL="<EMAIL>" --project $PROJECT --config prd
+doppler secrets set ADMIN_EMAIL="<EMAIL>" --config prd
 
 # Clerk redirect URLs — typically the same as dev
 for KEY in NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL \
            NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL; do
-  V=$(doppler secrets get "$KEY" --project $PROJECT --config dev --plain 2>/dev/null)
-  [ -n "$V" ] && doppler secrets set "$KEY"="$V" --project $PROJECT --config prd
+  V=$(doppler secrets get "$KEY" --config dev --plain 2>/dev/null)
+  [ -n "$V" ] && doppler secrets set "$KEY"="$V" --config prd
 done
 ```
 

@@ -387,6 +387,8 @@ These are only needed when you're ready to enable paid subscriptions:
    - Clerk Dashboard > Billing > Plans > Create Plan
    - Name it, set monthly price, save
 
+Claude review workflows on pull requests need the `CLAUDE_CODE_OAUTH_TOKEN` repository secret (or an organization secret that provides it); until it is set they are skipped. See the GitHub Actions secrets section of DEPLOYMENT.md.
+
 ### Start Development
 
 If `<USE_DOPPLER>` is true, instruct:
