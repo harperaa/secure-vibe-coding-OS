@@ -679,7 +679,7 @@ async function runConfigure(args) {
     }
     if (lastErr) throw lastErr;
 
-    result.steps.push(`Retrieved webhook signing secret: ${webhookSecret.substring(0, 10)}...`);
+    result.steps.push('Retrieved webhook signing secret');
   } catch (err) {
     result.steps.push(`Webhook creation failed after ${retryDelaysMs.length} attempts: ${err.message}`);
     result.manualSteps.push(
@@ -688,7 +688,8 @@ async function runConfigure(args) {
       `  2. Endpoint URL: ${webhookEndpointUrl}`,
       `  3. Subscribe to events: user.created, user.updated, user.deleted, paymentAttempt.updated`,
       `  4. Click Create, copy the Signing Secret (whsec_...)`,
-      `  5. Run: npx convex env set CLERK_WEBHOOK_SECRET whsec_YOUR_SECRET`,
+      `  5. Run: npx convex env set CLERK_WEBHOOK_SECRET`,
+      `     and paste the signing secret (whsec_...) when it asks for the value`,
     );
   }
 
@@ -761,8 +762,9 @@ async function runConfigure(args) {
   } else {
     for (const [key, value] of Object.entries(convexVarsToSet)) {
       try {
-        execFileSync('npx', ['convex', 'env', 'set', key, value], {
+        execFileSync('npx', ['convex', 'env', 'set', key], {
           cwd: ROOT_DIR,
+          input: String(value),
           stdio: 'pipe',
           timeout: 30000,
         });
@@ -1048,7 +1050,12 @@ async function runConvexSetup(args) {
         if (issuer) {
           for (const key of ['CLERK_JWT_ISSUER_DOMAIN', 'NEXT_PUBLIC_CLERK_FRONTEND_API_URL']) {
             try {
-              execFileSync('npx', ['convex', 'env', 'set', key, issuer], { cwd: ROOT_DIR, stdio: 'pipe', timeout: 30000 });
+              execFileSync('npx', ['convex', 'env', 'set', key], {
+                cwd: ROOT_DIR,
+                input: String(issuer),
+                stdio: 'pipe',
+                timeout: 30000,
+              });
               result.steps.push(`Set Convex env var ${key} so auth.config.ts can be pushed`);
             } catch (envErr) {
               result.steps.push(`Could not set ${key} before retry: ${envErr.message}`);
