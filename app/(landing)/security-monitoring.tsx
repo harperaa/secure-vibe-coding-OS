@@ -5,7 +5,7 @@ import { IconShieldCheck, IconAlertTriangle, IconActivity } from '@tabler/icons-
 
 export default function SecurityMonitoring() {
     return (
-        <section className="py-12 md:py-16">
+        <section id="features" className="scroll-mt-24 py-12 md:py-16">
             <div className="mx-auto w-full max-w-5xl px-6">
                 <div className="text-center">
                     <h2 className="text-foreground text-4xl font-semibold">Real-Time Security Monitoring</h2>

@@ -349,6 +349,8 @@ export function DataTable({
     []
   )
   const [sorting, setSorting] = React.useState<SortingState>([])
+  // One selected view shared by the tab list (wide screens) and the select (small screens).
+  const [view, setView] = React.useState("outline")
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -403,14 +405,15 @@ export function DataTable({
 
   return (
     <Tabs
-      defaultValue="outline"
+      value={view}
+      onValueChange={setView}
       className="w-full flex-col justify-start gap-6"
     >
       <div className="flex items-center justify-between px-4 lg:px-6">
         <Label htmlFor="view-selector" className="sr-only">
           View
         </Label>
-        <Select defaultValue="outline">
+        <Select value={view} onValueChange={setView}>
           <SelectTrigger
             className="flex w-fit @4xl/main:hidden"
             size="sm"
