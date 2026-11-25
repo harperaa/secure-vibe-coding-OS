@@ -128,7 +128,7 @@ framework and choose features purely from the command line:
 
 ```bash
 npm install
-node scripts/setup.mjs init --site-name="My Site" --admin-email="me@example.com" [--clerk-pk=... --clerk-sk=...]
+node scripts/setup.mjs init --site-name="My Site" --admin-email="me@example.com"   # own Clerk keys: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY / CLERK_SECRET_KEY env vars, Doppler dev or .env.local
 node scripts/modules.mjs install homepage-content blog pricing --apply-edits   # pick your features
 node scripts/setup.mjs convex-setup --project-name="My Site"
 node scripts/setup.mjs configure --admin-email="me@example.com"   # Clerk secret key picked up from Doppler/.env.local

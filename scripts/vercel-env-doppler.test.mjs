@@ -7,8 +7,12 @@
  * - Re-run: targets that already have the token are left alone. No new Doppler
  *   token is minted and none is ever revoked.
  *
+ * - The Doppler token never appears in any child's argv; a generated
+ *   REVALIDATE_TOKEN goes to `doppler secrets set` on stdin.
+ *
  * Runs the real script in a throwaway repo with stub `doppler`, `vercel` and
- * `npx` binaries that record what they were called with.
+ * `npx` binaries that record what they were called with, on a PATH that holds
+ * only those stubs, node/npm and /usr/bin:/bin.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -17,6 +21,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isolatedTestPath } from "./lib/isolated-test-path.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const TOKEN = "dp.st.dev.synthetic";
@@ -27,10 +32,11 @@ const argv = process.argv.slice(2);
 const sub = argv.join(' ');
 let stdin = null;
 if (${JSON.stringify(name)} === 'vercel' && sub.startsWith('env add')) stdin = fs.readFileSync(0, 'utf-8');
+if (${JSON.stringify(name)} === 'doppler' && sub.startsWith('secrets set')) stdin = fs.readFileSync(0, 'utf-8');
 fs.appendFileSync(process.env.STUB_LOG, JSON.stringify({ bin: ${JSON.stringify(name)}, argv, stdin }) + '\\n');
 if (${JSON.stringify(name)} === 'doppler') {
   if (sub.startsWith('configs tokens create')) console.log(${JSON.stringify(TOKEN)});
-  else if (sub.startsWith('secrets download')) console.log(JSON.stringify({ REVALIDATE_TOKEN: 'r'.repeat(40), CLERK_SECRET_KEY: 'sk_test_synthetic' }));
+  else if (sub.startsWith('secrets download')) console.log(process.env.STUB_DOPPLER_JSON || JSON.stringify({ REVALIDATE_TOKEN: 'r'.repeat(40), CLERK_SECRET_KEY: 'sk_test_synthetic' }));
 }
 if (${JSON.stringify(name)} === 'vercel' && sub.startsWith('env ls')) {
   if (process.env.STUB_VERCEL_LS_FAIL) process.exit(1);
@@ -39,7 +45,7 @@ if (${JSON.stringify(name)} === 'vercel' && sub.startsWith('env ls')) {
 process.exit(0);
 `;
 
-function run(existingTargets, { extraEnvs = [], lsFail = false } = {}) {
+function run(existingTargets, { extraEnvs = [], lsFail = false, dopplerSecrets = null } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "vercel-env-doppler-"));
   fs.mkdirSync(path.join(root, "scripts", "lib"), { recursive: true });
   for (const f of ["deploy.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs")]) {
@@ -62,7 +68,7 @@ function run(existingTargets, { extraEnvs = [], lsFail = false } = {}) {
     cwd: root,
     encoding: "utf8",
     timeout: 60000,
-    env: { ...process.env, STUB_LOG: log, STUB_VERCEL_ENVS: JSON.stringify({ envs }), ...(lsFail ? { STUB_VERCEL_LS_FAIL: "1" } : {}), PATH: `${bin}${path.delimiter}${process.env.PATH}` },
+    env: { ...process.env, STUB_LOG: log, STUB_VERCEL_ENVS: JSON.stringify({ envs }), ...(lsFail ? { STUB_VERCEL_LS_FAIL: "1" } : {}), ...(dopplerSecrets ? { STUB_DOPPLER_JSON: JSON.stringify(dopplerSecrets) } : {}), PATH: isolatedTestPath([bin]) },
   });
   const calls = fs.readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   const out = JSON.parse(r.stdout.slice(r.stdout.indexOf("{")));
@@ -70,7 +76,11 @@ function run(existingTargets, { extraEnvs = [], lsFail = false } = {}) {
   const minted = calls.filter((c) => c.bin === "doppler" && c.argv.slice(0, 3).join(" ") === "configs tokens create");
   const revoked = calls.filter((c) => c.bin === "doppler" && /\b(revoke|delete)\b/.test(c.argv.join(" ")));
   const removed = calls.filter((c) => c.bin === "vercel" && /^env (rm|remove)\b/.test(c.argv.join(" ")));
-  return { out, adds, minted, revoked, removed };
+  const dopplerSets = calls.filter((c) => c.bin === "doppler" && c.argv[0] === "secrets" && c.argv[1] === "set");
+  // The Doppler token is a value: it may go on stdin, never into argv or output.
+  assert.ok(!JSON.stringify(calls.map((c) => c.argv)).includes(TOKEN), "Doppler token found in argv");
+  assert.ok(!r.stdout.includes(TOKEN) && !r.stderr.includes(TOKEN), "Doppler token found in output");
+  return { out, adds, minted, revoked, removed, dopplerSets, calls };
 }
 
 test("first run sets DOPPLER_TOKEN on all three targets by overwrite, value on stdin", () => {
@@ -84,6 +94,22 @@ test("first run sets DOPPLER_TOKEN on all three targets by overwrite, value on s
   assert.equal(removed.length, 0);
   assert.equal(revoked.length, 0);
   assert.equal(out.varsSet.length, 3);
+});
+
+test("a missing REVALIDATE_TOKEN is generated and sent to doppler secrets set on stdin", () => {
+  const { out, dopplerSets, calls } = run([], { dopplerSecrets: { CLERK_SECRET_KEY: "sk_test_synthetic" } });
+  const set = dopplerSets.find((c) => c.argv[2] === "REVALIDATE_TOKEN");
+  assert.ok(set, "REVALIDATE_TOKEN was not set");
+  assert.deepEqual(set.argv, ["secrets", "set", "REVALIDATE_TOKEN", "--project", "my-product", "--config", "dev", "--silent"]);
+  assert.match(set.stdin, /^[A-Za-z0-9_-]{43}$/);
+  assert.ok(!JSON.stringify(calls.map((c) => c.argv)).includes(set.stdin), "REVALIDATE_TOKEN found in argv");
+  assert.ok(out.steps.includes("Generated REVALIDATE_TOKEN in Doppler config=dev"));
+  assert.ok(!JSON.stringify(out).includes(set.stdin));
+});
+
+test("an existing REVALIDATE_TOKEN is kept", () => {
+  const { dopplerSets } = run([]);
+  assert.equal(dopplerSets.filter((c) => c.argv[2] === "REVALIDATE_TOKEN").length, 0);
 });
 
 test("re-run leaves existing tokens alone: nothing minted, set, removed or revoked", () => {

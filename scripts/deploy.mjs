@@ -17,18 +17,26 @@
  *   write-summary         - Write deployment summary to docs/DEPLOYMENT-DEV.md or docs/DEPLOYMENT-PROD.md
  *   update-vercel-clerk-keys - Update only Clerk-related Vercel env vars
  *
- * All input comes from CLI arguments (no interactive prompts).
+ * All input comes from CLI arguments and the environment (no interactive prompts).
  * Designed to be called by the /deploy-to-dev and /deploy-to-prod Claude Code commands.
+ *
+ * Secret inputs need not be on the command line. Each is resolved in order:
+ * the flag (optional, kept for compatibility), the env var of the same name
+ * (CLERK_SECRET_KEY, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CONVEX_DEPLOY_KEY,
+ * CLERK_WEBHOOK_SECRET), the Doppler config (`prd` for production
+ * subcommands) in Doppler mode, and .env.local in legacy mode. Production
+ * subcommands skip non-flag values that are not production keys (sk_live_,
+ * pk_live_, prod:).
  *
  * Usage:
  *   node scripts/deploy.mjs check-tools
  *   node scripts/deploy.mjs github-setup --repo-name="my-project" [--owner=<user|org>] [--no-push]
  *   node scripts/deploy.mjs convex-deploy-key
- *   node scripts/deploy.mjs validate-keys --clerk-pk=pk_live_... --clerk-sk=sk_live_... [--deploy-key=prod:...|...]
- *   node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...
- *   node scripts/deploy.mjs prod-webhook --clerk-sk=sk_live_... --convex-site-url=https://xxx.convex.site --admin-email=admin@example.com
- *   node scripts/deploy.mjs convex-prod-env --deploy-key=prod:...|... --webhook-secret=whsec_... --frontend-api-url=https://... --admin-email=admin@example.com
- *   node scripts/deploy.mjs vercel-env --clerk-pk=... --clerk-sk=... --deploy-key=... --frontend-api-url=... --site-name=... [--convex-url=...]
+ *   node scripts/deploy.mjs validate-keys --require-prod=true       [--clerk-pk=pk_live_... --clerk-sk=sk_live_... --deploy-key=prod:...|...]
+ *   node scripts/deploy.mjs convex-deploy-functions                  [--deploy-key=prod:...|...]
+ *   node scripts/deploy.mjs prod-webhook --convex-site-url=https://xxx.convex.site --admin-email=admin@example.com [--clerk-sk=sk_live_...]
+ *   node scripts/deploy.mjs convex-prod-env --frontend-api-url=https://... --admin-email=admin@example.com [--deploy-key=prod:...|... --webhook-secret=whsec_...]
+ *   node scripts/deploy.mjs vercel-env --frontend-api-url=... --site-name=... [--convex-url=...] [--clerk-pk=... --clerk-sk=... --deploy-key=...]
  *   node scripts/deploy.mjs vercel-deploy
  */
 
@@ -44,6 +52,7 @@ import {
   createServiceToken,
   setSecret,
   downloadSecrets,
+  resolveSecret,
 } from './lib/doppler.mjs';
 import { parseGithubRepo, isTemplateRepo } from './lib/github-repo.mjs';
 
@@ -109,6 +118,45 @@ function getEnvValue(content, key) {
   const regex = new RegExp(`^${key}=(.*)$`, 'm');
   const match = content.match(regex);
   return match ? match[1] : null;
+}
+
+// ---------------------------------------------------------------------------
+// Secret inputs: --flag, then env var, then Doppler, then .env.local
+// ---------------------------------------------------------------------------
+
+// What a production value looks like. Applied to every source except the flag,
+// so a development value (e.g. from .env.local or `doppler run` on dev) is
+// skipped instead of being sent to production.
+const PROD_VALUE = {
+  CLERK_SECRET_KEY: { accept: (v) => v.startsWith('sk_live_'), expected: 'expected a production key (sk_live_)' },
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: { accept: (v) => v.startsWith('pk_live_'), expected: 'expected a production key (pk_live_)' },
+  CONVEX_DEPLOY_KEY: { accept: (v) => v.startsWith('prod:'), expected: 'expected a production deploy key (prod:...)' },
+};
+
+/**
+ * Resolve the value of `--<flag>` / `key`. `prod: true` targets Doppler `prd`
+ * and only accepts production-looking values from non-flag sources.
+ * `localFile: false` skips .env.local (values it cannot hold, or cannot tell
+ * apart from development ones). `doppler: false` skips Doppler.
+ */
+function secretInput(args, flag, key, { prod = false, localFile = true, doppler = true } = {}) {
+  const guard = prod ? PROD_VALUE[key] : undefined;
+  return resolveSecret(key, {
+    flag: args[flag],
+    flagName: `--${flag}`,
+    config: doppler ? (prod ? 'prd' : 'dev') : undefined,
+    envFile: localFile ? ENV_FILE : undefined,
+    accept: guard?.accept,
+    expected: guard?.expected,
+  });
+}
+
+/** Exit with the names of the missing inputs (never their values). */
+function exitIfMissing(...resolved) {
+  const errors = resolved.filter((r) => !r.value).map((r) => r.error);
+  if (errors.length === 0) return;
+  console.error(JSON.stringify({ success: false, error: `Missing required input. ${errors.join(' ')}` }));
+  process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -641,17 +689,20 @@ async function runConvexDeployKey() {
 // ---------------------------------------------------------------------------
 
 async function runValidateKeys(args) {
-  const clerkPk = args['clerk-pk'];
-  const clerkSk = args['clerk-sk'];
-  const deployKey = args['deploy-key'];
+  // Validate key prefixes (accept both dev and prod keys)
+  const requireProd = args['require-prod'] === 'true';
 
-  if (!clerkPk || !clerkSk) {
-    console.error(JSON.stringify({
-      success: false,
-      error: 'Missing required arguments: --clerk-pk and --clerk-sk',
-    }));
-    process.exit(1);
-  }
+  // Without the flags: env var, then Doppler (prd with --require-prod, else
+  // dev), then .env.local. The optional deploy key is only looked up for
+  // --require-prod; a development setup can hold a dev deploy key.
+  const pk = secretInput(args, 'clerk-pk', 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', { prod: requireProd });
+  const sk = secretInput(args, 'clerk-sk', 'CLERK_SECRET_KEY', { prod: requireProd });
+  exitIfMissing(pk, sk);
+  const clerkPk = pk.value;
+  const clerkSk = sk.value;
+  const deployKey = requireProd
+    ? secretInput(args, 'deploy-key', 'CONVEX_DEPLOY_KEY', { prod: true }).value
+    : args['deploy-key'];
 
   const result = {
     success: true,
@@ -660,8 +711,6 @@ async function runValidateKeys(args) {
     jwtTemplateCreated: false,
   };
 
-  // Validate key prefixes (accept both dev and prod keys)
-  const requireProd = args['require-prod'] === 'true';
   const validPkPrefixes = requireProd ? ['pk_live_'] : ['pk_test_', 'pk_live_'];
   const validSkPrefixes = requireProd ? ['sk_live_'] : ['sk_test_', 'sk_live_'];
 
@@ -813,15 +862,9 @@ async function runValidateKeys(args) {
 // ---------------------------------------------------------------------------
 
 async function runConvexDeployFunctions(args) {
-  const deployKey = args['deploy-key'];
-
-  if (!deployKey) {
-    console.error(JSON.stringify({
-      success: false,
-      error: 'Missing required argument: --deploy-key',
-    }));
-    process.exit(1);
-  }
+  const dk = secretInput(args, 'deploy-key', 'CONVEX_DEPLOY_KEY', { prod: true });
+  exitIfMissing(dk);
+  const deployKey = dk.value;
 
   const result = {
     success: false,
@@ -875,17 +918,19 @@ async function runConvexDeployFunctions(args) {
 // ---------------------------------------------------------------------------
 
 async function runProdWebhook(args) {
-  const clerkSk = args['clerk-sk'];
   const convexSiteUrl = args['convex-site-url'];
   const adminEmail = args['admin-email'];
 
-  if (!clerkSk || !convexSiteUrl) {
+  if (!convexSiteUrl) {
     console.error(JSON.stringify({
       success: false,
-      error: 'Missing required arguments: --clerk-sk and --convex-site-url',
+      error: 'Missing required argument: --convex-site-url',
     }));
     process.exit(1);
   }
+  const sk = secretInput(args, 'clerk-sk', 'CLERK_SECRET_KEY', { prod: true });
+  exitIfMissing(sk);
+  const clerkSk = sk.value;
 
   const result = {
     success: false,
@@ -982,18 +1027,16 @@ async function runProdWebhook(args) {
 // ---------------------------------------------------------------------------
 
 async function runConvexProdEnv(args) {
-  const deployKey = args['deploy-key'];
-  const webhookSecret = args['webhook-secret'];
   const frontendApiUrl = args['frontend-api-url'];
   const adminEmail = args['admin-email'];
 
-  if (!deployKey) {
-    console.error(JSON.stringify({
-      success: false,
-      error: 'Missing required argument: --deploy-key',
-    }));
-    process.exit(1);
-  }
+  const dk = secretInput(args, 'deploy-key', 'CONVEX_DEPLOY_KEY', { prod: true });
+  exitIfMissing(dk);
+  const deployKey = dk.value;
+  // Optional. .env.local never holds it (it lives in Convex env), and a
+  // development whsec_ looks the same as a production one, so it is not read
+  // from there.
+  const webhookSecret = secretInput(args, 'webhook-secret', 'CLERK_WEBHOOK_SECRET', { prod: true, localFile: false }).value;
 
   const result = {
     success: true,
@@ -1150,21 +1193,26 @@ async function runVercelEnv(args) {
     return runVercelEnvDoppler({ env: 'production', config: 'prd' });
   }
 
-  const clerkPk = args['clerk-pk'];
-  const clerkSk = args['clerk-sk'];
-  const deployKey = args['deploy-key'];
   const frontendApiUrl = args['frontend-api-url'];
   const siteName = args['site-name'];
 
   const convexUrl = args['convex-url'];
 
-  if (!clerkPk || !clerkSk || !deployKey || !frontendApiUrl || !siteName) {
+  if (!frontendApiUrl || !siteName) {
     console.error(JSON.stringify({
       success: false,
-      error: 'Missing required arguments: --clerk-pk, --clerk-sk, --deploy-key, --frontend-api-url, --site-name',
+      error: 'Missing required arguments: --frontend-api-url, --site-name',
     }));
     process.exit(1);
   }
+  // Legacy mode: flag, then env var, then .env.local (production values only).
+  const pk = secretInput(args, 'clerk-pk', 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', { prod: true });
+  const sk = secretInput(args, 'clerk-sk', 'CLERK_SECRET_KEY', { prod: true });
+  const dk = secretInput(args, 'deploy-key', 'CONVEX_DEPLOY_KEY', { prod: true });
+  exitIfMissing(pk, sk, dk);
+  const clerkPk = pk.value;
+  const clerkSk = sk.value;
+  const deployKey = dk.value;
 
   const result = {
     success: true,
@@ -1979,17 +2027,23 @@ async function runWriteSummary(args) {
 // ---------------------------------------------------------------------------
 
 async function runUpdateVercelClerkKeys(args) {
-  const clerkPk = args['clerk-pk'];
-  const clerkSk = args['clerk-sk'];
   const frontendApiUrl = args['frontend-api-url'];
 
-  if (!clerkPk || !clerkSk || !frontendApiUrl) {
+  if (!frontendApiUrl) {
     console.error(JSON.stringify({
       success: false,
-      error: 'Missing required arguments: --clerk-pk, --clerk-sk, --frontend-api-url',
+      error: 'Missing required argument: --frontend-api-url',
     }));
     process.exit(1);
   }
+  // Flag, then env var only: Vercel's production target can hold development
+  // or production keys here, so neither Doppler config nor .env.local can be
+  // assumed to be the right source.
+  const pk = secretInput(args, 'clerk-pk', 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', { doppler: false, localFile: false });
+  const sk = secretInput(args, 'clerk-sk', 'CLERK_SECRET_KEY', { doppler: false, localFile: false });
+  exitIfMissing(pk, sk);
+  const clerkPk = pk.value;
+  const clerkSk = sk.value;
 
   const result = {
     success: true,
@@ -2078,15 +2132,22 @@ switch (command) {
   node scripts/deploy.mjs check-tools
   node scripts/deploy.mjs github-setup --repo-name="my-project" [--owner=<user|org>] [--no-push]
   node scripts/deploy.mjs convex-deploy-key
-  node scripts/deploy.mjs validate-keys --clerk-pk=... --clerk-sk=... [--deploy-key=prod:...|...] [--require-prod=true]
-  node scripts/deploy.mjs convex-deploy-functions --deploy-key=prod:...|...
-  node scripts/deploy.mjs prod-webhook --clerk-sk=... --convex-site-url=https://xxx.convex.site [--admin-email=admin@example.com]
-  node scripts/deploy.mjs convex-prod-env --deploy-key=prod:...|... --webhook-secret=whsec_... --frontend-api-url=https://... --admin-email=admin@example.com
+  node scripts/deploy.mjs validate-keys [--require-prod=true] [--clerk-pk=... --clerk-sk=... --deploy-key=prod:...|...]
+  node scripts/deploy.mjs convex-deploy-functions [--deploy-key=prod:...|...]
+  node scripts/deploy.mjs prod-webhook --convex-site-url=https://xxx.convex.site [--admin-email=admin@example.com] [--clerk-sk=...]
+  node scripts/deploy.mjs convex-prod-env --frontend-api-url=https://... --admin-email=admin@example.com [--deploy-key=prod:...|... --webhook-secret=whsec_...]
   node scripts/deploy.mjs vercel-env-dev                          (reads all from .env.local; auto-delegates to vercel-env-doppler in Doppler mode)
-  node scripts/deploy.mjs vercel-env --clerk-pk=... --clerk-sk=... --deploy-key=... --frontend-api-url=... --site-name=... [--convex-url=...]
+  node scripts/deploy.mjs vercel-env --frontend-api-url=... --site-name=... [--convex-url=...] [--clerk-pk=... --clerk-sk=... --deploy-key=...]
   node scripts/deploy.mjs vercel-env-doppler [--env=development|production] [--config=dev|prd]   (Doppler mode: pushes only DOPPLER_TOKEN; syncs Convex)
   node scripts/deploy.mjs vercel-deploy
   node scripts/deploy.mjs write-summary --vercel-url=... --repo-url=... [--completed-steps=...] [--skipped-steps=...]
-  node scripts/deploy.mjs update-vercel-clerk-keys --clerk-pk=pk_live_... --clerk-sk=sk_live_... --frontend-api-url=https://...`);
+  CLERK_SECRET_KEY=... NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=... node scripts/deploy.mjs update-vercel-clerk-keys --frontend-api-url=https://... [--clerk-pk=... --clerk-sk=...]
+
+Secret inputs (optional flags in [...]) are read, in order, from the flag, the env var
+of the same name (CLERK_SECRET_KEY, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CONVEX_DEPLOY_KEY,
+CLERK_WEBHOOK_SECRET), Doppler (prd for production subcommands, dev otherwise) in Doppler
+mode, and .env.local in legacy mode. Production subcommands skip non-flag values that are
+not production keys. update-vercel-clerk-keys reads only the flag or the env var;
+CLERK_WEBHOOK_SECRET is never read from .env.local.`);
     process.exit(1);
 }
