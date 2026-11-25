@@ -210,10 +210,18 @@ Not asked by default. Call AskUserQuestion with these two questions only in that
 Build and run the init command with all collected values:
 
 ```bash
-node scripts/setup.mjs init --site-name="<SITE_NAME>" --admin-email="<ADMIN_EMAIL>" [--clerk-pk=<PK> --clerk-sk=<SK>]
+node scripts/setup.mjs init --site-name="<SITE_NAME>" --admin-email="<ADMIN_EMAIL>"
 ```
 
-Omit `--clerk-pk`/`--clerk-sk` in the normal case — without them the script creates an accountless Clerk app. Pass them only if the user brought their own keys in the optional section above.
+Never pass `--clerk-pk`/`--clerk-sk`: secret values do not go on the command line. In the normal case the script creates an accountless Clerk app. If the user brought their own keys in the optional section above, store them BEFORE running `init`; `init` reads Clerk keys from the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` env vars, else reuses the keys already in Doppler `dev` / `.env.local`:
+- Doppler mode (`<USE_DOPPLER>` is true): pipe them to Doppler on stdin (single bash call each; `printf` is a shell builtin, so the value is never a process argument):
+  ```bash
+  printf '%s' '<PK>' | doppler secrets set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY --config dev
+  printf '%s' '<SK>' | doppler secrets set CLERK_SECRET_KEY --config dev
+  ```
+- Legacy mode: if `.env.local` does not exist, create it with `cp .env.example .env.local`. Then use Edit to replace the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=` and `CLERK_SECRET_KEY=` lines with `<PK>` and `<SK>`.
+
+The output then reports `reusedClerk: true` for these keys; handle it as described in the next paragraph (with the user's own keys there is normally no `claimUrl`). Never echo the keys back in chat.
 
 Re-running is safe: `init` reuses the Clerk application and the CSRF, session and security-log secrets that are already configured (Doppler `dev` or `.env.local`) and only creates what is missing. If the output has `reusedClerk: true`, no new Clerk app was created: in Phase 6 replace "Clerk application created (accountless)" with "Existing Clerk application reused" in the completed steps. Reusing the keys does not mean the app was claimed — if the output also has a `claimUrl` (carried over from the previous `docs/INSTALL.md`), pass it with `--accountless="true"` and run the claim section and Step 3 as usual, so the link is kept until the user confirms they claimed it. Only if `claimUrl` is null: pass `--accountless="false"`, omit `--claim-url`, and skip the claim section and Step 3.
 

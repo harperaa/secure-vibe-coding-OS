@@ -24,6 +24,19 @@ If `.doppler.yaml` exists in the repo root, this deployment runs in **Doppler mo
 
 The legacy mode (`.env.local` → `vercel env add` → secrets stored in Vercel) is preserved as the default when `.doppler.yaml` is absent.
 
+## Secret values never go on the command line
+
+`scripts/deploy.mjs` reads `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CONVEX_DEPLOY_KEY` and `CLERK_WEBHOOK_SECRET` without flags: from the environment, then Doppler `prd` (Doppler mode), then `.env.local` (legacy mode). Production subcommands skip any value that is not a production key (`sk_live_`, `pk_live_`, `prod:`), so the dev keys in `.env.local` are never used here. Do NOT pass `--clerk-pk`, `--clerk-sk`, `--deploy-key` or `--webhook-secret`. Store each secret as soon as it is collected:
+
+- **Doppler mode:** pipe it to Doppler on stdin, e.g. `printf '%s' '<SK>' | doppler secrets set CLERK_SECRET_KEY --config prd` (single bash call; `printf` is a shell builtin, so the value is never a process argument). Never use the `KEY=value` form for a secret.
+- **Legacy mode:** store it in the scratch file `.env.deploy-prod` in the repo root (gitignored by `.env*`). Create it with the Write tool, one `KEY='value'` line per secret with the value in single quotes (deploy keys contain `|`, which the shell would otherwise read as a pipe), then run `chmod 600 .env.deploy-prod`. Add later secrets with Edit. Phase 12 deletes the file; delete it too (`rm -f .env.deploy-prod`) if the deployment stops early.
+
+`<PROD_ENV>` below is the prefix that loads those values for a command:
+- Doppler mode: empty (the script reads Doppler `prd` itself)
+- Legacy mode: `set -a && . ./.env.deploy-prod && set +a && ` (shell builtins: values are exported to the script's environment, never put in an argument list)
+
+Never echo a secret back in chat; refer to it as "the key you provided".
+
 **Prerequisites the user must have BEFORE running this command:**
 - A custom domain they own (e.g., `myapp.com`) — Clerk production requires this, `*.vercel.app` is not accepted
 - A Stripe account — **optional**, only if the user chooses "Set up Stripe now" in the upfront question. The default is to skip Stripe and enable it later (instructions are written into `docs/DEPLOYMENT-PROD.md`).
@@ -203,6 +216,14 @@ AskUserQuestion: "Have you created your Clerk production instance and are ready 
 
 **Validate:** If doesn't start with `sk_live_`, ask again.
 
+**Store both keys now** (see "Secret values never go on the command line"):
+- Doppler mode:
+  ```bash
+  printf '%s' '<PK>' | doppler secrets set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY --config prd
+  printf '%s' '<SK>' | doppler secrets set CLERK_SECRET_KEY --config prd
+  ```
+- Legacy mode: Write `.env.deploy-prod` with `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<PK>` and `CLERK_SECRET_KEY=<SK>`, then `chmod 600 .env.deploy-prod`.
+
 ## Phase 4: Google OAuth Setup (Optional)
 
 **AskUserQuestion**: "Would you like to set up Google social login for production?"
@@ -314,9 +335,15 @@ Parse JSON output:
 **If "Yes, I have my deploy key":**
 Collect via AskUserQuestion. Validate format (starts with `prod:`, contains `|`).
 
+**Store the deploy key now** (either path):
+- Doppler mode: `printf '%s' '<KEY>' | doppler secrets set CONVEX_DEPLOY_KEY --config prd`
+- Legacy mode: add `CONVEX_DEPLOY_KEY=<KEY>` to `.env.deploy-prod` with Edit.
+
 ## Phase 7: Validate + Configure Clerk Production
 
-Run: `node scripts/deploy.mjs validate-keys --clerk-pk="<PK>" --clerk-sk="<SK>" --deploy-key="<KEY>" --require-prod=true`
+Run: `<PROD_ENV>node scripts/deploy.mjs validate-keys --require-prod=true`
+
+The Clerk keys and deploy key come from Doppler `prd` / `.env.deploy-prod` (stored in Phases 3 and 6). If the error says a key was not found, store it as described above and re-run.
 
 Parse JSON output:
 - Show validation results with checkmarks
@@ -329,7 +356,7 @@ Store the `frontendApiUrl` from the result.
 
 ## Phase 8: Deploy Convex Functions to Production
 
-Run: `node scripts/deploy.mjs convex-deploy-functions --deploy-key="<KEY>"`
+Run: `<PROD_ENV>node scripts/deploy.mjs convex-deploy-functions`
 
 Parse JSON output:
 - Show production Convex URL with checkmark
@@ -341,11 +368,17 @@ Store `prodSiteUrl` from the result.
 
 Get admin email from `.env.local` or ask user if not found.
 
-Run: `node scripts/deploy.mjs prod-webhook --clerk-sk="<SK>" --convex-site-url="<SITE_URL>" --admin-email="<ADMIN_EMAIL>"`
+Run: `<PROD_ENV>node scripts/deploy.mjs prod-webhook --convex-site-url="<SITE_URL>" --admin-email="<ADMIN_EMAIL>"`
 
-Parse JSON output and show results.
+Parse JSON output and show results (not the `webhookSecret` value). Store the signing secret before the next command:
+- If `success: true`, take `<WHSEC>` from `webhookSecret`:
+  - Doppler mode: `printf '%s' '<WHSEC>' | doppler secrets set CLERK_WEBHOOK_SECRET --config prd`
+  - Legacy mode: add `CLERK_WEBHOOK_SECRET=<WHSEC>` to `.env.deploy-prod` with Edit.
+- If it failed, show `manualSteps`. Once the user has the `whsec_...` value, Doppler mode: have them run `doppler secrets set CLERK_WEBHOOK_SECRET --config prd` and paste it at Doppler's interactive prompt (or set it in the dashboard). Legacy mode: collect it via AskUserQuestion and add it to `.env.deploy-prod` as above.
 
-Run: `node scripts/deploy.mjs convex-prod-env --deploy-key="<KEY>" --webhook-secret="<SECRET>" --frontend-api-url="<URL>" --admin-email="<ADMIN_EMAIL>"`
+Run: `<PROD_ENV>node scripts/deploy.mjs convex-prod-env --frontend-api-url="<URL>" --admin-email="<ADMIN_EMAIL>"`
+
+The deploy key and webhook secret come from Doppler `prd` / `.env.deploy-prod`.
 
 Parse JSON output and show each env var set. `SECURITY_LOG_KEY` is read from `.env.local` (minted and written there if absent) so the Vercel push in Phase 10 sends the identical value.
 
@@ -427,15 +460,19 @@ Required keys (the script's preflight allowlist):
 # Project is pinned by .doppler.yaml from /install. Pass only --config when
 # targeting prd (or reading from dev); never derive --project from package.json.
 
-# Clerk production app
-doppler secrets set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="<PK>" --config prd
-# Have the user paste <SK> / <WHSEC> at Doppler's interactive prompt (or set in the dashboard). Do not put the value on the command line.
+# Secrets: already stored in Phases 3, 6 and 9 (NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+# CLERK_SECRET_KEY, CONVEX_DEPLOY_KEY, CLERK_WEBHOOK_SECRET). Only if one is missing:
+# have the user paste it at Doppler's interactive prompt (or set it in the dashboard),
+# or pipe a value you hold on stdin: printf '%s' '<VALUE>' | doppler secrets set KEY --config prd
+# Never put a secret on the command line as KEY=value.
 doppler secrets set CLERK_SECRET_KEY --config prd
 doppler secrets set CLERK_WEBHOOK_SECRET --config prd
+doppler secrets set CONVEX_DEPLOY_KEY --config prd
+
+# Clerk production app (public value)
 doppler secrets set NEXT_PUBLIC_CLERK_FRONTEND_API_URL="<URL>" --config prd
 
-# Convex production
-doppler secrets set CONVEX_DEPLOY_KEY="<KEY>" --config prd
+# Convex production (public value)
 doppler secrets set NEXT_PUBLIC_CONVEX_URL="<PROD_CONVEX_URL>" --config prd
 
 # Site identity
@@ -469,10 +506,12 @@ Then run: `node scripts/deploy.mjs vercel-env`
 
 **If the script returns `error: "doppler_prd_incomplete"`**: STOP. Display the `message` and `hint` fields verbatim, then run the `doppler secrets set` commands above for whatever's listed in `missing[]`, then retry `vercel-env`.
 
-The command auto-delegates to `vercel-env-doppler`: issues a fresh `prd`-scoped Doppler service token, pushes only `DOPPLER_TOKEN` (and generates `REVALIDATE_TOKEN` if absent) to Vercel Production, runs `scripts/sync-convex-env.mjs --config prd`, and writes the `_PROD_PROMOTED_AT` marker (which gates future `/deploy-to-dev` runs from stomping prod). The `--clerk-*`, `--deploy-key`, `--frontend-api-url`, `--site-name`, `--convex-url` arguments are ignored in Doppler mode — values come from Doppler.
+The command auto-delegates to `vercel-env-doppler`: issues a fresh `prd`-scoped Doppler service token, pushes only `DOPPLER_TOKEN` (and generates `REVALIDATE_TOKEN` if absent) to Vercel Production, runs `scripts/sync-convex-env.mjs --config prd`, and writes the `_PROD_PROMOTED_AT` marker (which gates future `/deploy-to-dev` runs from stomping prod). Pass no arguments in Doppler mode — values come from Doppler.
 
 **Legacy mode** (no `.doppler.yaml`):
-Run: `node scripts/deploy.mjs vercel-env --clerk-pk="<PK>" --clerk-sk="<SK>" --deploy-key="<KEY>" --frontend-api-url="<URL>" --site-name="<NAME>" --convex-url="<PROD_CONVEX_URL>"`
+Run: `<PROD_ENV>node scripts/deploy.mjs vercel-env --frontend-api-url="<URL>" --site-name="<NAME>" --convex-url="<PROD_CONVEX_URL>"`
+
+The Clerk keys and deploy key come from `.env.deploy-prod` and reach Vercel on stdin.
 
 Use the production Convex URL from Phase 8 (`prodUrl`). This is required — server-side code (middleware, rate limiting, CSRF) needs `NEXT_PUBLIC_CONVEX_URL` at runtime.
 
@@ -491,6 +530,8 @@ Parse JSON output:
 - If deploy fails, show error and retry instructions
 
 ## Phase 12: Write Summary + Completion
+
+**Legacy mode:** delete the scratch file first: `rm -f .env.deploy-prod`. The production values now live in Vercel and Convex.
 
 Build write-summary arguments from all collected data. Include google-oauth status, billing status, and Stripe status.
 
