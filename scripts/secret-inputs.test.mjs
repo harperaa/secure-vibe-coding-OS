@@ -116,7 +116,6 @@ function fixture(t, { doppler = false, envLocal = null } = {}) {
       err: r.stderr.includes('{') ? JSON.parse(r.stderr.slice(r.stderr.indexOf('{'))) : null,
       calls,
       clerkKeys: readJsonl(clerkLog).map((c) => c.secretKey),
-      argvText: JSON.stringify(calls.map((c) => c.argv)),
     };
   }
 
@@ -124,13 +123,27 @@ function fixture(t, { doppler = false, envLocal = null } = {}) {
 }
 
 // No secret value in any child's argv, nor in the script's stdout/stderr.
+// Arguments are checked one by one (not as JSON text, where quotes in a secret
+// gain backslashes), and output is checked raw and JSON-encoded.
 function assertNotExposed(r, ...secrets) {
   for (const s of secrets) {
-    assert.ok(!r.argvText.includes(s), `secret found in argv: ${r.argvText}`);
-    assert.ok(!r.stdout.includes(s), 'secret found in stdout');
-    assert.ok(!r.stderr.includes(s), 'secret found in stderr');
+    const encoded = JSON.stringify(s).slice(1, -1);
+    for (const c of r.calls) {
+      assert.ok(!c.argv.some((a) => String(a).includes(s)), `secret found in argv of ${c.bin}`);
+    }
+    for (const [name, text] of [['stdout', r.stdout], ['stderr', r.stderr]]) {
+      assert.ok(!text.includes(s) && !text.includes(encoded), `secret found in ${name}`);
+    }
   }
 }
+
+test('assertNotExposed catches a secret with quotes in argv and in JSON output', () => {
+  const clean = { calls: [{ bin: 'vercel', argv: ['env', 'add'] }], stdout: '', stderr: '' };
+  assertNotExposed(clean, PROD.sk);
+  assert.throws(() => assertNotExposed({ ...clean, calls: [{ bin: 'vercel', argv: ['env', 'add', `--value=${PROD.sk}`] }] }, PROD.sk), /argv/);
+  assert.throws(() => assertNotExposed({ ...clean, stdout: JSON.stringify({ key: PROD.sk }) }, PROD.sk), /stdout/);
+  assert.throws(() => assertNotExposed({ ...clean, stderr: `bad key ${PROD.sk}` }, PROD.sk), /stderr/);
+});
 
 test('validate-keys --require-prod reads the Clerk keys and deploy key from the environment', (t) => {
   const { run } = fixture(t);
@@ -181,6 +194,14 @@ test('validate-keys (development) falls back to .env.local in legacy mode', (t) 
   assert.ok(!r.out.steps.includes('Deploy key format validated'));
   assert.deepEqual(r.clerkKeys, [DEV.sk]);
   assertNotExposed(r, DEV.sk);
+});
+
+test('validate-keys reads quoted values from .env.local', (t) => {
+  const { run } = fixture(t, { envLocal: `CLERK_SECRET_KEY="sk_live_quoted_key"\nNEXT_PUBLIC_CLERK_PUBLISHABLE_KEY='${PROD.pk}'\n` });
+  const r = run('deploy.mjs', ['validate-keys', '--require-prod=true']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.out.keyType, 'production');
+  assert.deepEqual(r.clerkKeys, ['sk_live_quoted_key']);
 });
 
 test('validate-keys flags still win over the environment', (t) => {

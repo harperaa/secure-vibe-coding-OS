@@ -395,7 +395,8 @@ export function resolveSecret(key, { flag, flagName, config, envFile, accept = (
   } else if (envFile) {
     places.push('.env.local');
     const content = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf-8') : '';
-    const value = content.match(new RegExp(`^${key}=(.*)$`, 'm'))?.[1]?.trim();
+    // dotenv allows KEY="value" and KEY='value': drop one pair of matching quotes.
+    const value = content.match(new RegExp(`^${key}=(.*)$`, 'm'))?.[1]?.trim().replace(/^(["'])(.*)\1$/, '$2');
     const placeholder = !value || value.includes('<') || value.includes('your_');
     if (!placeholder && take(value, '.env.local')) return { value, source: '.env.local' };
   }
