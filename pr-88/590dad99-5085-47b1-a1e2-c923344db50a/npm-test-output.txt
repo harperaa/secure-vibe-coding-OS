@@ -1,0 +1,208 @@
+
+> secure-vibe-coding-os@8.1.0 test
+> node --test scripts/*.test.mjs
+
+✔ an empty report passes and the gate asks npm for a JSON audit (263.83675ms)
+✔ findings below high pass (201.753458ms)
+✔ a high finding that is not allowlisted fails with exit 1 (202.045292ms)
+✔ a critical finding that is not allowlisted fails with exit 1 (237.234125ms)
+✔ an allowlisted GHSA is skipped (190.9385ms)
+✔ the allowlist lookup uses the id as written in the advisory URL (206.723209ms)
+✔ a package vulnerable only through an allowlisted one is skipped, in either object order (380.916083ms)
+✔ a second, non-allowlisted advisory on an allowlisted package still fails (176.075792ms)
+✔ a dependent with its own non-allowlisted advisory fails while the allowlisted package is skipped (215.352334ms)
+✔ npm error output is not treated as a clean report (exit 2) (241.753917ms)
+✔ JSON without a vulnerabilities object exits 2 (514.905958ms)
+✔ a failing npm with empty stdout exits 2 (227.906833ms)
+✔ an allowlist entry with a bad id or an empty reason exits 2 before npm runs (431.740208ms)
+(node:28320) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file://<repo>/templates/modules/blog/files/lib/blog.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to <repo>/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ JSON-LD cannot close its <script> tag (0.490334ms)
+✔ RSS feed escapes frontmatter and site values (7.04325ms)
+(node:28321) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file://<repo>/templates/modules/blog/files/lib/blog.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to <repo>/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a real slug still resolves (7.535167ms)
+✔ a slug cannot reach files outside content/blog (0.498792ms)
+✔ isNewer orders numerically, not lexically (3.388083ms)
+✔ newer security release in the same major fails the gate (0.142209ms)
+✔ equal version passes (0.088375ms)
+✔ newer ordinary (non-security) release does not fail the gate (0.064917ms)
+✔ security releases in another major line are ignored (0.071875ms)
+✔ older security releases do not count (0.07125ms)
+✔ run returns 1 when behind a security release (0.238167ms)
+✔ run returns 0 when current (0.10725ms)
+✔ run warns and passes when the index cannot be fetched (0.200709ms)
+✔ run warns and passes on a non-2xx response (0.138625ms)
+(node:28323) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file://<repo>/convex/lib/clerkWebhook.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to <repo>/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a validly signed webhook yields the parsed event (2.041167ms)
+✔ a tampered payload is rejected (0.831333ms)
+✔ a signature from another secret is rejected (0.650709ms)
+✔ missing svix headers are rejected (0.121875ms)
+✔ the Clerk route verifies through the helper, not verify()'s return value (1.840625ms)
+✔ the installed svix sends eventTypes and drops the old filterTypes key (30.45675ms)
+✔ setup and deploy create the Svix endpoint with eventTypes, not filterTypes (5.261959ms)
+✔ pushTokenToGithub sends the token on stdin and omits --body (268.790458ms)
+✔ setSecret sends the value on stdin, not as KEY=value argv (206.859791ms)
+✔ sync-convex-env.mjs passes secret values to convex on stdin (483.572042ms)
+✔ legacy mode: convex-setup resolves the Clerk issuer from .env.local on a fresh project (796.915041ms)
+✔ Doppler mode: convex-setup resolves the Clerk issuer from Doppler dev on a fresh project with an empty .env.local (914.673708ms)
+✔ Doppler mode: convex-setup pushes NEXT_PUBLIC_SITE_URL to Doppler dev when Convex is already configured (387.72025ms)
+✔ Doppler mode: convex-setup leaves an existing NEXT_PUBLIC_SITE_URL in Doppler dev alone (505.811292ms)
+✔ legacy mode: convex-setup on an already configured project does not touch Doppler or .env.local (262.501125ms)
+CSRF check failed: Missing token { sent: '[missing]', stored: '[missing]' }
+✔ a CSRF violation is logged with the proxy-appended IP, not the client-supplied one (61.006083ms)
+CSRF check failed: Token mismatch or not valid for this session
+CSRF check failed: Token mismatch or not valid for this session
+CSRF check failed: Token mismatch or not valid for this session
+CSRF check failed: Token mismatch or not valid for this session
+CSRF check failed: Missing token { sent: '[present]', stored: '[missing]' }
+(node:28327) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file://<repo>/lib/csrf.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to <repo>/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a token is accepted for the session it was issued to (8.121042ms)
+✔ a token issued to one session is rejected for another session (3.806958ms)
+✔ an equal header/cookie pair minted without CSRF_SECRET is rejected (0.496459ms)
+✔ a token with a tampered random part is rejected (0.570667ms)
+✔ a request without a session cookie is rejected (0.450167ms)
+✔ in production the token lives in a __Host- cookie and a planted XSRF-TOKEN is ignored (7.223583ms)
+✔ new Doppler project removes stg environment (258.481417ms)
+✔ existing Doppler project leaves environments untouched (181.701ms)
+✔ fresh clone (template package name, no .doppler.yaml) is refused (90.076709ms)
+✔ .doppler.yaml wins, even when package.json still has the template name (77.642125ms)
+✔ a renamed package.json is still a valid fallback (99.074208ms)
+✔ deploy.mjs convex-prod-env passes SECURITY_LOG_KEY to Convex verbatim (244.57825ms)
+✔ deploy.mjs vercel-env-dev passes .env.local values to Vercel verbatim (256.013ms)
+✔ deploy.mjs vercel-env passes .env.local values to Vercel verbatim (934.284459ms)
+✔ deploy.mjs update-vercel-clerk-keys passes the Clerk secret key to Vercel verbatim (345.784709ms)
+✔ setup.mjs configure passes SECURITY_LOG_KEY to Convex verbatim (556.222291ms)
+✔ setup.mjs convex-setup passes the Clerk issuer to Convex verbatim (817.683417ms)
+✔ production returns the generic body and never the message or stack (4.200916ms)
+✔ anything other than NODE_ENV=development gets the generic body (1.767667ms)
+✔ development includes message, stack, context and a timestamp (6.962708ms)
+✔ development without a context reports 'unknown' (0.873ms)
+✔ a non-Error value is reported as 'Unknown error' (1.534208ms)
+✔ handleValidationError answers 400 and omits details when not passed (0.160584ms)
+✔ handleValidationError includes details when passed (0.118833ms)
+✔ handleUnauthorizedError answers 401 with a default or custom message (0.157042ms)
+✔ handleForbiddenError answers 403 with a default or custom message (0.187875ms)
+✔ handleNotFoundError answers 404 and names the resource (1.917292ms)
+✔ parseGithubRepo reads owner/repo from github.com remotes only (0.810875ms)
+✔ resolveGithubRepo prefers GH_REPO, then origin, never upstream (100.63525ms)
+✔ lockdown-main.sh applies protection to origin, not the template (316.033ms)
+✔ lockdown-main.sh reads every origin URL form parseGithubRepo accepts (1008.651916ms)
+✔ lockdown-main.sh honours GH_REPO, with or without a host prefix (307.242292ms)
+✔ pushTokenToGithub passes -R with the origin repo to gh secret set (327.384292ms)
+✔ doppler-create-ci-token defers while origin is still the template (378.791167ms)
+✔ doppler-create-ci-token sends the CI token to gh secret set -R acme/product on stdin (394.002542ms)
+✔ doppler-create-ci-token re-run leaves an existing DOPPLER_TOKEN alone (202.251875ms)
+✔ github-setup points gh at the product once the template is upstream (0.440667ms)
+✔ setup.mjs has no spawn with shell: true (Semgrep spawn-shell-true) (0.280625ms)
+✔ re-run reuses the configured Clerk app and secrets (97.283167ms)
+✔ re-run keeps the claim link from the previous install summary (233.316666ms)
+✔ fresh install still creates an accountless Clerk app and new secrets (98.761042ms)
+✔ fresh clone or Doppler-mode repo: nothing to migrate (563.39275ms)
+✔ app values in .env.local are legacy config (529.8745ms)
+✔ app values stored on the Vercel project are legacy config (496.428ms)
+✔ inventory lists keys whose sources disagree, by name only (644.401584ms)
+✔ sources that agree have no conflicts (522.199834ms)
+✔ migrate refuses to merge conflicting sources and writes nothing to Doppler (631.443292ms)
+✔ migrate sends each value to `doppler secrets set KEY` on stdin, never in argv (1425.176459ms)
+✔ Convex env is compared too (756.603125ms)
+✔ before promotion, production differing from development is a conflict (456.150375ms)
+✔ after promotion, production goes to prd and is not compared with development (422.039416ms)
+✔ a full site can be reduced to minimal, and rebuilt (272.017583ms)
+✔ a partial selection keeps only what was picked (214.810333ms)
+✔ setting the current selection changes nothing (160.511917ms)
+✔ hand-edited files are not overwritten or removed without --force (296.280958ms)
+✔ status still lists installed and available modules (183.7935ms)
+✔ --dry-run reports the plan and changes nothing (184.768834ms)
+﹣ the template's installed pages match a clean build of all modules (0.357166ms) # SKIP
+(node:28433) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file://<repo>/convex/paymentAttemptTypes.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to <repo>/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ the validator check used here rejects bad data (1.20125ms)
+✔ the raw Clerk payload is not accepted as-is (0.162084ms)
+✔ a full paymentAttempt.updated payload maps to an object the validator accepts (0.197916ms)
+✔ every subscription item is mapped, and an empty list stays empty (0.198542ms)
+✔ failed_at, paid_at and failed_reason given as null, 0 or missing become undefined (0.216333ms)
+✔ failed_reason is passed through as given, including fields the validator does not know (0.111125ms)
+✔ a payload missing payer, payment_source, totals or subscription_items throws (0.925666ms)
+Rate limit exceeded for IP: 192.0.2.1 on /api/test
+Rate limit exceeded for IP: 192.0.2.2 on /api/test
+Rate limit exceeded for IP: 192.0.2.3 on /api/test
+Rate limit exceeded for IP: 192.0.2.3 on /api/test
+Rate limit exceeded for IP: 192.0.2.4 on /api/test
+Rate limit exceeded for IP: 192.0.2.5 on /api/test
+Rate limit exceeded for IP: 192.0.2.5 on /api/test
+Rate limit exceeded for IP: 192.0.2.5 on /api/test
+Rate limit exceeded for IP: 192.0.2.5 on /api/test
+✔ without options the default 5-per-minute limit applies (8.822209ms)
+✔ routes without options share the default bucket (3.203375ms)
+✔ a route with options gets its own limit and its own bucket (2.188708ms)
+✔ routes with the same options share one bucket (0.517375ms)
+✔ options equal to the default share the default bucket (0.966334ms)
+✔ invalid options fail when the route is wrapped, not on the first request (0.412875ms)
+✔ redacts emails, SSNs, phones, and record ids, counting each (0.788291ms)
+✔ leaves ordinary text and short numbers alone (0.52675ms)
+✔ phone formats: dotted, dashed, international prefix (0.087959ms)
+✔ SSN is matched before the phone rule can take part of it (0.070459ms)
+✔ every secure-vibe-runtime export loads under plain Node from a packed tarball (28483.651208ms)
+✔ assertNotExposed catches a secret with quotes in argv and in JSON output (7.152834ms)
+✔ validate-keys --require-prod reads the Clerk keys and deploy key from the environment (79.623292ms)
+✔ validate-keys --require-prod reads Doppler prd and skips dev keys in the environment (215.493625ms)
+✔ validate-keys --require-prod refuses the dev keys in .env.local and names what is missing (72.348917ms)
+✔ validate-keys (development) falls back to .env.local in legacy mode (82.77975ms)
+✔ validate-keys reads quoted values from .env.local (90.602541ms)
+✔ validate-keys flags still win over the environment (91.385167ms)
+✔ convex-deploy-functions passes a deploy key from the environment to convex via env, not argv (230.2635ms)
+✔ convex-deploy-functions reads Doppler prd; the --deploy-key flag still works (714.665333ms)
+✔ convex-deploy-functions without any deploy key exits and names the variable (103.054542ms)
+✔ convex-prod-env reads the deploy key and webhook secret from Doppler prd and sends values on stdin (636.301833ms)
+✔ convex-prod-env reads both from the environment in legacy mode (426.22575ms)
+✔ prod-webhook reads the Clerk secret key from the environment (70.304416ms)
+✔ prod-webhook reads Doppler prd and never the dev key (285.529125ms)
+✔ vercel-env (legacy) reads Clerk keys and deploy key from the environment and sends them on stdin (1561.705875ms)
+✔ update-vercel-clerk-keys reads the keys from the environment (350.772917ms)
+✔ setup.mjs init takes Clerk keys from the environment and stores them in Doppler dev via stdin (781.035291ms)
+✔ setup.mjs init (legacy) writes Clerk keys from the environment to .env.local; flags still win (137.282459ms)
+✔ hourStart floors to the UTC hour (0.459583ms)
+✔ countKey and parseKey round-trip, including types containing colons (0.505542ms)
+✔ bump adds, subtracts, and removes zeroed keys without mutating its input (0.105083ms)
+✔ summarize folds buckets exactly and honours the eventType filter (0.683792ms)
+(node:28646) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file://<repo>/lib/prompt-validation.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to <repo>/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ validatePrompt accepts an ordinary question (1.760334ms)
+✔ validatePrompt rejects injection attempts with the schema's message (0.39675ms)
+✔ validatePrompt reports the first failing rule for a too-short prompt (8.58925ms)
+✔ validateRequest returns cleaned data for valid input (1.153209ms)
+✔ validateRequest returns a 400 with per-field errors for invalid input (2.110792ms)
+✔ validateRequest treats optional fields as optional (0.721916ms)
+✔ validateRequestAsync mirrors validateRequest (1.174625ms)
+✔ first run sets DOPPLER_TOKEN on all three targets by overwrite, value on stdin (992.517792ms)
+✔ a missing REVALIDATE_TOKEN is generated and sent to doppler secrets set on stdin (904.885708ms)
+✔ an existing REVALIDATE_TOKEN is kept (1398.280292ms)
+✔ re-run leaves existing tokens alone: nothing minted, set, removed or revoked (746.546375ms)
+✔ a target missing the token gets one; the others are untouched (620.828458ms)
+✔ refuses to add DOPPLER_TOKEN when Vercel already stores app values Doppler provides (350.674125ms)
+✔ variables Doppler does not provide are not a conflict (740.310166ms)
+✔ stops without changing anything when the Vercel variables can't be listed (374.875542ms)
+✔ write-install-summary keeps escaped commas from install.md Doppler list (88.912792ms)
+ℹ tests 157
+ℹ suites 0
+ℹ pass 156
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 29636.800083
