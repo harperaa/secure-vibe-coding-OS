@@ -173,7 +173,7 @@ function runCreateCiToken(t, extraEnv = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ci-token-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, "scripts", "lib"), { recursive: true });
-  for (const f of ["setup.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs")]) {
+  for (const f of ["setup.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs"), path.join("lib", "convex-env-list.mjs")]) {
     fs.copyFileSync(path.join(here, f), path.join(root, "scripts", f));
   }
   const clerkDir = path.join(root, "node_modules", "@clerk", "backend");

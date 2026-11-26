@@ -32,8 +32,9 @@ if (a[0] === 'env' && a[1] === 'pull') {
 }
 process.exit(0);
 `;
-// `npx convex env list` prints STUB_CONVEX_ENV (KEY=value lines); fails when unset.
-const NPX = `#!${process.execPath}\nconst a = process.argv.slice(2).join(' ');\nif (a === 'convex env list' && process.env.STUB_CONVEX_ENV !== undefined) { console.log(process.env.STUB_CONVEX_ENV); process.exit(0); }\nprocess.exit(1);\n`;
+// `npx convex env list --include-values` prints STUB_CONVEX_ENV (KEY=value lines); without the
+// flag it prints names only, like the real CLI when it detects an AI agent. Fails when unset.
+const NPX = `#!${process.execPath}\nconst a = process.argv.slice(2).join(' ');\nconst env = process.env.STUB_CONVEX_ENV;\nif (a.startsWith('convex env list') && env !== undefined) { console.log(a.includes('--include-values') ? env : env.split('\\n').map((l) => l.split('=')[0]).join('\\n')); process.exit(0); }\nprocess.exit(1);\n`;
 // Records every call (argv + stdin); a migration that is refused must never reach `doppler secrets set`.
 const DOPPLER = `#!${process.execPath}
 const fs = require('node:fs');
@@ -50,7 +51,7 @@ const GH = `#!${process.execPath}\nrequire('node:fs').appendFileSync(process.env
 function inventory({ envLocal = "", vercelEnv = "", vercelByTarget = null, convexEnv = null, vercelFail = false, thenMigrate = false, full = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "legacy-inv-"));
   fs.mkdirSync(path.join(root, "scripts", "lib"), { recursive: true });
-  for (const f of ["setup.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs")]) {
+  for (const f of ["setup.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs"), path.join("lib", "convex-env-list.mjs")]) {
     fs.copyFileSync(path.join(here, f), path.join(root, "scripts", f));
   }
   const clerkDir = path.join(root, "node_modules", "@clerk", "backend");

@@ -18,6 +18,7 @@
 
 import { execSync, spawnSync } from 'node:child_process';
 import { downloadSecrets } from './lib/doppler.mjs';
+import { convexEnvListWithValues } from './lib/convex-env-list.mjs';
 
 // Allowlist — Convex functions only need these. Anything else stays in Doppler.
 const CONVEX_ALLOWLIST = [
@@ -61,10 +62,7 @@ function listConvexEnv(deployKey) {
   // `npx convex env list` outputs plain `KEY=value` lines (no --json flag exists).
   const env = { ...process.env };
   if (deployKey) env.CONVEX_DEPLOY_KEY = deployKey;
-  const result = spawnSync('npx', ['convex', 'env', 'list'], {
-    encoding: 'utf-8',
-    env,
-  });
+  const result = convexEnvListWithValues({ encoding: 'utf-8', env });
   if (result.status !== 0) {
     throw new Error(`convex env list failed:\n${result.stderr || result.stdout}`);
   }

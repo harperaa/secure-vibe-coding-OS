@@ -44,7 +44,7 @@ test('write-install-summary keeps escaped commas from install.md Doppler list', 
   fs.mkdirSync(docsDir, { recursive: true });
   fs.mkdirSync(path.join(root, 'scripts', 'lib'), { recursive: true });
 
-  for (const file of ['setup.mjs', path.join('lib', 'doppler.mjs'), path.join('lib', 'github-repo.mjs')]) {
+  for (const file of ['setup.mjs', path.join('lib', 'doppler.mjs'), path.join('lib', 'github-repo.mjs'), path.join('lib', 'convex-env-list.mjs')]) {
     fs.copyFileSync(path.join(SCRIPTS_DIR, file), path.join(root, 'scripts', file));
   }
 
