@@ -143,8 +143,9 @@ Cases to cover:
   exits non-zero when the Doppler fetch fails; secret values are never
   printed.
 - `sync-convex-env.mjs`: only keys in `CONVEX_ALLOWLIST` are pushed; a failing
-  `npx convex env set` stops the run with a non-zero exit; values go through
-  stdin, not argv.
+  `npx convex env set` stops the run with a non-zero exit. (That values go
+  through stdin, not argv, is already covered by
+  `scripts/cli-stdin-secrets.test.mjs`.)
 - `check-convex-auth.mjs`: exits 0 when clean and 1 on any violation. The two
   kinds of violation (no identity check and no `@public-endpoint`; a
   `@public-endpoint` whose reason is missing or too short) share exit 1 and
