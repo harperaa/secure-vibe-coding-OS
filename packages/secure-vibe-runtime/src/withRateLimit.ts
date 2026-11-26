@@ -98,6 +98,14 @@ function resolveLimiter(opts?: RateLimitOptions) {
   return { limiter, points, duration };
 }
 
+const MAX_IP_LENGTH = 45; // longest textual IPv6 address, including an embedded IPv4
+const IP_CHARS = /^[0-9a-fA-F:.]+$/;
+
+/** The value if it looks like an IP address, else null. */
+function plausibleIp(value: string | undefined): string | null {
+  return value && value.length <= MAX_IP_LENGTH && IP_CHARS.test(value) ? value : null;
+}
+
 /**
  * Resolves the caller's IP from platform-trusted headers.
  *
@@ -108,34 +116,38 @@ function resolveLimiter(opts?: RateLimitOptions) {
  * this, so the limiter could be bypassed by anyone who knew to rotate a header.
  *
  * Order of preference:
- *   1. `x-vercel-forwarded-for` — set by Vercel's edge, overwritten on every
- *      request, so a client cannot forge it.
- *   2. The RIGHTMOST `x-forwarded-for` entry — appended by the closest trusted
- *      proxy, rather than the leftmost value the client supplied.
- *   3. `x-real-ip` — set by the proxy, not the client, on common setups.
+ *   1. `x-vercel-forwarded-for`, ONLY when running on Vercel (`VERCEL=1`, set
+ *      by Vercel at build and runtime). Vercel's edge sets it on every request,
+ *      so there a client cannot forge it. Any other host passes the header
+ *      through as the client sent it (measured behind Clever Cloud's router),
+ *      so off Vercel it is ignored: trusting it there let a caller rotate it
+ *      and receive a fresh bucket on every request.
+ *   2. The RIGHTMOST `x-forwarded-for` entry, appended by the closest proxy,
+ *      rather than the leftmost value the client supplied. If that entry is not
+ *      a plausible IP, we return null instead of stepping further left, because
+ *      every entry to its left is client-controlled.
+ *   3. `x-real-ip`, only when there is no `x-forwarded-for` at all. Proxies
+ *      that append XFF never reach this step; a proxy that sets only
+ *      `x-real-ip` must overwrite it, or it is as forgeable as step 1 was.
  *
- * If none are present we return null and the caller fails CLOSED (see below),
- * because a single shared "unknown" bucket would let one abuser exhaust the
- * limit for every anonymous visitor at once.
+ * If nothing trustworthy is present we return null and the caller fails CLOSED
+ * (see below), because a single shared "unknown" bucket would let one abuser
+ * exhaust the limit for every anonymous visitor at once.
  *
  * Exported so app code that records a caller's IP (audit logs, for example)
  * uses this same resolution instead of reading a header directly. The trust
  * assumptions above (Vercel, or a proxy that appends XFF) apply to callers too.
  */
 export function clientIp(request: NextRequest): string | null {
-  const vercel = request.headers.get('x-vercel-forwarded-for')?.trim();
-  if (vercel) return vercel;
-
-  const xff = request.headers.get('x-forwarded-for');
-  if (xff) {
-    const parts = xff.split(',').map((p) => p.trim()).filter(Boolean);
-    if (parts.length > 0) return parts[parts.length - 1];
+  if (process.env.VERCEL === '1') {
+    const vercel = request.headers.get('x-vercel-forwarded-for')?.trim();
+    if (vercel) return vercel;
   }
 
-  const real = request.headers.get('x-real-ip')?.trim();
-  if (real) return real;
+  const xff = request.headers.get('x-forwarded-for');
+  if (xff) return plausibleIp(xff.split(',').at(-1)?.trim());
 
-  return null;
+  return plausibleIp(request.headers.get('x-real-ip')?.trim());
 }
 
 // Lazy-initialized Convex client for security logging
