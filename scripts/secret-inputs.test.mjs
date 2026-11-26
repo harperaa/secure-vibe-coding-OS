@@ -68,7 +68,7 @@ function fixture(t, { doppler = false, envLocal = null } = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'secret-inputs-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, 'scripts', 'lib'), { recursive: true });
-  for (const f of ['deploy.mjs', 'setup.mjs', path.join('lib', 'doppler.mjs'), path.join('lib', 'github-repo.mjs')]) {
+  for (const f of ['deploy.mjs', 'setup.mjs', path.join('lib', 'doppler.mjs'), path.join('lib', 'github-repo.mjs'), path.join('lib', 'convex-env-list.mjs')]) {
     fs.copyFileSync(path.join(here, f), path.join(root, 'scripts', f));
   }
   const clerkDir = path.join(root, 'node_modules', '@clerk', 'backend');

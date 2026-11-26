@@ -45,6 +45,7 @@ import {
   getProjectName as dopplerGetProjectName,
 } from './lib/doppler.mjs';
 import { resolveGithubRepo, isTemplateRepo } from './lib/github-repo.mjs';
+import { convexEnvListWithValues } from './lib/convex-env-list.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1599,7 +1600,9 @@ function readEnvFileAsMap(filePath) {
 }
 
 function readConvexEnvList() {
-  const result = spawnSync('npx', ['convex', 'env', 'list'], { encoding: 'utf-8' });
+  // With values: an agent-detected CLI lists names only, which left the inventory without
+  // Convex values and hid conflicts with the other sources.
+  const result = convexEnvListWithValues({ encoding: 'utf-8' });
   if (result.status !== 0) {
     return { ok: false, error: (result.stderr || result.stdout || '').trim() };
   }

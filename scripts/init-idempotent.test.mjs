@@ -23,7 +23,7 @@ const SK = "sk_test_synthetic";
 function runInit(envLocal, priorSummary = null) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "init-idem-"));
   fs.mkdirSync(path.join(root, "scripts", "lib"), { recursive: true });
-  for (const f of ["setup.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs")]) {
+  for (const f of ["setup.mjs", path.join("lib", "doppler.mjs"), path.join("lib", "github-repo.mjs"), path.join("lib", "convex-env-list.mjs")]) {
     fs.copyFileSync(path.join(here, f), path.join(root, "scripts", f));
   }
   const marker = path.join(root, "accountless-created");

@@ -39,6 +39,7 @@ process.exit(0);
   for (const file of [
     path.join('lib', 'doppler.mjs'),
     path.join('lib', 'github-repo.mjs'),
+    path.join('lib', 'convex-env-list.mjs'),
     'sync-convex-env.mjs',
   ]) {
     fs.copyFileSync(path.join(SCRIPTS_DIR, file), path.join(root, 'scripts', file));
@@ -123,7 +124,10 @@ fs.appendFileSync(process.env.FAKE_CLI_LOG, JSON.stringify({ cmd: 'npx', argv, s
 const stateFile = path.join(process.cwd(), 'convex-env-state.json');
 const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : {};
 if (argv[0] === 'convex' && argv[1] === 'env' && argv[2] === 'list') {
-  for (const [k, v] of Object.entries(state)) console.log(k + '=' + v);
+  // Like the real CLI when it detects an AI agent (AI_AGENT, CLAUDECODE): names only,
+  // unless --include-values is passed.
+  const withValues = argv.includes('--include-values');
+  for (const [k, v] of Object.entries(state)) console.log(withValues ? k + '=' + v : k);
   process.exit(0);
 }
 if (argv[0] === 'convex' && argv[1] === 'env' && argv[2] === 'set') {
