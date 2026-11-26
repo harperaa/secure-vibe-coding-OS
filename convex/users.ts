@@ -22,7 +22,11 @@ export const upsertFromClerk = internalMutation({
     }
 
     const userAttributes = {
-      name: `${data.first_name} ${data.last_name}`,
+      // Clerk sends null for names the user has not set; join only the parts that exist.
+      name:
+        [data.first_name, data.last_name].filter(Boolean).join(" ") ||
+        primaryEmail ||
+        "Unknown User",
       externalId: data.id,
       email: primaryEmail,
     };
